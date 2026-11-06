@@ -47,8 +47,10 @@ jobs:
             export PATH="$PATH:$(go env GOPATH)/bin"
             gomobile init
             cd engine
-            go get go.mau.fi/mautrix-gmessages@9567716bccd9da0d626a293d799629fec0ad6afd golang.org/x/mobile/bind
+            go get go.mau.fi/mautrix-gmessages@9567716bccd9da0d626a293d799629fec0ad6afd
+            go get -tool golang.org/x/mobile/cmd/gobind
             go mod tidy
+            grep -n "mobile" go.mod
             go vet ./...
             gomobile bind -v -target=android/arm64,android/amd64 -androidapi 29 \
               -javapkg=com.jpetrydesign.pyng -o ../app/libs/engine.aar .
