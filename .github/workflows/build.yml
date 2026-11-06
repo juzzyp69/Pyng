@@ -1,0 +1,100 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+
+      - name: Build engine
+        id: engine
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p ci-logs app/libs
+          {
+            export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+            echo "NDK: $ANDROID_NDK_HOME"
+            go version
+            go install golang.org/x/mobile/cmd/gomobile@latest
+            go install golang.org/x/mobile/cmd/gobind@latest
+            export PATH="$PATH:$(go env GOPATH)/bin"
+            gomobile init
+            cd engine
+            go get go.mau.fi/mautrix-gmessages@9567716bccd9da0d626a293d799629fec0ad6afd golang.org/x/mobile/bind
+            go mod tidy
+            go vet ./...
+            gomobile bind -v -target=android/arm64,android/amd64 -androidapi 29 \
+              -javapkg=com.jpetrydesign.pyng -o ../app/libs/engine.aar .
+            ls -la ../app/libs
+          } 2>&1 | tee ci-logs/engine.log
+
+      - name: Build app
+        id: app
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle --no-daemon --stacktrace assembleDebug 2>&1 | tee ci-logs/app.log
+          cp app/build/outputs/apk/debug/app-debug.apk "pyng-0.0.${{ github.run_number }}-test.apk"
+
+      - name: Publish test build
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: test-${{ github.run_number }}
+          name: Pyng test build ${{ github.run_number }}
+          prerelease: true
+          body: |
+            Test build from ${{ github.sha }}.
+            Download the APK below on your phone and open it to install.
+          files: pyng-0.0.${{ github.run_number }}-test.apk
+
+      - name: Save build logs
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p ci-logs
+          {
+            echo "run: ${{ github.run_number }}"
+            echo "commit: ${{ github.sha }}"
+            echo "engine: ${{ steps.engine.outcome }}"
+            echo "app: ${{ steps.app.outcome }}"
+            echo "job: ${{ job.status }}"
+          } > ci-logs/status.txt
+          for f in ci-logs/*.log; do [ -f "$f" ] && tail -c 400000 "$f" > "$f.tmp" && mv "$f.tmp" "$f"; done
+          cp -r ci-logs /tmp/ci-logs
+          git config user.name "pyng-ci"
+          git config user.email "pyng-ci@users.noreply.github.com"
+          git checkout --orphan ci-status-tmp
+          git rm -rf --cached . >/dev/null
+          git clean -fdx -e ci-logs >/dev/null || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -r /tmp/ci-logs/* .
+          git add -A
+          git commit -m "Build ${{ github.run_number }}: ${{ job.status }}"
+          git push -f origin HEAD:ci-status

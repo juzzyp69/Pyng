@@ -1,0 +1,11 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+app/libs/*.aar
+app/libs/*.jar
+engine/go.sum.local
