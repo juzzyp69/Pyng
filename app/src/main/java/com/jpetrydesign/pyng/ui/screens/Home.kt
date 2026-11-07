@@ -56,6 +56,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
@@ -720,7 +721,7 @@ private fun Modifier.ring(on: Boolean, color: Color) = if (on) this.border(2.dp,
 fun SolidCompose(ink: Color, hole: Color, size: Dp) {
     androidx.compose.foundation.Canvas(Modifier.size(size)) {
         val k = this.size.minDimension / 24f
-        androidx.compose.ui.graphics.drawscope.scale(k, k, pivot = Offset.Zero) {
+        scale(k, k, pivot = Offset.Zero) {
             val bubble = androidx.compose.ui.graphics.vector.PathParser().parsePathString("M12 3.2c-4.9 0-8.8 3.6-8.8 8.1 0 2 .8 3.9 2.1 5.3l-.9 3.6 3.9-1.6c1.1.5 2.4.8 3.7.8 4.9 0 8.8-3.6 8.8-8.1S16.9 3.2 12 3.2z").toPath()
             drawPath(bubble, ink)
             val st = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.2f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
@@ -735,7 +736,7 @@ fun SolidCompose(ink: Color, hole: Color, size: Dp) {
 fun SolidSearch(ink: Color, size: Dp) {
     androidx.compose.foundation.Canvas(Modifier.size(size)) {
         val k = this.size.minDimension / 24f
-        androidx.compose.ui.graphics.drawscope.scale(k, k, pivot = Offset.Zero) {
+        scale(k, k, pivot = Offset.Zero) {
             drawCircle(ink, radius = 6.6f, center = Offset(10.5f, 10.5f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.8f))
             drawLine(ink, Offset(15.4f, 15.4f), Offset(20.2f, 20.2f), strokeWidth = 3f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
         }
