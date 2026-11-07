@@ -148,8 +148,7 @@ fun MessageMenu(
             val rc = lastRow
             val a = lastAnchor
             Box(
-                Modifier.then(if (a != null) Modifier.width(with(density) { a.width.toDp() }) else Modifier.fillMaxWidth(0.72f))
-                    .heightIn(max = 300.dp).clip(RoundedCornerShape(20.dp))
+                Modifier.heightIn(max = 300.dp).clip(RoundedCornerShape(20.dp))
                     .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {},
                 contentAlignment = if (me) Alignment.TopEnd else Alignment.TopStart,
             ) {
@@ -192,7 +191,9 @@ fun MessageMenu(
         ) { (barM, bubM, actM), cons ->
             val loose = cons.copy(minWidth = 0, minHeight = 0)
             val b = barM.firstOrNull()?.measure(loose)
-            val u = bubM.first().measure(loose)
+            // Same width limit as bubbles in the chat, so the text wraps the same way.
+            val maxBub = minOf((cons.maxWidth * 0.74f).toInt(), with(density) { 420.dp.roundToPx() })
+            val u = bubM.first().measure(loose.copy(maxWidth = maxBub))
             val ac = actM.first().measure(loose)
             layout(cons.maxWidth, cons.maxHeight) {
                 val H = cons.maxHeight; val W = cons.maxWidth
@@ -203,7 +204,7 @@ fun MessageMenu(
                 if (y + total > H - bottomSafe) y = H - bottomSafe - total
                 if (y < topSafe) y = topSafe
                 val a = lastAnchor
-                val bubX = if (a != null) a.left.toInt().coerceIn(0, maxOf(0, W - u.width)) else if (me) W - side - u.width else side
+                val bubX = (if (a != null) (if (me) a.right.toInt() - u.width else a.left.toInt()) else if (me) W - side - u.width else side).coerceIn(0, maxOf(0, W - u.width))
                 val edgeX = { w: Int -> if (me) (bubX + u.width - w).coerceIn(side, maxOf(side, W - side - w)) else bubX.coerceIn(side, maxOf(side, W - side - w)) }
                 val lift = ((1f - k.value) * 24f).toInt()
                 b?.placeRelative(edgeX(b.width), y + lift)
