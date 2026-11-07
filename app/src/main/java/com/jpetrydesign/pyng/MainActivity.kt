@@ -5,6 +5,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -13,7 +16,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
+import androidx.compose.ui.Modifier
 import com.jpetrydesign.pyng.ui.ChatScreen
+import com.jpetrydesign.pyng.ui.CrashScreen
 import com.jpetrydesign.pyng.ui.EmojiScreen
 import com.jpetrydesign.pyng.ui.InboxScreen
 import com.jpetrydesign.pyng.ui.LogScreen
@@ -30,7 +35,20 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { PyngTheme { Root(hub) } }
+        val app = application as PyngApp
+        setContent {
+            PyngTheme {
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    var crash by remember { mutableStateOf(app.lastCrash()) }
+                    val report = crash
+                    if (report != null) {
+                        CrashScreen(report) { app.clearCrash(); crash = null }
+                    } else {
+                        Root(hub)
+                    }
+                }
+            }
+        }
     }
 
     override fun onStart() {

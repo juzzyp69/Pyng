@@ -70,3 +70,41 @@ fun LogScreen(hub: Hub, onBack: () -> Unit) {
         )
     }
 }
+
+@Composable
+fun CrashScreen(report: String, onContinue: () -> Unit) {
+    val ctx = LocalContext.current
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).systemBarsPadding()) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
+            Text("Messages closed unexpectedly", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "Share this report so it can be fixed.",
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Row(Modifier.padding(top = 8.dp)) {
+                TextButton(onClick = {
+                    val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, report) }
+                    ctx.startActivity(Intent.createChooser(send, "Share crash report"))
+                }) { Text("Share report") }
+                TextButton(onClick = {
+                    val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    cm.setPrimaryClip(ClipData.newPlainText("Crash report", report))
+                    Toast.makeText(ctx, "Copied", Toast.LENGTH_SHORT).show()
+                }) { Text("Copy") }
+                TextButton(onClick = onContinue) { Text("Continue") }
+            }
+        }
+        Text(
+            report,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+            lineHeight = 15.sp,
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .horizontalScroll(rememberScrollState())
+                .padding(12.dp),
+        )
+    }
+}

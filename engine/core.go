@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -37,12 +38,13 @@ type Messenger struct {
 	log      zerolog.Logger
 	logFile  *os.File
 
-	mu      sync.Mutex
-	auth    *libgm.AuthData
-	client  *libgm.Client
-	convs   map[string]*gmproto.Conversation
-	sims    []*gmproto.SIMCard
-	pairing context.CancelFunc
+	mu        sync.Mutex
+	connectMu sync.Mutex
+	auth      *libgm.AuthData
+	client    *libgm.Client
+	convs     map[string]*gmproto.Conversation
+	sims      []*gmproto.SIMCard
+	pairing   context.CancelFunc
 }
 
 // NewMessenger creates the engine. dataDir is a private app folder where the
@@ -60,8 +62,43 @@ func NewMessenger(dataDir string, listener Listener) *Messenger {
 	} else {
 		m.log = zerolog.Nop()
 	}
+	// Fatal Go crashes (which would otherwise only reach logcat) are written to
+	// crash.txt. A crash from the previous run is kept as crash-last.txt.
+	crashPath := filepath.Join(dataDir, "crash.txt")
+	if st, err := os.Stat(crashPath); err == nil && st.Size() > 0 {
+		_ = os.Rename(crashPath, filepath.Join(dataDir, "crash-last.txt"))
+	}
+	if f, err := os.OpenFile(crashPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600); err == nil {
+		_ = debug.SetCrashOutput(f, debug.CrashOptions{})
+		_ = f.Close()
+	}
 	m.auth = m.loadSession()
+	m.log.Info().Bool("paired", m.auth != nil).Msg("Engine started")
 	return m
+}
+
+// LastCrash returns the report of a crash from the previous run, if any.
+func (m *Messenger) LastCrash() string {
+	data, err := os.ReadFile(filepath.Join(m.dir, "crash-last.txt"))
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+// ClearCrash forgets the previous crash report.
+func (m *Messenger) ClearCrash() {
+	_ = os.Remove(filepath.Join(m.dir, "crash-last.txt"))
+}
+
+// guard turns a panic inside an exported call into an error instead of a crash.
+func (m *Messenger) guard(name string, err *error) {
+	if r := recover(); r != nil {
+		m.log.Error().Any("panic", r).Str("call", name).Bytes("stack", debug.Stack()).Msg("Recovered panic")
+		if err != nil {
+			*err = fmt.Errorf("internal error in %s: %v", name, r)
+		}
+	}
 }
 
 // ---------- session storage ----------
@@ -125,7 +162,10 @@ func (m *Messenger) newClient(ad *libgm.AuthData) *libgm.Client {
 }
 
 // Start connects using the stored session. Safe to call repeatedly.
-func (m *Messenger) Start() error {
+func (m *Messenger) Start() (err error) {
+	defer m.guard("Start", &err)
+	m.connectMu.Lock()
+	defer m.connectMu.Unlock()
 	if !m.IsPaired() {
 		return errors.New("not paired")
 	}
@@ -139,7 +179,9 @@ func (m *Messenger) Start() error {
 		return nil
 	}
 	m.emit("connection", map[string]any{"state": "connecting"})
+	m.log.Info().Msg("Connecting")
 	if err := cli.Connect(context.Background()); err != nil {
+		m.log.Err(err).Msg("Connect failed")
 		m.emit("connection", map[string]any{"state": "error", "error": err.Error()})
 		return err
 	}
@@ -163,9 +205,10 @@ func (m *Messenger) Stop() {
 // JSON object of cookie name to value taken from a signed-in session at
 // messages.google.com. It returns the emoji the person must tap in Google
 // Messages; the result arrives later as a "paired" or "pair_error" event.
-func (m *Messenger) StartGooglePairing(cookiesJSON string) (string, error) {
+func (m *Messenger) StartGooglePairing(cookiesJSON string) (emoji string, err error) {
+	defer m.guard("StartGooglePairing", &err)
 	cookies := map[string]string{}
-	if err := json.Unmarshal([]byte(cookiesJSON), &cookies); err != nil {
+	if err = json.Unmarshal([]byte(cookiesJSON), &cookies); err != nil {
 		return "", fmt.Errorf("bad cookies: %w", err)
 	}
 	for _, k := range []string{"SID", "HSID", "SSID", "APISID", "SAPISID", "OSID"} {
@@ -174,18 +217,21 @@ func (m *Messenger) StartGooglePairing(cookiesJSON string) (string, error) {
 		}
 	}
 	m.cancelPairing()
+	m.log.Info().Int("cookies", len(cookies)).Msg("Starting Google account pairing")
 	ad := libgm.NewAuthData()
 	ad.SetCookies(cookies)
 	cli := m.newClient(ad)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := cli.FetchConfig(ctx); err != nil {
+	if err = cli.FetchConfig(ctx); err != nil {
+		m.log.Err(err).Msg("FetchConfig failed")
 		return "", fmt.Errorf("could not reach Google Messages: %w", err)
 	}
 	bgCtx, bgCancel := context.WithCancel(context.Background())
 	emoji, sess, err := cli.StartGaiaPairing(ctx, bgCtx)
 	if err != nil {
+		m.log.Err(err).Msg("StartGaiaPairing failed")
 		bgCancel()
 		cli.Disconnect()
 		return "", friendlyPairError(err)
@@ -194,20 +240,34 @@ func (m *Messenger) StartGooglePairing(cookiesJSON string) (string, error) {
 	m.pairing = bgCancel
 	m.mu.Unlock()
 
+	m.log.Info().Str("emoji", emoji).Msg("Waiting for emoji confirmation")
 	go func() {
-		defer bgCancel()
+		defer m.guard("FinishGaiaPairing", nil)
 		phoneID, err := cli.FinishGaiaPairing(bgCtx, sess)
+		bgCancel()
 		if err != nil {
+			m.log.Err(err).Msg("FinishGaiaPairing failed")
 			cli.Disconnect()
 			m.emit("pair_error", map[string]any{"error": friendlyPairError(err).Error()})
 			return
 		}
-		m.adopt(cli, ad, phoneID)
-		go func() {
-			if err := cli.Reconnect(context.Background()); err != nil {
-				m.log.Err(err).Msg("Reconnect after pairing failed")
-			}
-		}()
+		m.log.Info().Str("phone", phoneID).Msg("Paired")
+		// Reconnect with the new keys before anything else uses the client.
+		m.connectMu.Lock()
+		m.mu.Lock()
+		old := m.client
+		m.client = cli
+		m.auth = ad
+		m.mu.Unlock()
+		if old != nil && old != cli {
+			old.Disconnect()
+		}
+		m.saveSession()
+		if err := cli.Reconnect(context.Background()); err != nil {
+			m.log.Err(err).Msg("Reconnect after pairing failed")
+		}
+		m.connectMu.Unlock()
+		m.emit("paired", map[string]any{"phone": phoneID})
 	}()
 	return emoji, nil
 }
@@ -313,7 +373,8 @@ func ctx20() (context.Context, context.CancelFunc) {
 }
 
 // ListConversations returns up to count inbox conversations as a JSON array.
-func (m *Messenger) ListConversations(count int) (string, error) {
+func (m *Messenger) ListConversations(count int) (res string, err error) {
+	defer m.guard("ListConversations", &err)
 	cli, err := m.ready()
 	if err != nil {
 		return "", err
@@ -339,7 +400,8 @@ func (m *Messenger) ListConversations(count int) (string, error) {
 
 // FetchMessages returns the newest count messages of a conversation, oldest
 // first, as a JSON array.
-func (m *Messenger) FetchMessages(conversationID string, count int) (string, error) {
+func (m *Messenger) FetchMessages(conversationID string, count int) (res string, err error) {
+	defer m.guard("FetchMessages", &err)
 	cli, err := m.ready()
 	if err != nil {
 		return "", err
@@ -362,7 +424,8 @@ func (m *Messenger) FetchMessages(conversationID string, count int) (string, err
 
 // SendText sends a plain text message. It returns the temporary id, which also
 // appears on the message once Google Messages confirms it.
-func (m *Messenger) SendText(conversationID string, text string) (string, error) {
+func (m *Messenger) SendText(conversationID string, text string) (res string, err error) {
+	defer m.guard("SendText", &err)
 	cli, err := m.ready()
 	if err != nil {
 		return "", err
@@ -453,7 +516,15 @@ func (m *Messenger) DeleteMessage(messageID string) error {
 
 // ---------- events ----------
 
+func errText(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
 func (m *Messenger) handleEvent(evt any) {
+	defer m.guard(fmt.Sprintf("event %T", evt), nil)
 	switch e := evt.(type) {
 	case *libgm.WrappedMessage:
 		m.emit("message", msgJSON(e.Message))
@@ -489,11 +560,11 @@ func (m *Messenger) handleEvent(evt any) {
 	case *events.PhoneRespondingAgain:
 		m.emit("connection", map[string]any{"state": "ready"})
 	case *events.ListenTemporaryError:
-		m.emit("connection", map[string]any{"state": "reconnecting", "error": e.Error.Error()})
+		m.emit("connection", map[string]any{"state": "reconnecting", "error": errText(e.Error)})
 	case *events.ListenRecovered:
 		m.emit("connection", map[string]any{"state": "ready"})
 	case *events.ListenFatalError:
-		m.emit("connection", map[string]any{"state": "error", "error": e.Error.Error()})
+		m.emit("connection", map[string]any{"state": "error", "error": errText(e.Error)})
 	case *events.GaiaLoggedOut, *gmproto.RevokePairData:
 		m.mu.Lock()
 		m.auth = nil
