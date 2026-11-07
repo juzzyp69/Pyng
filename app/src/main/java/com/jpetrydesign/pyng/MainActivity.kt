@@ -57,14 +57,17 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val repo = app.repo
+        val demo = intent?.getBooleanExtra("demo", false) == true
+        if (demo) setupDemo(intent)
         val p = repo.prefs.state
         val start: Route = when {
+            demo -> demoRoute(intent.getStringExtra("route"))
             !repo.paired -> Route.Setup(if (p.setupDone) 2 else 0)
             !p.setupDone -> Route.Setup(3)
             else -> Route.Home
         }
         nav = Nav(start)
-        locked = p.on("bioLock")
+        locked = p.on("bioLock") && !demo
         handle(intent)
         setContent {
             var crash by remember { mutableStateOf(app.lastCrash()) }
@@ -84,12 +87,52 @@ class MainActivity : FragmentActivity() {
         }
     }
 
+    /** Sample data and settings for automated screenshots (adb only). */
+    private fun setupDemo(i: Intent) {
+        val repo = app.repo
+        repo.loadDemo()
+        repo.demoOpen = i.getStringExtra("open")
+        repo.prefs.edit { pr ->
+            var x = pr.copy(toggles = pr.toggles + ("bioLock" to false))
+            i.getStringExtra("mode")?.let { x = x.copy(mode = it) }
+            i.getStringExtra("layout")?.let { x = x.copy(pinLayout = it) }
+            i.getStringExtra("text")?.let { x = x.copy(textSize = it) }
+            i.getStringExtra("theme")?.let { x = x.copy(themeKey = it) }
+            i.getStringExtra("bubble")?.let { x = x.copy(bubble = it) }
+            i.getStringExtra("wall")?.let { x = x.copy(defWall = it) }
+            i.getStringExtra("pinstyle")?.let { x = x.copy(pinStyle = it) }
+            x
+        }
+    }
+
+    private fun demoRoute(r: String?): Route {
+        val (k, arg) = (r ?: "home").split(":", limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+        return when (k) {
+            "thread" -> Route.Thread(arg.ifEmpty { "c1" })
+            "search" -> Route.Search
+            "new" -> Route.NewChat()
+            "newgroup" -> Route.NewChat(true)
+            "contact" -> Route.Contact(arg.ifEmpty { "c1" })
+            "theme" -> Route.ChatTheme(arg.ifEmpty { "c1" })
+            "settings" -> Route.Settings
+            "section" -> Route.Section(arg)
+            "appearance" -> Route.Appearance
+            "profile" -> Route.Profile
+            "react" -> Route.ReactPick
+            "lists" -> Route.Lists(arg)
+            "setup" -> Route.Setup(arg.toIntOrNull() ?: 0)
+            "log" -> Route.Log
+            else -> Route.Home
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handle(intent)
     }
 
     private fun handle(i: Intent?) {
+        if (i?.action == "new" && app.repo.paired) { nav.go(Route.NewChat()); return }
         val chat = i?.getStringExtra("chat") ?: return
         if (app.repo.paired && app.repo.prefs.state.setupDone) nav.openChat(chat)
     }
@@ -100,8 +143,10 @@ class MainActivity : FragmentActivity() {
         repo.foreground = true
         if (repo.prefs.state.on("bioLock") && System.currentTimeMillis() - lastStop > 60_000 && lastStop > 0) locked = true
         if (locked) unlock()
-        app.appScope.launch { app.hub.io { if (it.isPaired) it.start() } }
-        LinkService.start(this)
+        if (!repo.demo) {
+            app.appScope.launch { app.hub.io { if (it.isPaired) it.start() } }
+            LinkService.start(this)
+        }
     }
 
     override fun onStop() {

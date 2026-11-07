@@ -268,6 +268,7 @@ fun SectionScreen(nav: Nav, key: String) {
                 Note("Chat features (RCS) come from Google Messages running on your phone. Group names, reactions, typing and read receipts only reach people who also have chat features on.")
             }
             "privacy" -> {
+                Group("Permissions") { PermissionRows() }
                 Group("Protection") {
                     TogRow("Spam protection", "spam", "Checks unknown senders and their links on this phone"); Hairline()
                     ListRow("Spam & blocked", "Chats Google Messages marked as spam, and numbers you blocked", onClick = { nav.go(Route.Lists("spam")) }); Hairline()
@@ -293,6 +294,15 @@ fun SectionScreen(nav: Nav, key: String) {
                 Group("Visual") {
                     TogRow("Reduce transparency", "reduceBlur", "Solid surfaces instead of frosted glass"); Hairline()
                     TogRow("Reduce motion", "reduceMotion", "Turns off animations like typing dots and effects")
+                }
+                val scale = remember { runCatching { SysSettings.Global.getFloat(ctx.contentResolver, SysSettings.Global.ANIMATOR_DURATION_SCALE, 1f) }.getOrDefault(1f) }
+                if (scale == 0f) {
+                    Spacer(Modifier.height(12.dp))
+                    Card {
+                        ListRow("Android animations are off", "Your phone's \"Remove animations\" setting turns off motion in every app, including this one. Tap to open accessibility settings.", icon = Icons.access, onClick = {
+                            runCatching { ctx.startActivity(Intent(SysSettings.ACTION_ACCESSIBILITY_SETTINGS)) }
+                        })
+                    }
                 }
                 Note("These work alongside your phone's accessibility settings, including system font size and TalkBack.")
             }
@@ -520,7 +530,11 @@ fun LogScreen(nav: Nav) {
     val ctx = LocalContext.current
     val t = LocalTok.current
     var text by remember { mutableStateOf("Loading…") }
-    LaunchedEffect(Unit) { text = repo.hub.io { it.readLog(150_000) }.getOrDefault("").ifBlank { "The log is empty." } }
+    LaunchedEffect(Unit) {
+        val scale = runCatching { SysSettings.Global.getFloat(ctx.contentResolver, SysSettings.Global.ANIMATOR_DURATION_SCALE, 1f) }.getOrDefault(1f)
+        val head = "Version ${BuildConfig.VERSION_NAME} · ${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE} · animation scale $scale\n\n"
+        text = head + repo.hub.io { it.readLog(150_000) }.getOrDefault("").ifBlank { "The log is empty." }
+    }
     BackHandler { nav.back() }
     Box(Modifier.fillMaxSize().background(t.bg)) {
         Column(Modifier.fillMaxSize().systemBarsPadding()) {

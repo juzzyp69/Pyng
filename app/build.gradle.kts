@@ -76,4 +76,7 @@ dependencies {
     implementation("io.coil-kt:coil-gif:2.7.0")
     implementation("io.coil-kt:coil-video:2.7.0")
     implementation("dev.chrisbanes.haze:haze:1.5.0")
+    implementation("androidx.glance:glance-appwidget:1.1.1")
+    implementation("com.google.mlkit:translate:17.0.3")
+    implementation("com.google.mlkit:language-id:17.0.6")
 }

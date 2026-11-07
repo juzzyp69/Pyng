@@ -21,7 +21,7 @@ object Icons {
     const val clock = "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2"
     const val trash = "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"
     const val bell = "M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0"
-    const val bellOff = "M6 8a6 6 0 0 1 10.5-4M18 11v3l2 3H8M4 4l16 16M10 20a2 2 0 0 0 4 0"
+    const val bellOff = "M8.7 4.4A6 6 0 0 1 18 9.5V14l1.6 2.4M15 17H4.4L6 14.5v-5a6 6 0 0 1 .5-2.4M10 20a2.2 2.2 0 0 0 4 0M3.5 3.5l17 17"
     const val pinned = "M9 3h6l-1 6 4 4H6l4-4zM12 13v8"
     const val chev = "M9 6l6 6-6 6"
     const val palette = "M12 3a9 9 0 1 0 0 18c1 0 1.5-.8 1.5-1.6 0-1.3-1-1.6-1-2.7 0-.9.7-1.7 1.7-1.7H17a4 4 0 0 0 4-4C21 6.4 17 3 12 3zM7.5 11.5h.01M10 7.5h.01M15 7.5h.01"

@@ -104,7 +104,7 @@ fun AppearanceScreen(nav: Nav) {
     val repo = LocalRepo.current
     val t = LocalTok.current
     val p = repo.prefs.state
-    var pick by remember { mutableStateOf<String?>(null) }
+    var pick by remember { mutableStateOf(repo.demoOpen?.removePrefix("pick:")?.takeIf { repo.demoOpen?.startsWith("pick:") == true }.also { repo.demoOpen = null }) }
     val pal = Palettes.byKey(p.themeKey, p.c1, p.c2)
     Box(Modifier.fillMaxSize()) {
         Page("Appearance", { nav.back() }) {

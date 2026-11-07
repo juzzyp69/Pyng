@@ -64,6 +64,15 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     fun toast(text: String, undo: (() -> Unit)? = null) { _toasts.tryEmit(Toast(text, undo)) }
 
     var onIncoming: ((Conv, Msg) -> Unit)? = null
+
+    /** In-app banner for a message from another chat while the app is open. */
+    private val _banners = MutableSharedFlow<Pair<Conv, Msg>>(extraBufferCapacity = 4)
+    val banners: SharedFlow<Pair<Conv, Msg>> = _banners
+
+    /** Sample data for automated screenshots; never touches Google Messages. */
+    var demo = false
+        private set
+    var demoOpen: String? = null
     var onRead: ((String) -> Unit)? = null
 
     private val cacheFile = File(app.filesDir, "convs.json")
@@ -96,7 +105,10 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
                 }
                 if (!m.fromMe && !m.isSys && m.ts > System.currentTimeMillis() - 120_000) {
                     if (activeChat == m.convId && foreground) markRead(m.convId)
-                    else c?.let { onIncoming?.invoke(it, m) }
+                    else if (foreground && c != null) {
+                        val p = prefs.state
+                        if (p.on("notif") && c.id !in p.muted && p.alerts[c.id]?.on != false) _banners.tryEmit(c to m)
+                    } else c?.let { onIncoming?.invoke(it, m) }
                 }
             }
             "conversation" -> putConv(Conv.from(e.data))
@@ -151,6 +163,7 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
                     }
                     cacheFile.writeText(arr.toString())
                 }
+                com.jpetrydesign.pyng.widget.Widgets.refresh(app)
             }
         }
     }
@@ -168,7 +181,7 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     // ---------- loading ----------
 
     fun refresh() {
-        if (loading) return
+        if (loading || demo) return
         loading = true
         scope.launch {
             var tries = 0
@@ -204,6 +217,7 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     }
 
     fun loadMessages(convId: String, older: Boolean = false) {
+        if (demo) { if (!msgs.containsKey(convId)) msgs[convId] = emptyList(); return }
         scope.launch {
             val cur = msgs[convId].orEmpty()
             val oldest = cur.firstOrNull { it.id.isNotEmpty() }
@@ -224,11 +238,13 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     }
 
     fun loadContacts(force: Boolean = false) {
+        if (demo) return
         if (contacts.isNotEmpty() && !force) return
         scope.launch { hub.io { it.listContacts() }.onSuccess { j -> contacts = Contact.list(j).sortedBy { it.name.lowercase() } } }
     }
 
     fun ensureAvatars(ids: List<String>, contactsKind: Boolean = false) {
+        if (demo) return
         val need = ids.filter { it.isNotEmpty() && !avatars.containsKey(it) && it !in avatarPending }
         if (need.isEmpty()) return
         avatarPending += need
@@ -244,6 +260,7 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     }
 
     fun ensureMedia(ref: MediaRef, thumb: Boolean = false) {
+        if (demo) return
         val id = if (thumb && ref.thumbId.isNotEmpty()) ref.thumbId else ref.id
         val key = if (thumb && ref.thumbId.isNotEmpty()) ref.thumbKey else ref.key
         if (id.isEmpty() || media.containsKey(id) || mediaBusy[id] == true) return
@@ -285,6 +302,13 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     }
 
     private fun deliver(local: Msg) {
+        if (demo) {
+            scope.launch {
+                delay(650)
+                msgs[local.convId] = msgs[local.convId].orEmpty().map { if (it.tmpId == local.tmpId) it.copy(status = "OUTGOING_DELIVERED", id = "d" + it.tmpId) else it }
+            }
+            return
+        }
         scope.launch {
             val att = local.media.firstOrNull()
             val r = hub.io {
@@ -477,5 +501,68 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
             media.clear()
             toast("Cache cleared")
         }
+    }
+
+    // ---------- sample data ----------
+
+    fun loadDemo() {
+        demo = true
+        paired = true
+        convs.clear(); msgs.clear()
+        val now = System.currentTimeMillis()
+        val min = 60_000L
+        fun person(id: String, name: String, num: String, known: Boolean = true) =
+            Person(id, num, num, name, name.substringBefore(' '), "", false, if (known) "c$id" else "")
+        val me = Person("me", "", "", "You", "You", "", true, "")
+        fun conv(id: String, name: String, people: List<Person>, preview: String, agoMin: Long, unread: Boolean = false, fromMe: Boolean = false, group: Boolean = false, rcs: Boolean = true, status: String = "active", read: Boolean = false) =
+            Conv(id, name, preview, fromMe, if (group) people.first().name else "", if (read) "OUTGOING_DISPLAYED" else "OUTGOING_DELIVERED",
+                now - agoMin * min, unread, group, rcs, "", false, false, status, people + me, "")
+        val jordan = person("p1", "Jordan Lee", "(720) 555-0193")
+        val ava = person("p2", "Ava Morales", "(720) 555-0177")
+        val marcus = person("p3", "Marcus Reed", "(303) 555-0119")
+        val nina = person("p4", "Nina Kask", "(303) 555-0164")
+        val mom = person("p5", "Mom", "(720) 555-0142")
+        val list = listOf(
+            conv("c1", "Jordan Lee", listOf(jordan), "Sending the files over now", 8, unread = true),
+            conv("c2", "Mom", listOf(mom), "Dinner Sunday at 5:00 PM? Bring the good salad", 20, unread = true),
+            conv("c3", "Design crew", listOf(marcus, nina, ava), "The pinned grid looks so clean", 45, group = true),
+            conv("c4", "Ava Morales", listOf(ava), "Yes!! Can not wait", 70, fromMe = false),
+            conv("c5", "227767", listOf(person("p6", "227767", "227767", false)), "Your verification code is 118895. It expires in 10 minutes.", 90, unread = true, rcs = false),
+            conv("c6", "Priya Shah", listOf(person("p7", "Priya Shah", "(303) 555-0185")), "Sounds good, see you then", 130, fromMe = true, read = true),
+            conv("c7", "Marcus Reed", listOf(marcus), "Game night Friday at 7:00 PM?", 600),
+            conv("c8", "(855) 410-2291", listOf(person("p8", "", "(855) 410-2291", false)), "USPS: Your package is on hold due to an unpaid \$1.95 redelivery fee. Pay now: https://usps-redelivery-help.top/track", 700, rcs = false),
+            conv("c9", "Nina Kask", listOf(nina), "Look who claimed my spot on the couch", 1500),
+            conv("c10", "Chris Novak", listOf(person("p9", "Chris Novak", "(720) 555-0156")), "Haha that is perfect", 3000, status = "archived"),
+        )
+        list.forEach { convs[it.id] = it }
+        var n = 0
+        fun msg(c: String, fromMe: Boolean, text: String, agoMin: Long, who: Person? = null, status: String = if (fromMe) "OUTGOING_DISPLAYED" else "INCOMING_COMPLETE", reactions: List<Reaction> = emptyList(), reply: String = "") =
+            Msg("m${++n}", "", c, who?.id ?: if (fromMe) "me" else "", who?.name ?: "", who?.first ?: "", fromMe, status, "", text, emptyList(), now - agoMin * min, reactions, reply, 4, "text")
+        msgs["c1"] = listOf(
+            msg("c1", false, "Hey! Did you get a chance to look at the new layouts?", 70),
+            msg("c1", false, "No rush at all", 69),
+            msg("c1", true, "Yes! The second one feels so much cleaner", 60),
+            msg("c1", true, "Can you send the final exports when you get a sec?", 59),
+            msg("c1", false, "On it 👍", 30, reactions = listOf(Reaction("❤️", 1, listOf("me")))),
+            msg("c1", false, "Sending the files over now, here is the link too: https://github.com/juzzyp69/Pyng", 9),
+            msg("c1", false, "🔥🔥", 8),
+        )
+        msgs["c3"] = listOf(
+            msg("c3", false, "New round of comps is up", 80, marcus),
+            msg("c3", false, "The pinned grid looks so clean", 60, nina, reactions = listOf(Reaction("🔥", 2, listOf("p3", "p2")))),
+            msg("c3", false, "Agreed, ship it", 55, ava),
+            msg("c3", true, "Pushing the update tonight", 50, reply = "m${n - 1}"),
+            msg("c3", false, "Saturday at 9:00 AM works for everyone?", 45, marcus),
+        )
+        msgs["c2"] = listOf(
+            msg("c2", false, "Did you make it home ok?", 1500),
+            msg("c2", true, "Yep! Just got in", 1490),
+            msg("c2", false, "Call me when you are free", 25),
+            msg("c2", false, "Dinner Sunday at 5:00 PM? Bring the good salad", 20),
+        )
+        msgs["c8"] = listOf(msg("c8", false, convs["c8"]!!.preview, 700))
+        typing["c4"] = now + 600_000
+        contacts = listOf(jordan, ava, marcus, nina, mom).map { Contact(it.id, it.contactId, it.name, it.number, it.formatted, "") }
+        prefs.edit { it.copy(pinned = listOf("c2", "c4", "c3", "c7", "c9", "c6"), pinsSeeded = true, setupDone = true, profileName = "Justin Petry") }
     }
 }

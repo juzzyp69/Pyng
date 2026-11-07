@@ -131,6 +131,8 @@ fun Composer(
     onSend: (String) -> Unit,
     smart: Boolean,
     lastIncoming: String,
+    fontSize: Float = 15.5f,
+    initialPanel: String? = null,
 ) {
     val repo = LocalRepo.current
     val ctx = LocalContext.current
@@ -138,11 +140,13 @@ fun Composer(
     val motion = LocalMotion.current
     val scope = rememberCoroutineScope()
     val kb = LocalSoftwareKeyboardController.current
-    var panel by remember { mutableStateOf<String?>(null) }
+    var panel by remember { mutableStateOf(initialPanel) }
     var recording by remember { mutableStateOf(false) }
     var recSec by remember { mutableIntStateOf(0) }
     val recorder = remember { mutableStateListOf<Pair<MediaRecorder, File>>() }
     var busy by remember { mutableStateOf(false) }
+    var makerUri by remember { mutableStateOf<Uri?>(null) }
+    val pickForSticker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u -> if (u != null) makerUri = u }
 
     fun add(uris: List<Uri>) {
         if (uris.isEmpty()) return
@@ -211,6 +215,25 @@ fun Composer(
                     }
                 }
             }
+            val mention = if (conv?.group == true) Regex("(^|\\s)@(\\w*)$").find(draft) else null
+            if (mention != null && conv != null) {
+                val q = mention.groupValues[2].lowercase()
+                val people = conv.others.filter { it.short.lowercase().startsWith(q) || it.display.lowercase().startsWith(q) }
+                if (people.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    people.forEachIndexed { i, person ->
+                        val w = whoOf(person)
+                        Row(
+                            Modifier.enter(i, pop = true).height(38.dp).clip(RoundedCornerShape(19.dp)).frost(RoundedCornerShape(19.dp), t.glassStrong, 14.dp)
+                                .clickable { onDraft(draft.replace(Regex("@(\\w*)$"), "@" + person.short + " ")) }.padding(start = 4.dp, end = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            com.jpetrydesign.pyng.ui.kit.Avatar(w.photo, w.ini, 30.dp, t.tone, t.p, 11.sp)
+                            Spacer(Modifier.width(8.dp))
+                            T("@" + person.short, size = 13.5.sp, weight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
             if (schedule != null) {
                 Row(Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).background(t.tone).padding(start = 12.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Ico(Icons.clock, t.p, 13.dp, 2.3f); Spacer(Modifier.width(6.dp))
@@ -270,11 +293,11 @@ fun Composer(
                                     conv?.group == true -> if (conv.rcs) "Message ${conv.title}" else "Group text"
                                     conv?.rcs == true -> "Chat message"
                                     else -> "Text message"
-                                }, size = 15.sp, color = t.ink.copy(alpha = 0.5f), maxLines = 1,
+                                }, size = fontSize.sp, color = t.ink.copy(alpha = 0.5f), maxLines = 1,
                             )
                             BasicTextField(
                                 draft, onDraft,
-                                textStyle = TextStyle(fontFamily = Geist, fontSize = 15.sp, lineHeight = 20.sp, color = t.ink),
+                                textStyle = TextStyle(fontFamily = Geist, fontSize = fontSize.sp, lineHeight = (fontSize * 1.32f).sp, color = t.ink),
                                 cursorBrush = SolidColor(t.p),
                                 maxLines = 6,
                                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = if (p.on("enterSend")) ImeAction.Send else ImeAction.Default),
@@ -347,9 +370,13 @@ fun Composer(
                             "Voice" -> startRec()
                         }
                     }
-                    "expr" -> Expressions(t, initial = "Emoji", onEmoji = { e -> onDraft(draft + e); repo.prefs.edit { it.copy(recents = (listOf(e) + it.recents.filter { r -> r != e }).take(24)) } }, onSendText = { onSend(it) }, onGif = { f -> attachments.add(f); panel = null })
-                    "gifs" -> Expressions(t, initial = "GIFs", onEmoji = { e -> onDraft(draft + e) }, onSendText = { onSend(it) }, onGif = { f -> attachments.add(f); panel = null })
-                    "stickers" -> Expressions(t, initial = "Stickers", onEmoji = { e -> onDraft(draft + e) }, onSendText = { onSend(it); panel = null }, onGif = { f -> attachments.add(f); panel = null })
+                    "expr" -> Expressions(t, initial = "Emoji", onMake = { panel = "maker" }, onEmoji = { e -> onDraft(draft + e); repo.prefs.edit { it.copy(recents = (listOf(e) + it.recents.filter { r -> r != e }).take(24)) } }, onSendText = { onSend(it) }, onGif = { f -> attachments.add(f); panel = null })
+                    "gifs" -> Expressions(t, initial = "GIFs", onMake = { panel = "maker" }, onEmoji = { e -> onDraft(draft + e) }, onSendText = { onSend(it) }, onGif = { f -> attachments.add(f); panel = null })
+                    "stickers" -> Expressions(t, initial = "Stickers", onEmoji = { e -> onDraft(draft + e) }, onSendText = { onSend(it); panel = null }, onGif = { f -> attachments.add(f); panel = null }, onMake = { panel = "maker" })
+                    "maker" -> StickerMaker(t, makerUri,
+                        onPick = { pickForSticker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        onBack = { panel = "stickers" },
+                        onDone = { f -> conv?.let { repo.send(it.id, "", replyTo?.id.orEmpty(), listOf(f)) }; makerUri = null; panel = null })
                     "gallery" -> Gallery(t, onPick = { add(it) }, onAll = { pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) })
                     "location" -> LocationPanel(t, onBack = { panel = "plus" }) { text -> onSend(text); panel = null }
                     "schedule" -> SchedulePanel(t, onBack = { panel = "plus" }) { onSchedule(it); panel = null }
@@ -412,7 +439,7 @@ private fun PlusGrid(t: Tok, onPick: (String) -> Unit) {
 // ---------- expressions ----------
 
 @Composable
-private fun Expressions(t: Tok, initial: String, onEmoji: (String) -> Unit, onSendText: (String) -> Unit, onGif: (Pending) -> Unit) {
+private fun Expressions(t: Tok, initial: String, onEmoji: (String) -> Unit, onSendText: (String) -> Unit, onGif: (Pending) -> Unit, onMake: () -> Unit = {}) {
     var tab by remember { mutableStateOf(initial) }
     Column(Modifier.fillMaxSize()) {
         Seg(listOf("Emoji", "GIFs", "Stickers"), tab, { tab = it }, height = 40.dp)
@@ -423,6 +450,11 @@ private fun Expressions(t: Tok, initial: String, onEmoji: (String) -> Unit, onSe
             else -> {
                 val stickers = listOf("🐶", "😺", "🍕", "🎉", "💖", "🔥", "😎", "🌈", "☕", "👻", "🌵", "🍩", "🥳", "🫶", "🦄", "🌻")
                 LazyVerticalGrid(GridCells.Fixed(4), Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        Column(Modifier.aspectRatio(1f).clip(RoundedCornerShape(18.dp)).background(t.tone).press(0.9f, onMake), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            Ico(Icons.plus, t.p, 22.dp, 2.2f); Spacer(Modifier.height(4.dp)); T("Make", size = 12.sp, weight = FontWeight.SemiBold, color = t.p)
+                        }
+                    }
                     items(stickers) { e ->
                         Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(18.dp)).background(t.surface).press(0.9f) { onSendText(e) }, contentAlignment = Alignment.Center) { T(e, size = 44.sp) }
                     }

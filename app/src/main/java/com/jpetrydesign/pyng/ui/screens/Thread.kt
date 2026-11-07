@@ -88,6 +88,7 @@ import com.jpetrydesign.pyng.ui.kit.Provide
 import com.jpetrydesign.pyng.ui.kit.T
 import com.jpetrydesign.pyng.ui.kit.TypingDots
 import com.jpetrydesign.pyng.ui.kit.Wallpaper
+import com.jpetrydesign.pyng.ui.kit.swipeDir
 import com.jpetrydesign.pyng.ui.kit.edge
 import com.jpetrydesign.pyng.ui.kit.frost
 import com.jpetrydesign.pyng.ui.kit.press
@@ -153,6 +154,19 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     var schedule by remember(convId) { mutableStateOf<Pair<Long, String>?>(null) }
     val openedAt = remember(convId) { System.currentTimeMillis() }
     var callSheet by remember { mutableStateOf(false) }
+    // Screenshot hooks: open a panel, menu or status line straight away.
+    val demoOpen = remember { repo.demoOpen.also { repo.demoOpen = null } }
+    val demoPanel = demoOpen?.takeIf { it in setOf("plus", "expr", "gifs", "stickers", "schedule", "maker") }
+    LaunchedEffect(demoOpen, repo.msgs[convId]?.size) {
+        val list = repo.msgs[convId].orEmpty()
+        when (demoOpen) {
+            "menu" -> if (menuFor == null) menuFor = list.lastOrNull { !it.fromMe }
+            "info" -> info = list.lastOrNull { it.fromMe }?.key
+            "ts" -> tsShift = -with(density) { 76.dp.toPx() }
+            "reply" -> replyTo = list.lastOrNull { !it.fromMe }
+            "details" -> detailsFor = list.lastOrNull()
+        }
+    }
 
     LaunchedEffect(convId) {
         repo.activeChat = convId
@@ -196,6 +210,8 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     val matches = if (searching && q.isNotEmpty()) msgs.filter { it.text.lowercase().contains(q) }.map { it.key } else emptyList()
     val curMatch = if (matches.isNotEmpty()) matches[(matches.size - 1 - (matchIdx % matches.size)).coerceIn(0, matches.size - 1)] else null
     val reversed = msgs.asReversed()
+    // The newest messages rise in, staggered, the first time a chat opens.
+    val introKeys = remember(convId, loaded) { if (loaded) reversed.take(10).map { it.key }.toSet() else emptySet() }
     LaunchedEffect(curMatch, hl) {
         val k = curMatch ?: hl ?: return@LaunchedEffect
         val i = reversed.indexOfFirst { it.key == k || it.id == k }
@@ -234,15 +250,10 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                     state = list,
                     reverseLayout = true,
                     modifier = Modifier.fillMaxSize().hazeSource(haze)
-                        .pointerInput(convId) {
-                            val max = 76.dp.toPx()
-                            detectHorizontalDragGestures(
-                                onDragEnd = { tsShift = 0f },
-                                onDragCancel = { tsShift = 0f },
-                            ) { ch, d ->
-                                if (d > 0 || tsShift > 0) { ch.consume(); tsShift = (tsShift + d * 0.7f).coerceIn(0f, max) }
-                            }
-                        },
+                        .swipeDir(convId, -1,
+                            onDrag = { d -> tsShift = (tsShift + d * 0.7f).coerceIn(-with(density) { 76.dp.toPx() }, 0f) },
+                            onEnd = { scope.launch { val a = Animatable(tsShift); a.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 420f)) { tsShift = value } } },
+                        ),
                     contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = topPad, bottom = with(density) { bottomH.toDp() } + 8.dp),
                 ) {
                     if (typing) item("typing") {
@@ -289,6 +300,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                         quote = quote, senderName = if (conv?.group == true && !m.fromMe && !prevSame) (sender?.short ?: m.senderFirst.ifBlank { m.sender }) else null,
                                         senderWho = sender?.let { whoOf(it) }, starred = p.isStarred(m.key), chips = if (m.fromMe) emptyList() else chips,
                                         showPreview = p.on("previews") && spamWhy == null, tsShift = tsShift, timeLabel = clock(m.ts),
+                                        enterDelay = if (i < 10 && m.key in introKeys) (80 + i * 45) else -1,
                                         isNew = m.ts > openedAt, burst = burst?.takeIf { it.first == m.key }?.second, myId = myId,
                                     ),
                                     RowActs(
@@ -351,6 +363,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                         replyTo = replyTo, onCancelReply = { replyTo = null }, attachments = attachments, schedule = schedule,
                         onSchedule = { schedule = it }, onSend = { send(it) }, smart = p.on("smart") && msgs.lastOrNull()?.fromMe == false && draft.isEmpty() && !selecting && conv?.business != true,
                         lastIncoming = msgs.lastOrNull { !it.fromMe }?.text.orEmpty(),
+                        fontSize = fontSize, initialPanel = demoPanel,
                     )
                 }
             }

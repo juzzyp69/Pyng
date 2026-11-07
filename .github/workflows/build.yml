@@ -86,6 +86,29 @@ jobs:
             Download the APK below on your phone and open it to install.
           files: pyng-0.1.${{ github.run_number }}.apk
 
+      - name: Enable KVM
+        if: steps.app.outcome == 'success'
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Screens on emulator
+        id: screens
+        if: steps.app.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 30
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash ci/shots.sh pyng-0.1.${{ github.run_number }}.apk
+
       - name: Save build logs
         if: always()
         shell: bash
@@ -96,6 +119,7 @@ jobs:
             echo "commit: ${{ github.sha }}"
             echo "engine: ${{ steps.engine.outcome }}"
             echo "app: ${{ steps.app.outcome }}"
+            echo "screens: ${{ steps.screens.outcome }}"
             echo "job: ${{ job.status }}"
           } > ci-logs/status.txt
           for f in ci-logs/*.log; do [ -f "$f" ] && tail -c 400000 "$f" > "$f.tmp" && mv "$f.tmp" "$f"; done

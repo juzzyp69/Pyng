@@ -112,6 +112,17 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
     val now = System.currentTimeMillis()
 
     LaunchedEffect(Unit) { if (repo.convs.isEmpty() || !repo.hub.engine.isConnected) repo.refresh() }
+    val ctx = LocalContext.current
+    var askPerms by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!repo.demo && p.permsAsked < 1 && missingPerms(ctx).isNotEmpty()) { kotlinx.coroutines.delay(700); askPerms = true }
+        when (repo.demoOpen) {
+            "rowmenu" -> menuFor = repo.convs["c6"]
+            "strip" -> nav.strip = true
+            "perms" -> askPerms = true
+        }
+        repo.demoOpen = null
+    }
 
     val all = repo.convs.values.toList()
     fun unreadOf(c: Conv) = c.unread || c.id in p.markedUnread
@@ -283,17 +294,18 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                 horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
-                    Modifier.size(60.dp).edge(CircleShape).frost(CircleShape, t.fab).press(0.9f) { nav.go(Route.Search) },
+                    Modifier.size(60.dp).edge(CircleShape, elevation = 8.dp).frost(CircleShape, if (t.solid) t.fab else t.fab.copy(alpha = if (t.dark) 0.34f else 0.42f), 20.dp).press(0.9f) { nav.go(Route.Search) },
                     contentAlignment = Alignment.Center,
-                ) { Ico(Icons.search, t.ink, 23.dp, 2.5f) }
+                ) { SolidSearch(t.ink, 24.dp) }
                 Box(
-                    Modifier.size(60.dp).edge(CircleShape, primary = true).frost(CircleShape, t.fabP).press(0.9f) { nav.go(Route.NewChat()) },
+                    Modifier.size(60.dp).edge(CircleShape, primary = true, elevation = 10.dp).frost(CircleShape, if (t.solid) t.plusFlat else t.plusFlat.copy(alpha = 0.62f), 20.dp).press(0.9f) { nav.go(Route.NewChat()) },
                     contentAlignment = Alignment.Center,
-                ) { Ico(Icons.compose, t.plusInk, 25.dp, 2.1f) }
+                ) { SolidCompose(t.plusInk, if (t.solid) t.plusFlat else t.plusFlat, 27.dp) }
             }
         }
 
         RowMenu(menuFor, onDismiss = { menuFor = null })
+        PermissionSheet(askPerms) { askPerms = false; repo.prefs.edit { it.copy(permsAsked = 1) } }
         if (nav.strip) ColorStrip(onDone = { nav.strip = false })
     }
 }
@@ -357,7 +369,7 @@ fun ConvRow(
         typing -> if (c.group) "Someone is typing…" else "typing…"
         draft != null -> draft
         else -> (if (c.fromMe) "You: " else if (c.group && c.sender.isNotBlank()) c.sender.substringBefore(' ') + ": " else "") + c.preview
-    }
+    }.replace(Regex("\\s*\\n\\s*"), " ")
     val action = if (dx.value > 0) p.opt("swipeR") else p.opt("swipe")
     val cfg = swipeCfg(action, c, p.isPinned(c.id), p.isMuted(c.id), unread, t)
 
@@ -406,10 +418,12 @@ fun ConvRow(
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            T(c.title, size = nameSize.sp, weight = if (hot || bold) FontWeight.SemiBold else FontWeight.Medium, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
-                            if (pinMark) { Spacer(Modifier.width(6.dp)); Ico(Icons.pinned, t.p, 13.dp, 1.6f, fill = t.p) }
-                            if (muted) { Spacer(Modifier.width(6.dp)); Ico(Icons.bellOff, t.faint, 13.dp, 2.2f) }
-                            Spacer(Modifier.weight(1f))
+                            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                                T(c.title, size = nameSize.sp, weight = if (hot || bold) FontWeight.SemiBold else FontWeight.Medium, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                                if (pinMark) { Spacer(Modifier.width(6.dp)); Ico(Icons.pinned, t.p, 13.dp, 1.6f, fill = t.p) }
+                                if (muted) { Spacer(Modifier.width(6.dp)); Ico(Icons.bellOff, t.faint, 13.dp, 2.2f) }
+                            }
+                            Spacer(Modifier.width(10.dp))
                             T(listTime(c.ts), size = 12.5.sp, color = if (hot) t.p else t.soft, weight = if (hot) FontWeight.SemiBold else FontWeight.Normal)
                         }
                         Spacer(Modifier.height(3.dp))
@@ -697,3 +711,30 @@ fun RowMenu(c: Conv?, onDismiss: () -> Unit) {
 
 @Suppress("unused")
 private fun Modifier.ring(on: Boolean, color: Color) = if (on) this.border(2.dp, color, CircleShape) else this
+
+/** A filled chat bubble with a plus cut through it, centered in its box. */
+@Composable
+fun SolidCompose(ink: Color, hole: Color, size: Dp) {
+    androidx.compose.foundation.Canvas(Modifier.size(size)) {
+        val k = this.size.minDimension / 24f
+        androidx.compose.ui.graphics.drawscope.scale(k, k, pivot = Offset.Zero) {
+            val bubble = androidx.compose.ui.graphics.vector.PathParser().parsePathString("M12 3.2c-4.9 0-8.8 3.6-8.8 8.1 0 2 .8 3.9 2.1 5.3l-.9 3.6 3.9-1.6c1.1.5 2.4.8 3.7.8 4.9 0 8.8-3.6 8.8-8.1S16.9 3.2 12 3.2z").toPath()
+            drawPath(bubble, ink)
+            val st = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.2f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            drawLine(hole, Offset(12f, 7.8f), Offset(12f, 14.8f), strokeWidth = st.width, cap = st.cap, blendMode = androidx.compose.ui.graphics.BlendMode.Clear)
+            drawLine(hole, Offset(8.5f, 11.3f), Offset(15.5f, 11.3f), strokeWidth = st.width, cap = st.cap, blendMode = androidx.compose.ui.graphics.BlendMode.Clear)
+        }
+    }
+}
+
+/** A bold magnifier with a filled lens ring. */
+@Composable
+fun SolidSearch(ink: Color, size: Dp) {
+    androidx.compose.foundation.Canvas(Modifier.size(size)) {
+        val k = this.size.minDimension / 24f
+        androidx.compose.ui.graphics.drawscope.scale(k, k, pivot = Offset.Zero) {
+            drawCircle(ink, radius = 6.6f, center = Offset(10.5f, 10.5f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.8f))
+            drawLine(ink, Offset(15.4f, 15.4f), Offset(20.2f, 20.2f), strokeWidth = 3f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        }
+    }
+}

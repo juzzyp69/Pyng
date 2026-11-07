@@ -301,47 +301,17 @@ private fun StatusCard(ok: Boolean, title: String, sub: String) {
 
 @Composable
 private fun Permissions(onNext: () -> Unit) {
-    val t = LocalTok.current
-    val granted = remember { mutableStateMapOf<String, Boolean>() }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { res -> res.forEach { (k, v) -> granted[k] = v } }
-    val notif = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.POST_NOTIFICATIONS else null
-    val photos = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
-    val rows = listOfNotNull(
-        notif?.let { Triple(Icons.bell, "Notifications", "Alerts with quick reply" to it) },
-        Triple(Icons.gallery, "Photos & media", "Send photos straight from the message box" to photos),
-        Triple(Icons.mic, "Microphone", "Record voice messages" to Manifest.permission.RECORD_AUDIO),
-        Triple(Icons.pin, "Location", "Share where you are" to Manifest.permission.ACCESS_FINE_LOCATION),
-    )
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { onNext() }
     SetupPage(
         Icons.shield, "A Few Permissions", "Only what the app needs. You can change these any time in Android settings.",
         "Allow and continue", {
-            val all = rows.map { it.third.second } + (if (Build.VERSION.SDK_INT >= 33) listOf(Manifest.permission.READ_MEDIA_VIDEO) else emptyList())
-            launcher.launch(all.toTypedArray())
-            onNext()
+            val need = missingPerms(ctx).flatMap { it.perms }
+            if (need.isEmpty()) onNext() else launcher.launch(need.toTypedArray())
         },
         secondary = "Not now", onSecondary = onNext,
     ) {
-        Box(Modifier.enter(3)) {
-            WhiteCard {
-                rows.forEachIndexed { i, (icon, title, pair) ->
-                    if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(t.hair))
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 15.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(42.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(icon, t.p, 19.dp) }
-                        Spacer(Modifier.width(14.dp))
-                        Column(Modifier.weight(1f)) {
-                            T(title, size = 15.5.sp, weight = FontWeight.SemiBold)
-                            T(pair.first, size = 13.sp, color = t.soft, lineHeight = 18.sp)
-                        }
-                        val on = granted[pair.second] == true
-                        Box(
-                            Modifier.height(36.dp).clip(RoundedCornerShape(18.dp)).background(if (on) t.p else t.tone)
-                                .clickable { launcher.launch(arrayOf(pair.second)) }.padding(horizontal = 16.dp),
-                            contentAlignment = Alignment.Center,
-                        ) { T(if (on) "Allowed" else "Allow", size = 13.5.sp, weight = FontWeight.SemiBold, color = if (on) t.onFill else t.p) }
-                    }
-                }
-            }
-        }
+        Box(Modifier.enter(3)) { WhiteCard { PermissionRows() } }
     }
 }
 

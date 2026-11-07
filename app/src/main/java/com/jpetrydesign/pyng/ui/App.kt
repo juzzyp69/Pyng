@@ -130,6 +130,10 @@ fun PyngRoot(repo: Repo, nav: Nav) {
     val scheme = if (t.dark) darkColorScheme(primary = t.p, background = t.bg, surface = t.bg, onBackground = t.ink, onSurface = t.ink)
     else lightColorScheme(primary = t.p, background = t.bg, surface = t.bg, onBackground = t.ink, onSurface = t.ink)
     var toast by remember { mutableStateOf<Toast?>(null) }
+    var banner by remember { mutableStateOf<Pair<com.jpetrydesign.pyng.data.Conv, com.jpetrydesign.pyng.data.Msg>?>(null) }
+    LaunchedEffect(Unit) { repo.banners.collect { banner = it } }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(repo.prefs.state.pinned, repo.convs.size) { com.jpetrydesign.pyng.ui.screens.updateShortcuts(ctx, repo) }
     LaunchedEffect(Unit) {
         repo.toasts.collect {
             toast = it
@@ -149,6 +153,9 @@ fun PyngRoot(repo: Repo, nav: Nav) {
                 val wide = maxWidth >= 600.dp
                 if (wide) WideLayout(nav, maxWidth) else Pane(nav, Modifier.fillMaxSize(), wide = false)
                 ToastHost(toast, onUndo = { toast?.undo?.invoke(); toast = null }, Modifier.align(Alignment.BottomCenter))
+                Box(Modifier.align(Alignment.TopCenter)) {
+                    com.jpetrydesign.pyng.ui.screens.InAppBanner(banner, onOpen = { id -> banner = null; nav.openChat(id) }, onClose = { banner = null })
+                }
             }
         }
     }

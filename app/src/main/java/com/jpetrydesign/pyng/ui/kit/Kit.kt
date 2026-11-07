@@ -73,7 +73,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -386,6 +389,34 @@ fun CircleButton(icon: String, label: String, onClick: () -> Unit, modifier: Mod
 }
 
 fun Modifier.semanticsLabel(label: String): Modifier = this.semantics { contentDescription = label }
+
+/**
+ * A horizontal drag that only claims the gesture when it starts in one direction
+ * (sign = +1 for right, -1 for left). Anything else is left for parents and scrolling.
+ */
+fun Modifier.swipeDir(key: Any?, sign: Int, onDrag: (Float) -> Unit, onEnd: () -> Unit): Modifier = this.pointerInput(key, sign) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        var total = Offset.Zero
+        var dragging = false
+        val slop = viewConfiguration.touchSlop
+        while (true) {
+            val ev = awaitPointerEvent()
+            val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
+            if (!ch.pressed) break
+            if (!dragging && ch.isConsumed) break
+            val d = ch.positionChange()
+            if (!dragging) {
+                total += d
+                if (kotlin.math.abs(total.y) > slop && kotlin.math.abs(total.y) > kotlin.math.abs(total.x)) break
+                if (kotlin.math.abs(total.x) > slop) {
+                    if (sign * total.x > 0 && kotlin.math.abs(total.x) > kotlin.math.abs(total.y) * 1.2f) { dragging = true; ch.consume(); onDrag(total.x - sign * slop) } else break
+                }
+            } else { ch.consume(); onDrag(d.x) }
+        }
+        if (dragging) onEnd()
+    }
+}
 
 // ---------- page chrome ----------
 

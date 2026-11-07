@@ -63,6 +63,7 @@ import com.jpetrydesign.pyng.ui.kit.Icons
 import com.jpetrydesign.pyng.ui.kit.LocalMotion
 import com.jpetrydesign.pyng.ui.kit.LocalRepo
 import com.jpetrydesign.pyng.ui.kit.T
+import com.jpetrydesign.pyng.ui.kit.swipeDir
 import com.jpetrydesign.pyng.ui.theme.LocalTok
 import com.jpetrydesign.pyng.ui.theme.Tok
 import kotlinx.coroutines.Dispatchers
@@ -96,6 +97,7 @@ class RowCtx(
     val chips: List<Triple<String, String, () -> Unit>>,
     val showPreview: Boolean,
     val tsShift: Float,
+    val enterDelay: Int,
     val timeLabel: String,
     val isNew: Boolean,
     val burst: String?,
@@ -126,8 +128,14 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
     val scope = rememberCoroutineScope()
     val trigger = with(density) { 56.dp.toPx() }
     val maxPx = with(density) { 84.dp.toPx() }
-    val enterA = remember { Animatable(if (x.isNew && motion) 0f else 1f) }
-    LaunchedEffect(Unit) { if (enterA.value < 1f) enterA.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 320f)) }
+    val animate = motion && (x.isNew || x.enterDelay >= 0)
+    val enterA = remember { Animatable(if (animate) 0f else 1f) }
+    LaunchedEffect(Unit) {
+        if (enterA.value < 1f) {
+            if (!x.isNew && x.enterDelay > 0) delay(x.enterDelay.toLong())
+            enterA.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 320f))
+        }
+    }
     val shape = bubbleShape(me, x.prevSame, x.nextSame, x.shape.first, x.shape.second)
     val jumbo = if (m.media.isEmpty() && x.quote == null) jumboCount(m.text) else 0
 
@@ -149,20 +157,19 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
                 }
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = a.onSide),
         ) {
-            // Timestamp revealed when the list is dragged right.
-            if (x.tsShift > 1f) {
+            // Timestamp revealed on the right when the list is dragged left.
+            if (x.tsShift < -1f) {
                 T(
                     x.timeLabel, size = 11.sp, weight = FontWeight.SemiBold, color = t.soft,
-                    modifier = Modifier.align(Alignment.CenterStart).offset(x = (-70).dp).width(60.dp)
-                        .graphicsLayer { alpha = (x.tsShift / with(density) { 76.dp.toPx() }).coerceIn(0f, 1f) },
-                    align = androidx.compose.ui.text.style.TextAlign.End,
+                    modifier = Modifier.align(Alignment.CenterEnd).offset(x = 72.dp).width(64.dp)
+                        .graphicsLayer { alpha = (-x.tsShift / with(density) { 76.dp.toPx() }).coerceIn(0f, 1f) },
                 )
             }
             // Reply arrow that appears while swiping a bubble.
             if (swipe.value != 0f) {
                 val k = (abs(swipe.value) / trigger).coerceIn(0f, 1f)
                 Box(
-                    Modifier.align(if (me) Alignment.CenterEnd else Alignment.CenterStart).padding(horizontal = 6.dp).size(32.dp)
+                    Modifier.align(Alignment.CenterStart).padding(horizontal = 6.dp).size(32.dp)
                         .graphicsLayer { alpha = k; scaleX = k; scaleY = k }.clip(CircleShape).background(t.tone),
                     contentAlignment = Alignment.Center,
                 ) { Ico(Icons.reply, t.p, 16.dp, 2.2f) }
@@ -176,7 +183,11 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
                     Spacer(Modifier.width(10.dp))
                 }
                 Column(Modifier.weight(1f), horizontalAlignment = if (me) Alignment.End else Alignment.Start) {
-                    Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth(0.86f).wrapAlign(me)) {
+                    Row(
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = if (me) Arrangement.End else Arrangement.Start,
+                        modifier = Modifier.fillMaxWidth(if (x.group && !me) 0.84f else 0.78f),
+                    ) {
                         if (x.group && !me) {
                             val w = x.senderWho
                             Box(Modifier.size(26.dp).graphicsLayer { alpha = if (x.nextSame) 0f else 1f }) {
@@ -197,22 +208,13 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
                                             onLongPress = { a.onLong() },
                                         )
                                     }
-                                    .pointerInput(m.key) {
-                                        detectHorizontalDragGestures(
-                                            onDragEnd = {
-                                                if (abs(swipe.value) > trigger) a.onReply()
-                                                scope.launch { swipe.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 500f)) }
-                                            },
-                                            onDragCancel = { scope.launch { swipe.animateTo(0f) } },
-                                        ) { ch, d ->
-                                            val want = if (me) -(swipe.value + d) else swipe.value + d
-                                            if (want >= 0f || swipe.value != 0f) {
-                                                ch.consume()
-                                                val v = want.coerceIn(0f, maxPx)
-                                                scope.launch { swipe.snapTo(if (me) -v else v) }
-                                            }
-                                        }
-                                    },
+                                    .swipeDir(m.key, +1,
+                                        onDrag = { d -> scope.launch { swipe.snapTo((swipe.value + d * 0.8f).coerceIn(0f, maxPx)) } },
+                                        onEnd = {
+                                            if (swipe.value > trigger) a.onReply()
+                                            scope.launch { swipe.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 500f)) }
+                                        },
+                                    ),
                             ) {
                                 BubbleBody(m, x, shape, jumbo, a)
                             }
@@ -237,6 +239,7 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
                             T(x.info, size = 11.5.sp, weight = FontWeight.Medium, color = t.soft)
                         }
                     }
+                    if (!me && m.text.isNotEmpty() && m.media.isEmpty()) TranslateBlock(m.key, m.text, t)
                     if (x.chips.isNotEmpty()) {
                         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             x.chips.forEach { (label, icon, go) ->
@@ -262,7 +265,6 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
     }
 }
 
-private fun Modifier.wrapAlign(me: Boolean): Modifier = this.then(Modifier)
 
 @Composable
 private fun Modifier.fadeUp(): Modifier {

@@ -106,6 +106,7 @@ data class AppPrefs(
     val profilePhoto: String = "",
     val dismissedUnknown: Set<String> = emptySet(),
     val notSpam: Set<String> = emptySet(),
+    val permsAsked: Int = 0,
 ) {
     fun on(key: String) = toggles[key] ?: DEFAULT_TOGGLES[key] ?: false
     fun opt(key: String) = opts[key] ?: DEFAULT_OPTS[key].orEmpty()
@@ -129,6 +130,7 @@ private fun AppPrefs.toJson(): JSONObject = JSONObject().apply {
     put("drafts", JSONObject(drafts as Map<*, *>)); put("scheduled", JSONArray(scheduled.map { it.json() }))
     put("profileName", profileName); put("profilePhoto", profilePhoto)
     put("dismissedUnknown", JSONArray(dismissedUnknown.toList())); put("notSpam", JSONArray(notSpam.toList()))
+    put("permsAsked", permsAsked)
 }
 
 private fun JSONObject.strList(k: String) = optJSONArray(k).mapEach { optJSONArray(k)!!.optString(it) }
@@ -175,6 +177,7 @@ private fun fromJson(o: JSONObject): AppPrefs {
         profilePhoto = o.optString("profilePhoto"),
         dismissedUnknown = o.strList("dismissedUnknown").toSet(),
         notSpam = o.strList("notSpam").toSet(),
+        permsAsked = o.optInt("permsAsked"),
     )
 }
 
