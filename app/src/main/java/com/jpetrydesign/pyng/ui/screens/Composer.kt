@@ -545,7 +545,7 @@ private fun GifTab(t: Tok, onGif: (Pending) -> Unit) {
                 }
                 Spacer(Modifier.width(8.dp))
                 Box(
-                    Modifier.height(44.dp).clip(RoundedCornerShape(22.dp)).background(if (entry.length >= 16) t.plusBg else t.surface)
+                    Modifier.height(44.dp).clip(RoundedCornerShape(22.dp)).then(if (entry.length >= 16) Modifier.background(t.plusBg) else Modifier.background(t.surface))
                         .clickable(enabled = entry.length >= 16) { repo.prefs.setOpt("giphyKey", entry); repo.toast("GIF search is on") }.padding(horizontal = 18.dp),
                     contentAlignment = Alignment.Center,
                 ) { T("Save", size = 14.sp, weight = FontWeight.SemiBold, color = if (entry.length >= 16) t.plusInk else t.soft) }

@@ -34,6 +34,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -107,8 +110,8 @@ fun MessageMenu(
             .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = if (t.dark) 0.45f else 0.22f))
             .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { close() },
     ) {
-        val topSafe = androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(density) + with(density) { 12.dp.roundToPx() }
-        val bottomSafe = androidx.compose.foundation.layout.WindowInsets.navigationBars.getBottom(density) + with(density) { 12.dp.roundToPx() }
+        val topSafe = WindowInsets.statusBars.getTop(density) + with(density) { 12.dp.roundToPx() }
+        val bottomSafe = WindowInsets.navigationBars.getBottom(density) + with(density) { 12.dp.roundToPx() }
         val bar: @Composable () -> Unit = {
             if (canReact) {
                 if (!more) {

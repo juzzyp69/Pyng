@@ -38,6 +38,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsTopHeight
@@ -446,7 +448,7 @@ fun textScaleOf(size: String): Float = when (size) { "S" -> 0.95f; "L" -> 1.1f; 
 fun StatusScrim(modifier: Modifier = Modifier) {
     val t = LocalTok.current
     Column(modifier.fillMaxWidth()) {
-        Box(Modifier.fillMaxWidth().windowInsetsTopHeight(androidx.compose.foundation.layout.WindowInsets.statusBars).background(t.bg.copy(alpha = 0.94f)))
+        Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(t.bg.copy(alpha = 0.94f)))
         Box(Modifier.fillMaxWidth().height(14.dp).background(Brush.verticalGradient(listOf(t.bg.copy(alpha = 0.94f), t.bg.copy(alpha = 0f)))))
     }
 }

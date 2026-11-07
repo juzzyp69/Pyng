@@ -64,6 +64,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.unit.IntOffset
@@ -272,8 +274,8 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                     reverseLayout = true,
                     modifier = Modifier.fillMaxSize().hazeSource(haze)
                         .pointerInput(Unit) {
-                            androidx.compose.foundation.gestures.awaitEachGesture {
-                                androidx.compose.foundation.gestures.awaitFirstDown(requireUnconsumed = false)
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
                                 var changed = false
                                 do {
                                     val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)

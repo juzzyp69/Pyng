@@ -51,6 +51,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -598,7 +599,7 @@ class DragHolder {
 }
 
 /** A thin bright edge and a soft, light shadow: reads as glass rather than a solid disc. */
-private fun Modifier.glassRim(shape: androidx.compose.ui.graphics.Shape): Modifier = androidx.compose.ui.composed {
+private fun Modifier.glassRim(shape: androidx.compose.ui.graphics.Shape): Modifier = composed {
     val t = LocalTok.current
     this.shadow(3.dp, shape, clip = false, ambientColor = t.shadow, spotColor = t.shadow)
         .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = if (t.dark) 0.28f else 0.75f), Color.White.copy(alpha = if (t.dark) 0.06f else 0.2f))), shape)
