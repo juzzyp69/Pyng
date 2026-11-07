@@ -147,6 +147,13 @@ fun PyngRoot(repo: Repo, nav: Nav) {
     LaunchedEffect(repo.paired) {
         if (!repo.paired && nav.top !is Route.Setup && nav.top !is Route.Log) nav.replace(Route.Setup(2))
     }
+    // Status bar and gesture bar icons follow the app's light or dark look, not the phone's.
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.SideEffect {
+        (view.context as? android.app.Activity)?.window?.let { w ->
+            androidx.core.view.WindowCompat.getInsetsController(w, view).apply { isAppearanceLightStatusBars = !t.dark; isAppearanceLightNavigationBars = !t.dark }
+        }
+    }
     MaterialTheme(colorScheme = scheme) {
         // Text size from Appearance scales every bit of text in the app, on top of Android's own setting.
         val baseDensity = androidx.compose.ui.platform.LocalDensity.current

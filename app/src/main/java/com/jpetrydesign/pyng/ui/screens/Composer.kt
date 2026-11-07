@@ -300,10 +300,8 @@ fun Composer(
                             if (draft.isEmpty()) T(
                                 when {
                                     schedule != null -> "Scheduled message"
-                                    conv?.group == true -> if (conv.rcs) "Message ${conv.title}" else "Group text"
-                                    conv != null && encryptionOf(conv, LocalRepo.current.msgs[conv.id].orEmpty()) == Enc.E2EE -> "Encrypted message"
-                                    conv?.rcs == true -> "Chat message"
-                                    else -> "Text message"
+                                    conv?.rcs == true -> "RCS Message"
+                                    else -> "SMS Message"
                                 }, size = fontSize.sp, color = t.ink.copy(alpha = 0.5f), maxLines = 1,
                             )
                             BasicTextField(
@@ -363,7 +361,7 @@ fun Composer(
             if (panel != null) last = panel!!
             Column(Modifier.fillMaxWidth().height(when (last) { "expr" -> 380.dp; "plus" -> 270.dp; else -> 310.dp }).background(t.sheet).navigationBarsPadding().padding(horizontal = 14.dp, vertical = 14.dp)) {
                 when (last) {
-                    "plus" -> PlusGrid(t) { what ->
+                    "plus" -> PlusGrid(t, translating = conv != null && repo.prefs.state.opt("tr:" + conv.id) == "1") { what ->
                         when (what) {
                             "Gallery" -> pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
                             "Camera" -> { val f = repo.newFile("jpg"); camFile = f; runCatching { camera.launch(FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)) } }
@@ -379,6 +377,12 @@ fun Composer(
                             "Contact" -> pickContact.launch(null)
                             "Schedule" -> panel = "schedule"
                             "Voice" -> startRec()
+                            "Translate" -> if (conv != null) {
+                                val on = repo.prefs.state.opt("tr:" + conv.id) == "1"
+                                repo.prefs.setOpt("tr:" + conv.id, if (on) "" else "1")
+                                repo.toast(if (on) "Translation off for this chat" else "Messages in other languages will be translated")
+                                panel = null
+                            }
                         }
                     }
                     "expr" -> Expressions(t, initial = "Emoji", onMake = { panel = "maker" }, onEmoji = { e -> onDraft(draft + e); repo.prefs.edit { it.copy(recents = (listOf(e) + it.recents.filter { r -> r != e }).take(24)) } }, onSendText = { onSend(it) }, onGif = { f -> attachments.add(f); panel = null })
@@ -424,26 +428,27 @@ private fun RecBars(color: Color, modifier: Modifier) {
 }
 
 @Composable
-private fun PlusGrid(t: Tok, onPick: (String) -> Unit) {
+private fun PlusGrid(t: Tok, translating: Boolean = false, onPick: (String) -> Unit) {
     val items = listOf(
-        "Gallery" to Icons.gallery, "Camera" to Icons.camera, "GIFs" to "", "Stickers" to Icons.sticker,
-        "Files" to Icons.file, "Location" to Icons.pin, "Contact" to Icons.contact, "Schedule" to Icons.clock,
+        "Gallery" to Icons.gallery, "Camera" to Icons.camera, "GIFs" to "", "Stickers" to Icons.sticker, "Files" to Icons.file,
+        "Location" to Icons.pin, "Contact" to Icons.contact, "Schedule" to Icons.clock, "Translate" to Icons.translate,
     )
     // Even spacing: the two rows sit centered in the panel with matching gaps.
     Column(Modifier.fillMaxSize().padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(26.dp, Alignment.CenterVertically)) {
-        items.chunked(4).forEachIndexed { r, row ->
+        items.chunked(5).forEachIndexed { r, row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 row.forEachIndexed { i, (label, icon) ->
+                    val lit = label == "Translate" && translating
                     Column(
-                        Modifier.width(76.dp).enter(r * 4 + i, pop = true).clip(RoundedCornerShape(16.dp)).clickable { onPick(label) }.padding(vertical = 4.dp),
+                        Modifier.width(70.dp).enter(r * 5 + i, pop = true).clip(RoundedCornerShape(16.dp)).clickable { onPick(label) }.padding(vertical = 4.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Box(Modifier.size(56.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(54.dp).clip(CircleShape).background(if (lit) t.fill else t.tone), contentAlignment = Alignment.Center) {
                             if (icon.isEmpty()) Box(Modifier.border(2.dp, t.p, RoundedCornerShape(6.dp)).padding(horizontal = 4.dp, vertical = 1.dp)) { T("GIF", size = 12.sp, weight = FontWeight.Bold, color = t.p, letterSpacing = 0.5.sp) }
-                            else Ico(icon, t.p, 22.dp, 1.9f)
+                            else Ico(icon, if (lit) t.onFill else t.p, 22.dp, 1.9f)
                         }
                         Spacer(Modifier.height(8.dp))
-                        T(label, size = 12.5.sp, weight = FontWeight.Medium, maxLines = 1)
+                        T(if (lit) "Translating" else label, size = 12.sp, weight = FontWeight.Medium, maxLines = 1)
                     }
                 }
             }

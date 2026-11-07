@@ -52,13 +52,13 @@ Every feature from the design prototype and our conversations, with where it sta
 - ✅ Reactions under bubbles
 - ✅ Big emoji when a message is only 1–3 emoji
 - ✅ Photos, GIFs, video, voice messages (with playback), files, contact cards
-- ✅ Link previews with title and image
+- ✅ Link preview cards: picture, title, description, site icon (a link-only message shows just the card)
 - ✅ Smart chips: add to calendar, open in Maps, track package, copy code
-- ✅ Translate messages in other languages (on-device)
+- ✅ Translate: turn it on per chat from the + menu; messages in other languages translate on-device
 - ✅ Typing bubble, jump-to-latest button, staggered message entrance
 - ✅ Smart replies above the keyboard, with an X to close them
 - ✅ @mentions in group chats
-- ✅ Composer: + (rotates to ×), emoji, gallery, send / mic, SMS character counter
+- ✅ Composer: + (rotates to ×), emoji, gallery, send / mic, SMS character counter; box reads "RCS Message" or "SMS Message"
 - ✅ + panel: Gallery, Camera, GIFs, Stickers, Files, Location, Contact, Schedule
 - ✅ Emoji with search, categories and recents; stickers; sticker maker (Cutout / Circle / Rounded, white outline)
 - ✅ In-panel gallery grid with multi-select
@@ -68,19 +68,24 @@ Every feature from the design prototype and our conversations, with where it sta
 - ✅ Effects: balloons for birthdays, confetti, hearts
 - ✅ Scam warning and "Not in your contacts" banners
 - ✅ Select mode (copy, star, delete) and search inside a chat
+- ✅ Deleting a message or conversation asks first
+- ✅ Chats open at the newest message and stay there as new ones arrive
 - ✅ Empty chat with "Say hi"
 - 🔶 GIF search needs a free GIPHY key: paste it in the GIFs tab
 - ❌ Voice message transcripts (Android can't transcribe audio files on-device yet)
 
 ## Contact card
-- ✅ Photo, name, number, RCS chip (contact and group photos from Google Messages)
+- ✅ Photo, name, number, encryption status (tap it for what it means)
+- ✅ Contact photos from your phone's contacts, with Google Messages as backup
 - ✅ Call, Search, Mute, Pin
 - ✅ Chat theme, notifications on/off, vibration
 - ✅ Media, Links, Files tabs
 - ✅ Group members
 - ✅ Add to contacts, archive, block & report, delete
 - 🔶 Per-chat notification sound (sound follows Android's notification settings)
-- ❌ Rename group, change group photo, add people, leave group (Google Messages for Web doesn't offer these)
+- 🔶 Rename a group and change its photo: shows in Pyng only (Google Messages doesn't let linked apps change them)
+- ✅ Media, Links and Files show who sent each one
+- ❌ Add people, leave group (Google Messages for Web doesn't offer these)
 
 ## Chat theme
 - ✅ App theme, all palettes and duotones, Custom (Mono / Duotone / Gradient) with the color wheel
@@ -102,7 +107,9 @@ Every feature from the design prototype and our conversations, with where it sta
 
 ## Around the phone
 - ✅ Notifications with Reply and Mark as read
-- ✅ Stays connected in the background with no notification of its own; only texts notify, muted chats stay silent
+- ✅ Doesn't run all the time: wakes when Google Messages gets a text (notification access), shows its own alert and hides Google's
+- ✅ "Always connected" switch for anyone who wants the old behavior
+- ✅ Text notifications show in Android's Conversations section with the person's photo
 - ✅ Home-screen widgets: Conversations and Pinned people
 - ✅ App-icon shortcuts: New message plus your top 3 pinned chats
 - ✅ Fold inner screen: chat list and conversation side by side

@@ -105,8 +105,8 @@ object Notifier {
         list += senderName to m
         while (list.size > 7) list.removeAt(0)
 
-        val avatarPath = repo.avatars[conv.avatarId].orEmpty()
-        val icon = circle(if (avatarPath.isNotEmpty()) BitmapFactory.decodeFile(avatarPath) else null)
+        val avatarPath = if (conv.group) repo.prefs.state.opt("gphoto:" + conv.id) else repo.avatars[conv.avatarId].orEmpty()
+        val icon = circle(loadBitmap(ctx, avatarPath))
         val me = NPerson.Builder().setName("You").build()
         val style = NotificationCompat.MessagingStyle(me).setConversationTitle(if (conv.group) conv.title else null).setGroupConversation(conv.group)
         list.forEach { (who, msg) ->
@@ -154,8 +154,28 @@ object Notifier {
             )
             b.addAction(NotificationCompat.Action.Builder(R.drawable.ic_stat_check, "Mark as read", readPi).setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_MARK_AS_READ).setShowsUserInterface(false).build())
         }
+        // Registering the chat as a conversation puts it in Android's Conversations section, with the photo.
+        if (!placeholder) runCatching {
+            val person = NPerson.Builder().setName(conv.title).setKey(conv.id).apply { if (icon != null) setIcon(IconCompat.createWithBitmap(icon)) }.build()
+            val sc = androidx.core.content.pm.ShortcutInfoCompat.Builder(ctx, conv.id)
+                .setShortLabel(conv.shortTitle.ifBlank { conv.title }).setLongLabel(conv.title)
+                .setIcon(if (icon != null) IconCompat.createWithAdaptiveBitmap(icon) else IconCompat.createWithResource(ctx, R.drawable.ic_shortcut_new))
+                .setIntent(Intent(ctx, MainActivity::class.java).setAction("open").putExtra("chat", conv.id))
+                .setLongLived(true).setPerson(person)
+                .setCategories(setOf("android.shortcut.conversation"))
+                .build()
+            androidx.core.content.pm.ShortcutManagerCompat.pushDynamicShortcut(ctx, sc)
+        }
         runCatching { NotificationManagerCompat.from(ctx).notify(conv.id, 1, b.build()) }
     }
+
+    private fun loadBitmap(ctx: Context, path: String): Bitmap? = runCatching {
+        when {
+            path.isBlank() -> null
+            path.startsWith("content://") -> ctx.contentResolver.openInputStream(android.net.Uri.parse(path))?.use { BitmapFactory.decodeStream(it) }
+            else -> BitmapFactory.decodeFile(path)
+        }
+    }.getOrNull()
 
     /**
      * Shows a text using what Google Messages' own notification said, for when Pyng isn't

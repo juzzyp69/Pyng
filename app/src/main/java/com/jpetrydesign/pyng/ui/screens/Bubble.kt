@@ -236,7 +236,7 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
                             T(x.info, size = 11.5.sp, weight = FontWeight.Medium, color = t.soft)
                         }
                     }
-                    if (!me && m.text.isNotEmpty() && m.media.isEmpty()) TranslateBlock(m.key, m.text, t)
+                    if (!me && m.text.isNotEmpty() && m.media.isEmpty()) TranslateBlock(m.key, m.text, t, m.convId)
                     if (x.chips.isNotEmpty()) {
                         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             x.chips.forEach { (label, icon, go) ->

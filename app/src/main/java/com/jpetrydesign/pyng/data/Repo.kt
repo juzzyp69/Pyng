@@ -78,7 +78,7 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     fun setGroupName(convId: String, name: String) {
         prefs.setOpt("gname:$convId", name.trim())
         convs[convId]?.let { c -> convs[convId] = if (name.isBlank()) c.copy(name = rawNames[convId] ?: c.name) else c.copy(name = name.trim()) }
-        saveCacheSoon(); com.jpetrydesign.pyng.widget.Widgets.refresh(app)
+        saveCacheSoon(); scope.launch { com.jpetrydesign.pyng.widget.Widgets.refresh(app) }
     }
     suspend fun setGroupPhoto(convId: String, uri: Uri?) {
         if (uri == null) { prefs.setOpt("gphoto:$convId", ""); return }

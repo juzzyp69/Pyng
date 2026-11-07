@@ -292,6 +292,7 @@ fun ContactScreen(nav: Nav, convId: String) {
                     }
                 }
             }
+            com.jpetrydesign.pyng.ui.kit.StatusScrim(Modifier.align(Alignment.TopCenter))
             RenameSheet(renaming, c.title, { renaming = false }) { repo.setGroupName(convId, it) }
         }
     }
@@ -385,6 +386,7 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
                 Spacer(Modifier.height(20.dp))
                 PillButton("Reset to app theme", { repo.prefs.edit { it.copy(looks = it.looks - convId) } }, Modifier.padding(horizontal = 16.dp).fillMaxWidth(), primary = false, height = 50.dp)
             }
+            com.jpetrydesign.pyng.ui.kit.StatusScrim(Modifier.align(Alignment.TopCenter))
         }
     }
 }

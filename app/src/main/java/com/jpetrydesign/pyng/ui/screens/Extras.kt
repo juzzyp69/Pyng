@@ -105,11 +105,13 @@ object Translator {
 
 /** "Translate" under a message in another language, and the translation once done. */
 @Composable
-fun TranslateBlock(key: String, text: String, t: Tok) {
+fun TranslateBlock(key: String, text: String, t: Tok, convId: String = "") {
     val repo = LocalRepo.current
-    if (!repo.prefs.state.on("translate")) return
+    // Off unless you turn on Translate for this chat from the + menu.
+    if (!repo.prefs.state.on("translate") || repo.prefs.state.opt("tr:$convId") != "1") return
     LaunchedEffect(key) { Translator.identify(key, text) }
     val done = Translator.result[key]
+    LaunchedEffect(key, Translator.canOffer(key)) { if (Translator.canOffer(key) && done == null && Translator.busy[key] != true) Translator.translate(key, text) { } }
     var showOriginal by remember { mutableStateOf(false) }
     if (done != null && !showOriginal) {
         Column(Modifier.padding(top = 4.dp).fillMaxWidth(0.78f).clip(RoundedCornerShape(14.dp)).background(t.surface).padding(horizontal = 12.dp, vertical = 8.dp)) {
