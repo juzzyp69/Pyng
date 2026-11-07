@@ -32,8 +32,16 @@ jobs:
         with:
           gradle-version: '8.14.3'
 
+      - name: Restore engine
+        id: aarcache
+        uses: actions/cache@v4
+        with:
+          path: app/libs
+          key: engine-v1-${{ hashFiles('engine/**') }}
+
       - name: Build engine
         id: engine
+        if: steps.aarcache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -o pipefail
@@ -60,21 +68,23 @@ jobs:
       - name: Build app
         id: app
         shell: bash
+        env:
+          GIPHY_KEY: ${{ secrets.GIPHY_KEY }}
         run: |
           set -o pipefail
           gradle --no-daemon --stacktrace assembleDebug 2>&1 | tee ci-logs/app.log
-          cp app/build/outputs/apk/debug/app-debug.apk "pyng-0.0.${{ github.run_number }}-test.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "pyng-0.1.${{ github.run_number }}.apk"
 
       - name: Publish test build
         uses: softprops/action-gh-release@v2
         with:
           tag_name: test-${{ github.run_number }}
-          name: Pyng test build ${{ github.run_number }}
+          name: Pyng 0.1.${{ github.run_number }}
           prerelease: true
           body: |
             Test build from ${{ github.sha }}.
             Download the APK below on your phone and open it to install.
-          files: pyng-0.0.${{ github.run_number }}-test.apk
+          files: pyng-0.1.${{ github.run_number }}.apk
 
       - name: Save build logs
         if: always()
