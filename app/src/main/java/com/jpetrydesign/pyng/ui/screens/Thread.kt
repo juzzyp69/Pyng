@@ -63,6 +63,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.unit.IntOffset
@@ -277,7 +278,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                 do {
                                     val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
                                     if (e.changes.count { it.pressed } >= 2) {
-                                        val z = androidx.compose.foundation.gestures.calculateZoom(e)
+                                        val z = e.calculateZoom()
                                         if (z != 1f) { zoom = (zoom * z).coerceIn(0.8f, 1.7f); changed = true }
                                         e.changes.forEach { it.consume() }
                                     }
