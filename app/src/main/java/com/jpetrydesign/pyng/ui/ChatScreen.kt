@@ -62,14 +62,14 @@ fun ChatScreen(hub: Hub, conversationId: String, name: String, onBack: () -> Uni
 
     fun upsert(m: Msg) {
         val i = msgs.indexOfFirst { (m.id.isNotEmpty() && it.id == m.id) || (m.tmpId.isNotEmpty() && it.tmpId == m.tmpId) }
-        msgs = if (i >= 0) msgs.toMutableList().also { it[i] = m } else msgs + m
+        msgs = tidy(if (i >= 0) msgs.toMutableList().also { it[i] = m } else msgs + m)
     }
 
     LaunchedEffect(conversationId) {
         var tries = 0
         while (true) {
             val r = hub.io { it.fetchMessages(conversationId, 50) }
-            if (r.isSuccess) { msgs = Msg.list(r.getOrThrow()); error = null; break }
+            if (r.isSuccess) { msgs = tidy(Msg.list(r.getOrThrow()) + msgs.filter { it.id.isEmpty() }); error = null; break }
             error = r.exceptionOrNull()?.message
             if (++tries >= 4) break
             delay(1500L * tries)
@@ -138,7 +138,7 @@ fun ChatScreen(hub: Hub, conversationId: String, name: String, onBack: () -> Uni
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                items(msgs.asReversed(), key = { it.tmpId.ifEmpty { it.id } + it.id }) { m -> Bubble(m) }
+                items(msgs.asReversed(), key = { msgKey(it) }) { m -> Bubble(m) }
             }
         }
         Row(
@@ -175,6 +175,11 @@ fun ChatScreen(hub: Hub, conversationId: String, name: String, onBack: () -> Uni
         }
     }
 }
+
+private fun msgKey(m: Msg) = if (m.id.isNotEmpty()) "m:" + m.id else "t:" + m.tmpId
+
+/** One entry per message, oldest first. */
+private fun tidy(list: List<Msg>) = list.distinctBy { msgKey(it) }.sortedBy { if (it.ts > 0) it.ts else Long.MAX_VALUE }
 
 @Composable
 private fun Bubble(m: Msg) {

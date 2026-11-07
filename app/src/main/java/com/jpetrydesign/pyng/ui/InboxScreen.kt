@@ -68,7 +68,7 @@ fun InboxScreen(hub: Hub, onOpen: (Conv) -> Unit, onLog: () -> Unit, onUnpair: (
         var tries = 0
         while (true) {
             val r = hub.io { it.start(); it.listConversations(60) }
-            if (r.isSuccess) { convs = Conv.list(r.getOrThrow()).sortedByDescending { it.ts }; error = null; break }
+            if (r.isSuccess) { convs = tidy(Conv.list(r.getOrThrow())); error = null; break }
             error = r.exceptionOrNull()?.message
             if (++tries >= 5) break
             delay(1500L * tries)
@@ -82,7 +82,7 @@ fun InboxScreen(hub: Hub, onOpen: (Conv) -> Unit, onLog: () -> Unit, onUnpair: (
             when (e.kind) {
                 "conversation" -> {
                     val c = Conv.from(e.data)
-                    convs = (convs.filter { it.id != c.id } + c).sortedByDescending { it.ts }
+                    if (c.id.isNotEmpty()) convs = tidy(listOf(c) + convs)
                 }
                 "message" -> if (convs.none { it.id == e.data.optString("conversationId") }) load()
                 "paired" -> load()
@@ -126,13 +126,16 @@ fun InboxScreen(hub: Hub, onOpen: (Conv) -> Unit, onLog: () -> Unit, onUnpair: (
             if (loading && convs.isEmpty()) {
                 item { Box(Modifier.padding(40.dp)) { CircularProgressIndicator() } }
             }
-            items(convs, key = { it.id }) { c ->
+            items(convs, key = { "c:" + it.id }) { c ->
                 ConvRow(c) { onOpen(c) }
             }
             item { Spacer(Modifier.navigationBarsPadding().height(24.dp)) }
         }
     }
 }
+
+/** Newest first, one entry per conversation (the first one seen wins). */
+private fun tidy(list: List<Conv>) = list.filter { it.id.isNotEmpty() }.distinctBy { it.id }.sortedByDescending { it.ts }
 
 private fun statusLabel(s: String) = when (s) {
     "ready", "idle" -> "Linked to Google Messages"
