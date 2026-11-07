@@ -54,6 +54,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -154,13 +156,25 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     var schedule by remember(convId) { mutableStateOf<Pair<Long, String>?>(null) }
     val openedAt = remember(convId) { System.currentTimeMillis() }
     var callSheet by remember { mutableStateOf(false) }
+    // Where each bubble sits, so the long-press screen can keep the message in place.
+    val bubbleCoords = remember(convId) { HashMap<String, androidx.compose.ui.layout.LayoutCoordinates>() }
+    val rowCtxs = remember(convId) { HashMap<String, RowCtx>() }
+    val rootCoords = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+    var menuAnchor by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    fun openMenu(m: Msg) {
+        menuAnchor = runCatching {
+            val r = rootCoords[0]; val b = bubbleCoords[m.key]
+            if (r != null && b != null && b.isAttached) r.localBoundingBoxOf(b) else null
+        }.getOrNull()
+        menuFor = m
+    }
     // Screenshot hooks: open a panel, menu or status line straight away.
     val demoOpen = remember { repo.demoOpen.also { repo.demoOpen = null } }
     val demoPanel = demoOpen?.takeIf { it in setOf("plus", "expr", "gifs", "stickers", "schedule", "maker") }
     LaunchedEffect(demoOpen, repo.msgs[convId]?.size) {
         val list = repo.msgs[convId].orEmpty()
         when (demoOpen) {
-            "menu" -> if (menuFor == null) menuFor = list.lastOrNull { !it.fromMe }
+            "menu" -> if (menuFor == null) list.lastOrNull { !it.fromMe }?.let { delay(600); openMenu(it) }
             "info" -> info = list.lastOrNull { it.fromMe }?.key
             "ts" -> tsShift = -with(density) { 76.dp.toPx() }
             "reply" -> replyTo = list.lastOrNull { !it.fromMe }
@@ -220,7 +234,9 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
         if (i >= 0) list.animateScrollToItem(i + 1)
     }
 
-    val fontSize = mapOf("S" to 14f, "M" to 15.5f, "L" to 17f, "XL" to 19f)[p.textSize] ?: 15.5f
+    // Pinch the chat to make bubbles bigger or smaller; it sticks for every chat.
+    var zoom by remember { mutableStateOf(p.opt("chatZoom").toFloatOrNull() ?: 1f) }
+    val fontSize = 15.5f * zoom
     val shape = when (p.bubble) { "Soft" -> 14.dp to 4.dp; "Pill" -> 22.dp to 22.dp; else -> 20.dp to 6.dp }
     val wall = p.looks[convId]?.wall?.ifEmpty { null } ?: p.defWall
     val selecting = selected.isNotEmpty()
@@ -243,8 +259,10 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
         scope.launch { list.animateScrollToItem(0) }
     }
 
+    val blur by androidx.compose.animation.core.animateDpAsState(if (menuFor != null) 18.dp else 0.dp, label = "blur")
     Provide(t) {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().onGloballyPositioned { rootCoords[0] = it }) {
+            Box(Modifier.fillMaxSize().then(if (blur > 0.5.dp) Modifier.blur(blur) else Modifier)) {
             Wallpaper(wall, t)
             androidx.compose.runtime.CompositionLocalProvider(LocalHaze provides haze) {
                 val topPad = with(density) { WindowInsets.statusBars.getTop(this).toDp() } + 96.dp
@@ -252,6 +270,21 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                     state = list,
                     reverseLayout = true,
                     modifier = Modifier.fillMaxSize().hazeSource(haze)
+                        .pointerInput(Unit) {
+                            androidx.compose.foundation.gestures.awaitEachGesture {
+                                androidx.compose.foundation.gestures.awaitFirstDown(requireUnconsumed = false)
+                                var changed = false
+                                do {
+                                    val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                                    if (e.changes.count { it.pressed } >= 2) {
+                                        val z = androidx.compose.foundation.gestures.calculateZoom(e)
+                                        if (z != 1f) { zoom = (zoom * z).coerceIn(0.8f, 1.7f); changed = true }
+                                        e.changes.forEach { it.consume() }
+                                    }
+                                } while (e.changes.any { it.pressed })
+                                if (changed) repo.prefs.setOpt("chatZoom", "%.2f".format(java.util.Locale.US, zoom))
+                            }
+                        }
                         .swipeDir(convId, -1,
                             onDrag = { d -> tsShift = (tsShift + d * 0.7f).coerceIn(-with(density) { 76.dp.toPx() }, 0f) },
                             onEnd = { scope.launch { val a = Animatable(tsShift); a.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 420f)) { tsShift = value } } },
@@ -293,9 +326,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                     if (r == null) "Reply" to "Original message" else (if (r.fromMe) "You" else r.sender.ifBlank { conv?.shortTitle ?: "" }) to msgPreview(r)
                                 }
                                 val sender = if (conv?.group == true && !m.fromMe) conv.people.firstOrNull { it.id == m.participantId } else null
-                                MessageRow(
-                                    m,
-                                    RowCtx(
+                                val rc = RowCtx(
                                         t = t, group = conv?.group == true, prevSame = prevSame, nextSame = nextSame, fontSize = fontSize, shape = shape,
                                         info = inf?.first, infoIcon = inf?.second ?: Icons.check, infoInk = if (inf?.third == true) t.p else t.soft,
                                         selecting = selecting, selected = m.key in selected, highlighted = curMatch == m.key || hl == m.id,
@@ -304,7 +335,10 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                         showPreview = p.on("previews") && spamWhy == null, tsShift = tsShift, timeLabel = clock(m.ts),
                                         enterDelay = if (i < 10 && m.key in introKeys && introPlayed.add(m.key)) (80 + i * 45) else -1,
                                         isNew = m.ts > openedAt, burst = burst?.takeIf { it.first == m.key }?.second, myId = myId,
-                                    ),
+                                    )
+                                rowCtxs[m.key] = rc
+                                MessageRow(
+                                    m, rc,
                                     RowActs(
                                         onSide = { if (selecting) toggle(selected, m.key) else info = if (info == m.key) null else m.key },
                                         onTap = {
@@ -312,10 +346,11 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                             else m.media.firstOrNull()?.let { openMedia(ctx, repo, nav, it) }
                                         },
                                         onDouble = { if (m.id.isNotEmpty()) { repo.react(m, "❤️"); burst = m.key to "❤️" } },
-                                        onLong = { if (!selecting) { menuFor = m; info = null } },
+                                        onLong = { if (!selecting) { openMenu(m); info = null } },
                                         onReply = { replyTo = m },
                                         onOpenMedia = { ref -> if (selecting) toggle(selected, m.key) else openMedia(ctx, repo, nav, ref) },
                                         onRetry = { repo.retry(m) },
+                                        onPlaced = { bubbleCoords[m.key] = it },
                                     ),
                                 )
                             }
@@ -370,8 +405,9 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                 }
             }
 
+            }
             Effects(fx, t)
-            MessageMenu(menuFor, t, conv, onDismiss = { menuFor = null },
+            MessageMenu(menuFor, t, conv, menuAnchor, menuFor?.let { rowCtxs[it.key] }, onDismiss = { menuFor = null },
                 onReact = { m, e -> repo.react(m, e); burst = m.key to e },
                 onReply = { replyTo = it }, onCopy = { copy(ctx, it.text); repo.toast("Copied") },
                 onForward = { forward = it }, onStar = { star(repo, listOf(it)) },

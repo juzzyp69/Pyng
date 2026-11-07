@@ -27,7 +27,9 @@ fun whoOf(c: Conv): Who {
 
 fun whoOf(c: Conv, repo: Repo, t: Tok): Who {
     val show = repo.prefs.state.showPhotos == "Show"
-    val photo = if (show && !c.group) repo.avatars[c.avatarId]?.takeIf { it.isNotEmpty() } else null
+    val photo = if (!show) null
+        else if (c.group) c.groupPhoto.takeIf { it.startsWith("http") }
+        else repo.avatars[c.avatarId]?.takeIf { it.isNotEmpty() }
     val tinted = c.group || c.business
     return Who(photo, initialsOf(c.title), if (tinted) t.tone else t.neutral, if (tinted) t.p else t.neutralInk)
 }

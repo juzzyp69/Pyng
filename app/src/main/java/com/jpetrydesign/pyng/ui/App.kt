@@ -148,7 +148,11 @@ fun PyngRoot(repo: Repo, nav: Nav) {
         if (!repo.paired && nav.top !is Route.Setup && nav.top !is Route.Log) nav.replace(Route.Setup(2))
     }
     MaterialTheme(colorScheme = scheme) {
-        CompositionLocalProvider(LocalTok provides t, LocalRepo provides repo, LocalMotion provides motion) {
+        // Text size from Appearance scales every bit of text in the app, on top of Android's own setting.
+        val baseDensity = androidx.compose.ui.platform.LocalDensity.current
+        val textScale = com.jpetrydesign.pyng.ui.kit.textScaleOf(repo.prefs.state.textSize)
+        val scaled = androidx.compose.ui.unit.Density(baseDensity.density, baseDensity.fontScale * textScale)
+        CompositionLocalProvider(LocalTok provides t, LocalRepo provides repo, LocalMotion provides motion, androidx.compose.ui.platform.LocalDensity provides scaled) {
             BoxWithConstraints(Modifier.fillMaxSize().background(t.bg)) {
                 val wide = maxWidth >= 600.dp
                 if (wide) WideLayout(nav, maxWidth) else Pane(nav, Modifier.fillMaxSize(), wide = false)

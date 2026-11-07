@@ -77,9 +77,17 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
 
     private val cacheFile = File(app.filesDir, "convs.json")
     private val avatarPending = mutableSetOf<String>()
+    private val avatarFile = File(app.filesDir, "avatars.json")
 
     init {
         runCatching { if (paired && cacheFile.exists()) Conv.list(cacheFile.readText()).forEach { convs[it.id] = it } }
+        // Photos found last time show straight away; everyone else is fetched once connected.
+        runCatching {
+            if (paired && avatarFile.exists()) {
+                val o = org.json.JSONObject(avatarFile.readText())
+                o.keys().forEach { k -> val v = o.optString(k); if (v.isNotEmpty() && File(v).exists()) avatars[k] = v }
+            }
+        }
         scope.launch { hub.events.collect { handle(it) } }
         scope.launch {
             while (true) {
@@ -123,8 +131,8 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
             "paired" -> { paired = true; refresh() }
             "unpaired" -> {
                 paired = false
-                convs.clear(); msgs.clear()
-                cacheFile.delete()
+                convs.clear(); msgs.clear(); avatars.clear()
+                cacheFile.delete(); avatarFile.delete()
             }
             "connection" -> if (e.data.optString("state") == "ready" && convs.isEmpty()) refresh()
         }
@@ -196,6 +204,7 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
                     val ids = all.map { it.id }.toSet()
                     convs.keys.filter { it !in ids }.forEach { convs.remove(it) }
                     all.distinctBy { it.id }.forEach { putConv(it) }
+                    ensureAvatars(convs.values.flatMap { c -> c.others.map { it.id } }.distinct())
                     loadError = null
                     seedPins()
                     break
@@ -250,13 +259,21 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         avatarPending += need
         scope.launch {
             delay(150)
-            need.chunked(20).forEach { batch ->
+            // Most recent chats first, a few at a time, so the visible photos land quickly.
+            val order = need.sortedByDescending { id -> convs.values.filter { c -> c.others.any { it.id == id } }.maxOfOrNull { it.ts } ?: 0L }
+            order.chunked(6).forEach { batch ->
                 hub.io { it.fetchAvatars(JSONArray(batch).toString(), contactsKind) }.onSuccess { j ->
                     val o = org.json.JSONObject(j)
                     batch.forEach { id -> avatars[id] = o.optString(id) }
                 }.onFailure { batch.forEach { id -> avatarPending.remove(id) } }
             }
+            saveAvatars()
         }
+    }
+
+    private fun saveAvatars() {
+        val snap = avatars.filterValues { it.isNotEmpty() }
+        scope.launch(Dispatchers.IO) { runCatching { avatarFile.writeText(org.json.JSONObject(snap as Map<*, *>).toString()) } }
     }
 
     fun ensureMedia(ref: MediaRef, thumb: Boolean = false) {
@@ -499,7 +516,10 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
             hub.io { it.clearCache() }
             withContext(Dispatchers.IO) { File(app.cacheDir, "outgoing").deleteRecursively() }
             media.clear()
+            avatars.clear(); avatarPending.clear()
+            withContext(Dispatchers.IO) { avatarFile.delete() }
             toast("Cache cleared")
+            ensureAvatars(convs.values.flatMap { c -> c.others.map { it.id } }.distinct())
         }
     }
 

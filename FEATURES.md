@@ -17,13 +17,14 @@ Every feature from the design prototype and our conversations, with where it sta
 - ✅ Pinned chats seeded from Google Messages pins, up to 8
 - ✅ 10 pinned layouts: Grid, Large, Pages, Carousel, Compact, Chips, Cards, Spotlight, List, Dock
 - ✅ Pinned notifications: Badges or Rings, typing dots on pinned faces
-- ✅ Hold a pinned chat and drag to rearrange ("Pinned order saved")
+- ✅ Hold a pinned chat and drag it: the others slide aside to show where it lands, and it saves when you let go
+- ✅ Drag a pinned chat out to unpin it; hold a chat in the list and drag it up to pin it
 - ✅ Rows: photo or initials, name, time, preview, typing, draft, read check, muted, pin mark, unread badge
 - ✅ Copy button for verification codes
 - ✅ Swipe left and right with your chosen actions (archive, read/unread, delete, pin, mute, off)
 - ✅ Long-press menu: pin, archive, mute, mark read/unread, block, delete — with Undo where it makes sense
 - ✅ Archived and Spam & blocked folders, swipe hint, empty states
-- ✅ Frosted search and new-message buttons (solid icons)
+- ✅ Frosted glass search and new-message buttons (solid icons)
 - ✅ In-app banner with quick reply when a message arrives in another chat
 - ✅ App color strip that previews live on Home
 - 🔶 Unread badge shows "1" until the chat's messages are loaded (Google Messages only says *if* a chat is unread)
@@ -40,13 +41,14 @@ Every feature from the design prototype and our conversations, with where it sta
 - ✅ Call sheet: voice call, video call, copy number
 - ✅ Wallpapers per chat or app-wide, including your own photo
 - ✅ Bubble shapes: Rounded, Soft, Pill, with grouped corners
-- ✅ Sent bubbles on the right, about 78% max width (like Google Messages)
+- ✅ Sent bubbles on the right, about 72% max width
+- ✅ Pinch a chat to make bubbles bigger or smaller
 - ✅ Time dividers ("Today 3:52 PM"), or a time under every message
 - ✅ Tap beside a message for its status (received / sending / delivered / read / scheduled)
-- ✅ Swipe left to reveal timestamps
+- ✅ Swipe left to reveal timestamps (your bubbles slide over, like iMessage)
 - ✅ Swipe a bubble right to reply; reply quotes inside bubbles
 - ✅ Double-tap for ❤️ with a burst
-- ✅ Long-press menu: quick reactions (+ all emoji), reply, copy, forward, star, read aloud, select, details, delete
+- ✅ Long-press like Google Messages: chat blurs, the message stays in place, reactions above (emoji button for the rest), actions below
 - ✅ Reactions under bubbles
 - ✅ Big emoji when a message is only 1–3 emoji
 - ✅ Photos, GIFs, video, voice messages (with playback), files, contact cards
@@ -54,23 +56,24 @@ Every feature from the design prototype and our conversations, with where it sta
 - ✅ Smart chips: add to calendar, open in Maps, track package, copy code
 - ✅ Translate messages in other languages (on-device)
 - ✅ Typing bubble, jump-to-latest button, staggered message entrance
-- ✅ Smart replies above the keyboard
+- ✅ Smart replies above the keyboard, with an X to close them
 - ✅ @mentions in group chats
 - ✅ Composer: + (rotates to ×), emoji, gallery, send / mic, SMS character counter
 - ✅ + panel: Gallery, Camera, GIFs, Stickers, Files, Location, Contact, Schedule
 - ✅ Emoji with search, categories and recents; stickers; sticker maker (Cutout / Circle / Rounded, white outline)
 - ✅ In-panel gallery grid with multi-select
-- ✅ Scheduled send, shown faded in the chat until it goes
+- ✅ Scheduled send (pick date and time, or a suggestion), shown faded in the chat until it goes
+- ✅ Location with a map preview
 - ✅ Voice recording with live bars
 - ✅ Effects: balloons for birthdays, confetti, hearts
 - ✅ Scam warning and "Not in your contacts" banners
 - ✅ Select mode (copy, star, delete) and search inside a chat
 - ✅ Empty chat with "Say hi"
-- 🔶 GIF search needs a GIPHY key (add `GIPHY_KEY` to the repo's Actions secrets)
+- 🔶 GIF search needs a free GIPHY key: paste it in the GIFs tab
 - ❌ Voice message transcripts (Android can't transcribe audio files on-device yet)
 
 ## Contact card
-- ✅ Photo, name, number, RCS chip
+- ✅ Photo, name, number, RCS chip (contact and group photos from Google Messages)
 - ✅ Call, Search, Mute, Pin
 - ✅ Chat theme, notifications on/off, vibration
 - ✅ Media, Links, Files tabs
@@ -92,14 +95,14 @@ Every feature from the design prototype and our conversations, with where it sta
 - ✅ Light / Dark / Match system
 - ✅ Quick reactions picker, profile name and photo
 - ✅ Fingerprint lock, hide in recent apps, permissions page
-- ✅ Bold text, high contrast, reduce transparency, reduce motion, text size
+- ✅ Bold text, high contrast, reduce transparency, reduce motion, text size (applies to the whole app)
 - ✅ Debug log and crash reports
 - ❌ AI assistant (removed)
 - ❌ SIM & MMS settings (these live in Google Messages)
 
 ## Around the phone
 - ✅ Notifications with Reply and Mark as read
-- ✅ Stays connected in the background (quiet "Connected" notification; can be turned off)
+- ✅ Stays connected in the background with no notification of its own; only texts notify, muted chats stay silent
 - ✅ Home-screen widgets: Conversations and Pinned people
 - ✅ App-icon shortcuts: New message plus your top 3 pinned chats
 - ✅ Fold inner screen: chat list and conversation side by side

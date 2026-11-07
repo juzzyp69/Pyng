@@ -52,13 +52,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
@@ -126,6 +135,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
     }
 
     val all = repo.convs.values.toList()
+    val layout = p.pinLayout
     fun unreadOf(c: Conv) = c.unread || c.id in p.markedUnread
     fun countOf(c: Conv): Int {
         if (!unreadOf(c)) return 0
@@ -136,64 +146,114 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
     val spamLocal = if (p.on("spam")) all.filter { c -> c.status == "active" && c.id !in p.notSpam && !c.fromMe && spamCheck(c, c.preview) != null }.map { it.id }.toSet() else emptySet()
     val active = all.filter { it.status == "active" && it.id !in spamLocal }
     val pinnedIds = p.pinned.filter { id -> active.any { it.id == id } }
-    val pins = pinnedIds.mapNotNull { id -> active.firstOrNull { it.id == id } }.map { c ->
+
+    // Dragging: a pinned chat (to reorder or drag out) or a list row (to drag up into pins).
+    val listState = rememberLazyListState()
+    val dh = remember { DragHolder() }
+    var dragId by remember { mutableStateOf<String?>(null) }
+    var dragFromRow by remember { mutableStateOf(false) }
+    var dragPointer by remember { mutableStateOf(Offset.Zero) }
+    var dragStart by remember { mutableStateOf(Offset.Zero) }
+    var dragMoved by remember { mutableStateOf(false) }
+    var inZone by remember { mutableStateOf(false) }
+    var target by remember { mutableStateOf(0) }
+    val haptic = LocalHapticFeedback.current
+    val density = LocalDensity.current
+    val ghostLift = with(density) { 46.dp.toPx() }
+    val previewIds = dragId.let { id ->
+        if (id == null) pinnedIds
+        else {
+            val without = pinnedIds - id
+            if (inZone && (!dragFromRow || without.size < 8)) without.toMutableList().apply { add(target.coerceIn(0, size), id) } else without
+        }
+    }
+    val pins = previewIds.mapNotNull { id -> active.firstOrNull { it.id == id } }.map { c ->
         Pin(c, whoOf(c, repo, t), countOf(c), typingOf(c), (if (c.fromMe) "You: " else if (c.group && c.sender.isNotBlank()) c.sender.substringBefore(' ') + ": " else "") + c.preview)
     }
-    val layout = p.pinLayout
     val rows = (if (layout == "List") pins.map { it.c } else emptyList()) + active.filter { it.id !in pinnedIds }.sortedByDescending { it.ts }
     val archCount = all.count { it.status == "archived" }
     val spamCount = all.count { it.status == "spam" || it.status == "blocked" } + spamLocal.size
     val newCount = active.count { unreadOf(it) && it.id !in p.muted }
 
-    // Drag-to-reorder for pinned chats.
-    val slots = remember { mutableStateMapOf<String, Rect>() }
-    var dragId by remember { mutableStateOf<String?>(null) }
-    var dragPointer by remember { mutableStateOf(Offset.Zero) }
-    var grab by remember { mutableStateOf(Offset.Zero) }
-    var dragMoved by remember { mutableStateOf(false) }
-    val haptic = LocalHapticFeedback.current
-    val pinCtl = PinCtl(
-        slots = slots, dragId = dragId, pointer = dragPointer, grab = grab,
-        open = { id -> nav.openChat(id) },
-        lift = { id, at ->
-            dragId = id; dragMoved = false
-            val r = slots[id]
-            grab = if (r != null) at - r.center else Offset.Zero
-            dragPointer = at
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-        },
-        move = { at ->
-            val id = dragId
-            if (id != null) {
-                if ((at - dragPointer).getDistance() > 4f) dragMoved = true
-                dragPointer = at
-                val target = at - grab
-                val order = pinnedIds.toMutableList()
-                val best = order.minByOrNull { o -> slots[o]?.center?.let { (it - target).getDistanceSquared() } ?: Float.MAX_VALUE }
-                if (best != null && best != id) {
-                    val from = order.indexOf(id); val to = order.indexOf(best)
-                    if (from >= 0 && to >= 0) {
-                        order.removeAt(from); order.add(to, id)
-                        val rest = p.pinned.filter { it !in order }
-                        repo.prefs.edit { it.copy(pinned = order + rest) }
+    fun liftAt(id: String, at: Offset, fromRow: Boolean) {
+        dragId = id; dragFromRow = fromRow; dragMoved = false
+        dragPointer = at; dragStart = at
+        inZone = !fromRow
+        target = pinnedIds.indexOf(id).coerceAtLeast(0)
+        dh.active = true
+        dh.animUntil = Long.MAX_VALUE
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+    }
+    dh.onMove = move@{ at ->
+        val id = dragId ?: return@move
+        dragPointer = at
+        if ((at - dragStart).getDistance() > 14f) dragMoved = true
+        val g = at - Offset(0f, ghostLift)
+        val z = dh.zone
+        val now = z != null && z.inflate(28f).contains(g)
+        if (now != inZone) { inZone = now; haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
+        if (now) {
+            val n = (pinnedIds - id).size + 1
+            val best = (0 until n).mapNotNull { i -> dh.slots[i]?.let { i to (it.center - g).getDistanceSquared() } }.minByOrNull { it.second }?.first
+            if (best != null && best != target) { target = best; haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
+        }
+    }
+    dh.onDrop = drop@{
+        val id = dragId ?: return@drop
+        dh.active = false
+        dh.animUntil = System.currentTimeMillis() + 700
+        val order = previewIds
+        dragId = null
+        if (!dragMoved) { menuFor = repo.convs[id]; return@drop }
+        val cur = repo.prefs.state.pinned
+        when {
+            dragFromRow && inZone -> {
+                if (pinnedIds.size >= 8) repo.toast("Unpin a chat first (8 max)")
+                else { repo.prefs.edit { it.copy(pinned = order + cur.filter { x -> x !in order }) }; repo.toast("Pinned") }
+            }
+            dragFromRow -> {}
+            inZone -> repo.prefs.edit { it.copy(pinned = order + cur.filter { x -> x !in order }) }
+            else -> {
+                val before = cur
+                repo.prefs.edit { it.copy(pinned = cur.filter { x -> x != id }) }
+                repo.toast("Unpinned") { repo.prefs.edit { it.copy(pinned = before) } }
+            }
+        }
+    }
+    if (layout == "List") dh.zone = null
+    // Scroll the list while a dragged chat is held near the top or bottom edge.
+    LaunchedEffect(dragId) {
+        if (dragId == null) return@LaunchedEffect
+        val edge = with(density) { 150.dp.toPx() }
+        while (dragId != null) {
+            withFrameNanos { }
+            val y = dragPointer.y
+            if (y < edge) listState.scrollBy(-(edge - y) / 10f)
+            else if (dh.height > 0 && y > dh.height - edge) listState.scrollBy((y - (dh.height - edge)) / 10f)
+        }
+    }
+    val pinCtl = PinCtl(dh = dh, dragId = dragId, open = { id -> nav.openChat(id) }, lift = { id, at -> liftAt(id, at, false) })
+
+    Box(
+        Modifier.fillMaxSize()
+            .onGloballyPositioned { dh.home = it; dh.height = it.size.height.toFloat() }
+            // While something is lifted, this box follows the finger before anything else sees it.
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val e = awaitPointerEvent(PointerEventPass.Initial)
+                        if (!dh.active) continue
+                        val ch = e.changes.firstOrNull() ?: continue
+                        if (ch.pressed) { dh.onMove(ch.position); ch.consume() } else { ch.consume(); dh.onDrop() }
                     }
                 }
-            }
-        },
-        drop = {
-            val id = dragId
-            dragId = null
-            if (id != null) {
-                if (dragMoved) repo.toast("Pinned order saved") else menuFor = repo.convs[id]
-            }
-        },
-    )
-
-    Box(Modifier.fillMaxSize()) {
+            },
+    ) {
         Glow()
         androidx.compose.runtime.CompositionLocalProvider(LocalHaze provides haze) {
             LazyColumn(
                 Modifier.fillMaxSize().hazeSource(haze),
+                state = listState,
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 130.dp),
             ) {
                 item("head") {
@@ -227,15 +287,18 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                     item("pins") { PinnedArea(layout, pins, pinCtl, p.pinStyle) }
                 } else if (pins.isEmpty() && rows.isNotEmpty()) {
                     item("nopins") {
+                        DisposableEffect(Unit) { onDispose { dh.zone = null } }
                         Row(
-                            Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(26.dp)).background(t.card).padding(16.dp),
+                            Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                                .onGloballyPositioned { c -> dh.home?.let { h -> runCatching { dh.zone = h.localBoundingBoxOf(c) } } }
+                                .clip(RoundedCornerShape(26.dp)).background(t.card).padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Box(Modifier.size(44.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(Icons.pinned, t.p, 20.dp) }
                             Spacer(Modifier.width(14.dp))
                             Column {
                                 T("Pin your favorite people", size = 14.5.sp, weight = FontWeight.SemiBold)
-                                T("Hold any conversation and tap Pin. Up to 8 show here as big circles.", size = 12.5.sp, color = t.soft, lineHeight = 17.sp)
+                                T("Hold a conversation and drag it up here, or tap Pin. Up to 8 show here as big circles.", size = 12.5.sp, color = t.soft, lineHeight = 17.sp)
                             }
                         }
                     }
@@ -257,6 +320,8 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                         c = c, index = i, pinMark = layout == "List" && c.id in pinnedIds, count = countOf(c), unread = unreadOf(c),
                         typing = typingOf(c), selected = wide && (nav.top as? Route.Thread)?.id == c.id,
                         onOpen = { nav.openChat(c.id) }, onMenu = { menuFor = c },
+                        lifted = dragId == c.id,
+                        onLift = if (layout == "List") null else ({ at -> liftAt(c.id, at, true) }), home = dh,
                         onSwipe = { side -> swipeAct(repo, c, if (side > 0) p.opt("swipeR") else p.opt("swipe")) },
                     )
                 }
@@ -275,12 +340,13 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
             if (layout == "Dock" && pins.isNotEmpty()) {
                 Row(
                     Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(start = 18.dp, bottom = 28.dp, end = 168.dp)
+                        .onGloballyPositioned { c -> dh.home?.let { h -> runCatching { dh.zone = h.localBoundingBoxOf(c); dh.area = c } } }
                         .height(60.dp).edge(RoundedCornerShape(30.dp)).frost(RoundedCornerShape(30.dp), t.fab)
                         .horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     pins.forEachIndexed { i, pin ->
-                        PinItem(pin, pinCtl, Modifier.enter(i, pop = true)) {
+                        PinItem(pin, i, pinCtl, Modifier.enter(i, pop = true)) {
                             Box(Modifier.size(46.dp)) {
                                 Avatar(pin.who.photo, pin.who.ini, 46.dp, pin.who.bg, pin.who.ink, 15.sp)
                                 if (pin.count > 0) CountBadge(pin.count, h = 18.dp, modifier = Modifier.align(Alignment.TopEnd).offset(3.dp, (-2).dp))
@@ -294,17 +360,40 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                 Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 20.dp, bottom = 28.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically,
             ) {
+                // Frosted glass: light blur, mostly see-through, with a bright rim instead of a heavy shadow.
                 Box(
-                    Modifier.size(60.dp).edge(CircleShape, elevation = 8.dp).frost(CircleShape, if (t.solid) t.fab else t.fab.copy(alpha = if (t.dark) 0.34f else 0.42f), 20.dp).press(0.9f) { nav.go(Route.Search) },
+                    Modifier.size(60.dp).glassRim(CircleShape).frost(CircleShape, if (t.solid) t.fab else t.fab.copy(alpha = if (t.dark) 0.14f else 0.2f), 9.dp).press(0.9f) { nav.go(Route.Search) },
                     contentAlignment = Alignment.Center,
                 ) { SolidSearch(t.ink, 24.dp) }
                 Box(
-                    Modifier.size(60.dp).edge(CircleShape, primary = true, elevation = 10.dp).frost(CircleShape, if (t.solid) t.plusFlat else t.plusFlat.copy(alpha = 0.62f), 20.dp).press(0.9f) { nav.go(Route.NewChat()) },
+                    Modifier.size(60.dp).glassRim(CircleShape).frost(CircleShape, if (t.solid) t.plusFlat else t.plusFlat.copy(alpha = if (t.dark) 0.3f else 0.34f), 9.dp).press(0.9f) { nav.go(Route.NewChat()) },
                     contentAlignment = Alignment.Center,
-                ) { SolidCompose(t.plusInk, if (t.solid) t.plusFlat else t.plusFlat, 27.dp) }
+                ) { SolidCompose(if (t.solid) t.plusInk else t.ink, if (t.solid) t.plusFlat else t.plusFlat, 27.dp) }
             }
         }
 
+        dragId?.let { id -> repo.convs[id] }?.let { c ->
+            val w = whoOf(c)
+            val size = 68.dp
+            val half = with(density) { size.toPx() / 2 }
+            Column(
+                Modifier.zIndex(30f).offset { IntOffset((dragPointer.x - half).roundToInt(), (dragPointer.y - ghostLift - half).roundToInt()) },
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Box(Modifier.size(size).graphicsLayer { scaleX = 1.08f; scaleY = 1.08f }.edge(CircleShape, elevation = 16.dp).clip(CircleShape)) {
+                    Avatar(w.photo, w.ini, size, w.bg, w.ink, 21.sp)
+                }
+                val label = when {
+                    dragFromRow && inZone -> if (pinnedIds.size >= 8) "8 max" else "Pin"
+                    !dragFromRow && !inZone && dragMoved -> "Unpin"
+                    else -> null
+                }
+                if (label != null) T(label, size = 12.sp, weight = FontWeight.SemiBold, color = t.onFill,
+                    modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(12.dp)).background(t.fill).padding(horizontal = 10.dp, vertical = 4.dp))
+            }
+        }
+
+        com.jpetrydesign.pyng.ui.kit.StatusScrim(Modifier.align(Alignment.TopCenter))
         RowMenu(menuFor, onDismiss = { menuFor = null })
         PermissionSheet(askPerms) { askPerms = false; repo.prefs.edit { it.copy(permsAsked = 1) } }
         if (nav.strip) ColorStrip(onDone = { nav.strip = false })
@@ -345,6 +434,9 @@ fun ConvRow(
     onOpen: () -> Unit,
     onMenu: () -> Unit,
     onSwipe: (Int) -> Unit,
+    lifted: Boolean = false,
+    onLift: ((Offset) -> Unit)? = null,
+    home: DragHolder? = null,
 ) {
     val repo = LocalRepo.current
     val t = LocalTok.current
@@ -356,8 +448,8 @@ fun ConvRow(
     val bold = p.on("boldText")
     val draft = p.drafts[c.id]?.takeIf { it.isNotBlank() }
     val compact = p.density == "Compact"
-    val nameSize = mapOf("S" to 14.5f, "M" to 15.5f, "L" to 17f, "XL" to 18.5f)[p.textSize] ?: 15.5f
-    val prevSize = mapOf("S" to 13f, "M" to 14f, "L" to 15.5f, "XL" to 17f)[p.textSize] ?: 14f
+    val nameSize = 15.5f
+    val prevSize = 14f
     val av = if (compact) 40.dp else 48.dp
     val density = LocalDensity.current
     val maxPx = with(density) { 150.dp.toPx() }
@@ -374,9 +466,17 @@ fun ConvRow(
     val action = if (dx.value > 0) p.opt("swipeR") else p.opt("swipe")
     val cfg = swipeCfg(action, c, p.isPinned(c.id), p.isMuted(c.id), unread, t)
 
+    val rowCoords = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    val liftNow by androidx.compose.runtime.rememberUpdatedState(onLift)
+    val menuNow by androidx.compose.runtime.rememberUpdatedState(onMenu)
+    val openNow by androidx.compose.runtime.rememberUpdatedState(onOpen)
     val seen = remember { SeenRows.contains(c.id) }
     androidx.compose.runtime.SideEffect { SeenRows.add(c.id) }
-    Column(Modifier.then(if (index < 10 && !seen) Modifier.enter(index) else Modifier).fillMaxWidth()) {
+    Column(
+        Modifier.then(if (index < 10 && !seen) Modifier.enter(index) else Modifier).fillMaxWidth()
+            .onGloballyPositioned { rowCoords[0] = it }
+            .graphicsLayer { alpha = if (lifted) 0.4f else 1f },
+    ) {
         Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(if (dx.value != 0f) 18.dp else 0.dp))) {
             if (dx.value != 0f) {
                 Row(
@@ -396,7 +496,11 @@ fun ConvRow(
                 Modifier.fillMaxWidth().offset { IntOffset(dx.value.roundToInt(), 0) }
                     .background(if (dx.value != 0f) t.bg else if (selected) t.tone else Color.Transparent)
                     .pointerInput(c.id) {
-                        detectTapGestures(onTap = { onOpen() }, onLongPress = { onMenu() })
+                        detectTapGestures(onTap = { openNow() }, onLongPress = { at ->
+                            val h = home?.home; val rc = rowCoords[0]; val lift = liftNow
+                            if (lift != null && h != null && rc != null) runCatching { lift(h.localPositionOf(rc, at)) }.onFailure { menuNow() }
+                            else menuNow()
+                        })
                     }
                     .pointerInput(c.id, leftOn, rightOn) {
                         detectHorizontalDragGestures(
@@ -479,43 +583,75 @@ private fun swipeCfg(a: String, c: Conv, pinned: Boolean, muted: Boolean, unread
 
 // ---------- pinned layouts ----------
 
+/** Plain holders shared by the drag code; none of these trigger recomposition. */
+class DragHolder {
+    var home: LayoutCoordinates? = null
+    var height = 0f
+    var area: LayoutCoordinates? = null
+    var zone: Rect? = null
+    val slots = HashMap<Int, Rect>()
+    val lastPos = HashMap<String, Offset>()
+    var active = false
+    var animUntil = 0L
+    var onMove: (Offset) -> Unit = {}
+    var onDrop: () -> Unit = {}
+}
+
+/** A thin bright edge and a soft, light shadow: reads as glass rather than a solid disc. */
+private fun Modifier.glassRim(shape: androidx.compose.ui.graphics.Shape): Modifier = androidx.compose.ui.composed {
+    val t = LocalTok.current
+    this.shadow(3.dp, shape, clip = false, ambientColor = t.shadow, spotColor = t.shadow)
+        .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = if (t.dark) 0.28f else 0.75f), Color.White.copy(alpha = if (t.dark) 0.06f else 0.2f))), shape)
+}
+
 private class PinCtl(
-    val slots: MutableMap<String, Rect>,
+    val dh: DragHolder,
     val dragId: String?,
-    val pointer: Offset,
-    val grab: Offset,
     val open: (String) -> Unit,
     val lift: (String, Offset) -> Unit,
-    val move: (Offset) -> Unit,
-    val drop: () -> Unit,
 )
 
-/** Wraps one pinned item: records its slot, opens on tap, lifts and drags on long-press. */
+/** Wraps one pinned slot: records where it sits, opens on tap, lifts on long-press, and glides when the order changes. */
 @Composable
-private fun PinItem(pin: Pin, ctl: PinCtl, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+private fun PinItem(pin: Pin, index: Int, ctl: PinCtl, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val id = pin.c.id
-    val dragging = ctl.dragId == id
-    val k by animateFloatAsState(if (dragging) 1.08f else 1f, spring(dampingRatio = 0.6f, stiffness = 500f), label = "lift")
-    var origin by remember { mutableStateOf(Offset.Zero) }
+    val dh = ctl.dh
+    val placeholder = ctl.dragId == id
+    val coords = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    val shift = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+    val scope = rememberCoroutineScope()
+    val open by androidx.compose.runtime.rememberUpdatedState(ctl.open)
+    val lift by androidx.compose.runtime.rememberUpdatedState(ctl.lift)
     Box(
         modifier
-            .zIndex(if (dragging) 6f else 0f)
-            .onGloballyPositioned { coords -> val r = coords.boundsInRoot(); ctl.slots[id] = r; origin = r.topLeft }
-            // Gestures sit outside the lift transform so finger positions stay in the slot's own coordinates.
-            .pointerInput(id) { detectTapGestures(onTap = { ctl.open(id) }, onLongPress = { }) }
+            .onGloballyPositioned { c ->
+                coords[0] = c
+                val h = dh.home ?: return@onGloballyPositioned
+                runCatching {
+                    dh.slots[index] = h.localBoundingBoxOf(c)
+                    val area = dh.area
+                    if (area != null) {
+                        val pos = area.localPositionOf(c, Offset.Zero)
+                        val prev = dh.lastPos[id]
+                        dh.lastPos[id] = pos
+                        if (prev != null && System.currentTimeMillis() < dh.animUntil && (prev - pos).getDistance() > 2f) {
+                            scope.launch {
+                                shift.snapTo(shift.value + (prev - pos))
+                                shift.animateTo(Offset.Zero, spring(dampingRatio = 0.78f, stiffness = 420f))
+                            }
+                        }
+                    }
+                }
+            }
             .pointerInput(id) {
-                detectDragGesturesAfterLongPress(
-                    onDragStart = { at -> ctl.lift(id, origin + at) },
-                    onDragEnd = { ctl.drop() },
-                    onDragCancel = { ctl.drop() },
-                ) { ch, _ -> ch.consume(); ctl.move(origin + ch.position) }
+                detectTapGestures(onTap = { open(id) }, onLongPress = { at ->
+                    val h = dh.home; val c = coords[0]
+                    if (h != null && c != null) runCatching { lift(id, h.localPositionOf(c, at)) }
+                })
             }
             .graphicsLayer {
-                scaleX = k; scaleY = k
-                if (dragging) {
-                    val r = ctl.slots[id]
-                    if (r != null) { val target = ctl.pointer - ctl.grab; translationX = target.x - r.center.x; translationY = target.y - r.center.y }
-                }
+                translationX = shift.value.x; translationY = shift.value.y
+                alpha = if (placeholder) 0.35f else 1f
             },
     ) { content() }
 }
@@ -553,18 +689,21 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
     val cardMod = Modifier.fillMaxWidth().padding(bottom = 14.dp).clip(cardShape).background(t.card).cardEdge(cardShape)
     val limit = mapOf("Grid" to 8, "Large" to 6, "Cards" to 6, "Spotlight" to 7)[layout] ?: 12
     val pins = all.take(limit)
+    val dh = ctl.dh
+    DisposableEffect(Unit) { onDispose { dh.zone = null; dh.area = null } }
+    Box(Modifier.fillMaxWidth().onGloballyPositioned { c -> dh.area = c; dh.home?.let { h -> runCatching { dh.zone = h.localBoundingBoxOf(c) } } }) {
     when (layout) {
         "Large", "Grid" -> {
             val cols = if (layout == "Large") 3 else 4
-            val av = if (layout == "Large") 86.dp else 68.dp
+            val av = if (layout == "Large") 88.dp else 74.dp
             Column(cardMod.padding(horizontal = if (layout == "Large") 10.dp else 8.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                 pins.chunked(cols).forEachIndexed { r, row ->
                     Row(Modifier.fillMaxWidth()) {
                         row.forEachIndexed { i, pin ->
                             Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
-                                PinItem(pin, ctl, Modifier.enter(r * cols + i, pop = true)) {
+                                PinItem(pin, r * cols + i, ctl, Modifier.enter(r * cols + i, pop = true)) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        PinFace(pin, av, if (layout == "Large") 26f else 21f, style)
+                                        PinFace(pin, av, if (layout == "Large") 26f else 22f, style)
                                         Spacer(Modifier.height(8.dp))
                                         PinName(pin, if (layout == "Large") 14f else 13f, if (layout == "Large") 100.dp else 80.dp)
                                     }
@@ -584,9 +723,9 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
                     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
                         pages[pg].forEachIndexed { i, pin ->
                             Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
-                                PinItem(pin, ctl, Modifier.enter(i, pop = true)) {
+                                PinItem(pin, pg * 4 + i, ctl, Modifier.enter(i, pop = true)) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        PinFace(pin, 68.dp, 21f, style); Spacer(Modifier.height(8.dp)); PinName(pin, 13f, 80.dp)
+                                        PinFace(pin, 72.dp, 22f, style); Spacer(Modifier.height(8.dp)); PinName(pin, 13f, 82.dp)
                                     }
                                 }
                             }
@@ -608,7 +747,7 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
             val mod = if (compact) Modifier.fillMaxWidth().padding(bottom = 20.dp) else cardMod.padding(vertical = 18.dp)
             Row(mod.horizontalScroll(rememberScrollState()).padding(horizontal = if (compact) 2.dp else 10.dp), horizontalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 4.dp)) {
                 pins.forEachIndexed { i, pin ->
-                    PinItem(pin, ctl, Modifier.width(if (compact) 56.dp else 80.dp).enter(i, pop = true)) {
+                    PinItem(pin, i, ctl, Modifier.width(if (compact) 56.dp else 80.dp).enter(i, pop = true)) {
                         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                             PinFace(pin, if (compact) 52.dp else 64.dp, if (compact) 17f else 20f, style)
                             Spacer(Modifier.height(8.dp))
@@ -621,7 +760,7 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
         "Chips" -> {
             FlowRow(Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 pins.forEachIndexed { i, pin ->
-                    PinItem(pin, ctl, Modifier.enter(i, pop = true)) {
+                    PinItem(pin, i, ctl, Modifier.enter(i, pop = true)) {
                         Row(
                             Modifier.clip(RoundedCornerShape(999.dp)).background(t.card).cardEdge(RoundedCornerShape(999.dp)).padding(start = 5.dp, end = 16.dp, top = 5.dp, bottom = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -639,7 +778,7 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
             Column(Modifier.fillMaxWidth().padding(bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 val first = if (spot) pins.firstOrNull() else null
                 if (first != null) {
-                    PinItem(first, ctl, Modifier.fillMaxWidth().enter(0, pop = true)) {
+                    PinItem(first, 0, ctl, Modifier.fillMaxWidth().enter(0, pop = true)) {
                         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(t.card).cardEdge(RoundedCornerShape(24.dp)).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                             PinFace(first, 62.dp, 18f, style, 20.dp)
                             Spacer(Modifier.width(12.dp))
@@ -655,7 +794,7 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
                 rest.chunked(cols).forEachIndexed { r, row ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         row.forEachIndexed { i, pin ->
-                            PinItem(pin, ctl, Modifier.weight(1f).enter(1 + r * cols + i, pop = true)) {
+                            PinItem(pin, (if (spot) 1 else 0) + r * cols + i, ctl, Modifier.weight(1f).enter(1 + r * cols + i, pop = true)) {
                                 Column(
                                     Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(t.card).cardEdge(RoundedCornerShape(24.dp))
                                         .padding(if (spot) PaddingValues(horizontal = 6.dp, vertical = 14.dp) else PaddingValues(14.dp)),
@@ -673,6 +812,7 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
                 }
             }
         }
+    }
     }
 }
 

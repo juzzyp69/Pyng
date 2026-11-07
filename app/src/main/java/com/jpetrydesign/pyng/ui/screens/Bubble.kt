@@ -41,6 +41,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -77,7 +78,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /** Everything a single message row needs from the thread. */
-class RowCtx(
+data class RowCtx(
     val t: Tok,
     val group: Boolean,
     val prevSame: Boolean,
@@ -112,6 +113,7 @@ class RowActs(
     val onReply: () -> Unit,
     val onOpenMedia: (MediaRef) -> Unit,
     val onRetry: () -> Unit,
+    val onPlaced: (androidx.compose.ui.layout.LayoutCoordinates) -> Unit = {},
 )
 
 fun bubbleShape(me: Boolean, prev: Boolean, next: Boolean, big: Dp, small: Dp): RoundedCornerShape =
@@ -178,7 +180,7 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
                     Row(
                         verticalAlignment = Alignment.Bottom,
                         horizontalArrangement = if (me) Arrangement.End else Arrangement.Start,
-                        modifier = Modifier.fillMaxWidth(if (x.group && !me) 0.84f else 0.78f),
+                        modifier = Modifier.fillMaxWidth(if (x.group && !me) 0.8f else 0.72f).widthIn(max = 420.dp),
                     ) {
                         if (x.group && !me) {
                             val w = x.senderWho
@@ -190,6 +192,7 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
                         Box(Modifier.weight(1f, fill = false)) {
                             Box(
                                 Modifier
+                                    .onGloballyPositioned { a.onPlaced(it) }
                                     .offset { IntOffset(swipe.value.roundToInt(), 0) }
                                     .padding(bottom = if (m.reactions.isNotEmpty()) 14.dp else 0.dp)
                                     .then(if (x.highlighted) Modifier.border(3.dp, t.p, shape) else Modifier)
@@ -297,6 +300,17 @@ private fun BurstEmoji(e: String, modifier: Modifier) {
         scaleX = s; scaleY = s; alpha = if (v < 0.3f) v / 0.3f else 1f - (v - 0.3f) / 0.7f
         translationY = -v * 60f
     }) { T(e, size = 46.sp) }
+}
+
+/** The message as the long-press screen shows it: same bubble, no extras. */
+@Composable
+fun MenuBubble(m: Msg, x: RowCtx) {
+    val shape = bubbleShape(m.fromMe, false, false, x.shape.first, x.shape.second)
+    val jumbo = if (m.media.isEmpty() && x.quote == null) jumboCount(m.text) else 0
+    BubbleBody(
+        m, x.copy(info = null, chips = emptyList(), highlighted = false, selecting = false, burst = null, tsShift = 0f, enterDelay = -1, starred = false),
+        shape, jumbo, RowActs({}, {}, {}, {}, {}, { _ -> }, {}),
+    )
 }
 
 @Composable

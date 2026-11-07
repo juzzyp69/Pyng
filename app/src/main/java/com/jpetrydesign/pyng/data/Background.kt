@@ -40,7 +40,7 @@ import java.util.concurrent.TimeUnit
 /** Message notifications, with reply and mark-as-read actions. */
 object Notifier {
     const val CH_MESSAGES = "messages"
-    const val CH_LINK = "link"
+    const val CH_LINK = "link-hidden"
     const val KEY_REPLY = "reply"
 
     fun channels(ctx: Context) {
@@ -48,9 +48,15 @@ object Notifier {
         nm.createNotificationChannel(NotificationChannel(CH_MESSAGES, "Messages", NotificationManager.IMPORTANCE_HIGH).apply {
             description = "New messages"
         })
-        nm.createNotificationChannel(NotificationChannel(CH_LINK, "Connection to Google Messages", NotificationManager.IMPORTANCE_MIN).apply {
-            description = "Keeps Messages connected so new texts arrive right away"
+        // Android needs a notification for the background connection. Its channel starts switched
+        // off, so nothing shows; only texts from your chats notify.
+        runCatching { nm.deleteNotificationChannel("link") }
+        nm.createNotificationChannel(NotificationChannel(CH_LINK, "Background connection", NotificationManager.IMPORTANCE_NONE).apply {
+            description = "Keeps Messages connected so new texts arrive right away. Off by default, so it never shows."
             setShowBadge(false)
+            setSound(null, null)
+            enableVibration(false)
+            lockscreenVisibility = android.app.Notification.VISIBILITY_SECRET
         })
     }
 
@@ -142,9 +148,13 @@ object Notifier {
 
     fun linkNotification(ctx: Context) = NotificationCompat.Builder(ctx, CH_LINK)
         .setSmallIcon(R.drawable.ic_stat_message)
-        .setContentTitle("Connected to Google Messages")
-        .setContentText("New texts arrive right away")
+        .setContentTitle("Messages")
+        .setContentText("Connected")
         .setOngoing(true)
+        .setSilent(true)
+        .setOnlyAlertOnce(true)
+        .setShowWhen(false)
+        .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_DEFERRED)
         .setPriority(NotificationCompat.PRIORITY_MIN)
         .setContentIntent(PendingIntent.getActivity(ctx, 0, Intent(ctx, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE))
         .build()

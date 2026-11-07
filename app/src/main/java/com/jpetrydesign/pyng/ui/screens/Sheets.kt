@@ -11,6 +11,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -51,11 +56,17 @@ import com.jpetrydesign.pyng.ui.theme.Tok
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+/**
+ * Long-press on a message, like Google Messages: the chat blurs, the message stays where it was,
+ * reactions sit above it (with an emoji button for the full set) and actions sit below.
+ */
 @Composable
 fun MessageMenu(
     m: Msg?,
     t: Tok,
     conv: Conv?,
+    anchor: androidx.compose.ui.geometry.Rect?,
+    rowCtx: RowCtx?,
     onDismiss: () -> Unit,
     onReact: (Msg, String) -> Unit,
     onReply: (Msg) -> Unit,
@@ -68,50 +79,134 @@ fun MessageMenu(
 ) {
     val repo = LocalRepo.current
     val ctx = LocalContext.current
+    val motion = com.jpetrydesign.pyng.ui.kit.LocalMotion.current
     var last by remember { mutableStateOf(m) }
-    if (m != null) last = m
+    var lastAnchor by remember { mutableStateOf(anchor) }
+    var lastRow by remember { mutableStateOf(rowCtx) }
+    if (m != null) { last = m; lastAnchor = anchor; lastRow = rowCtx }
     var more by remember(m) { mutableStateOf(false) }
-    Sheet(visible = m != null, onDismiss = onDismiss) {
-        val cur = last ?: return@Sheet
-        val p = repo.prefs.state
-        val myId = conv?.me?.id.orEmpty()
-        val mine = cur.reactions.firstOrNull { myId.isNotEmpty() && myId in it.by }?.emoji
-        val canReact = cur.id.isNotEmpty() && conv?.rcs == true
-        if (canReact) {
-            if (!more) {
-                Row(
-                    Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(t.surface).padding(horizontal = 8.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    p.quickReacts.forEachIndexed { i, e ->
-                        Box(
-                            Modifier.enter(i, pop = true).size(44.dp).clip(CircleShape).background(if (mine == e) t.tone else androidx.compose.ui.graphics.Color.Transparent)
-                                .press(0.8f) { onReact(cur, e); onDismiss() },
-                            contentAlignment = Alignment.Center,
-                        ) { T(e, size = 26.sp) }
+    if (m != null) androidx.activity.compose.BackHandler { if (more) more = false else onDismiss() }
+    val k = remember { androidx.compose.animation.core.Animatable(0f) }
+    androidx.compose.runtime.LaunchedEffect(m != null) {
+        if (m != null) { if (motion) k.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.72f, stiffness = 420f)) else k.snapTo(1f) }
+        else if (motion) k.animateTo(0f, androidx.compose.animation.core.tween(160)) else k.snapTo(0f)
+    }
+    if (m == null && k.value <= 0.01f) return
+    val cur = last ?: return
+    val p = repo.prefs.state
+    val myId = conv?.me?.id.orEmpty()
+    val mine = cur.reactions.firstOrNull { myId.isNotEmpty() && myId in it.by }?.emoji
+    val canReact = cur.id.isNotEmpty() && conv?.rcs == true
+    val me = cur.fromMe
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val close = { more = false; onDismiss() }
+
+    Box(
+        Modifier.fillMaxSize().zIndex(25f)
+            .graphicsLayer { alpha = k.value.coerceIn(0f, 1f) }
+            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = if (t.dark) 0.45f else 0.22f))
+            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { close() },
+    ) {
+        val topSafe = androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(density) + with(density) { 12.dp.roundToPx() }
+        val bottomSafe = androidx.compose.foundation.layout.WindowInsets.navigationBars.getBottom(density) + with(density) { 12.dp.roundToPx() }
+        val bar: @Composable () -> Unit = {
+            if (canReact) {
+                if (!more) {
+                    Row(
+                        Modifier.shadow(10.dp, RoundedCornerShape(32.dp)).clip(RoundedCornerShape(32.dp)).background(t.sheet)
+                            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
+                            .padding(horizontal = 6.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        p.quickReacts.forEachIndexed { i, e ->
+                            Box(
+                                Modifier.enter(i, pop = true).size(46.dp).clip(CircleShape).background(if (mine == e) t.tone else androidx.compose.ui.graphics.Color.Transparent)
+                                    .press(0.8f) { onReact(cur, e); close() },
+                                contentAlignment = Alignment.Center,
+                            ) { T(e, size = 27.sp) }
+                        }
+                        Box(Modifier.size(46.dp).clip(CircleShape).clickable { more = true }, contentAlignment = Alignment.Center) { Ico(Icons.emojiAdd, t.soft, 24.dp, 1.8f) }
                     }
-                    Box(Modifier.size(40.dp).clip(CircleShape).clickable { more = true }, contentAlignment = Alignment.Center) { Ico(Icons.plus, t.soft, 20.dp, 2f) }
-                }
-            } else {
-                LazyVerticalGrid(GridCells.Fixed(8), Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(260.dp)) {
-                    items(EmojiData.cats.flatMap { it.items }.map { it.first }) { e ->
-                        Box(Modifier.aspectRatio(1f).clip(CircleShape).clickable { onReact(cur, e); onDismiss() }, contentAlignment = Alignment.Center) { T(e, size = 24.sp) }
+                } else {
+                    Box(
+                        Modifier.width(340.dp).height(300.dp).shadow(10.dp, RoundedCornerShape(26.dp)).clip(RoundedCornerShape(26.dp)).background(t.sheet)
+                            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {},
+                    ) {
+                        LazyVerticalGrid(GridCells.Fixed(8), Modifier.fillMaxSize().padding(8.dp)) {
+                            items(EmojiData.cats.flatMap { it.items }.map { it.first }) { e ->
+                                Box(Modifier.aspectRatio(1f).clip(CircleShape).clickable { onReact(cur, e); close() }, contentAlignment = Alignment.Center) { T(e, size = 24.sp) }
+                            }
+                        }
                     }
                 }
             }
         }
-        val preview = msgPreview(cur)
-        if (preview.isNotEmpty()) T(preview, size = 13.sp, color = t.soft, maxLines = 1, modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp))
-        SheetGroup {
-            var i = 0
-            if (cur.id.isNotEmpty()) SheetAction("Reply", Icons.reply, { onReply(cur); onDismiss() }, first = true, index = i++)
-            if (cur.text.isNotEmpty()) SheetAction("Copy text", Icons.copy, { onCopy(cur); onDismiss() }, first = i == 0, index = i++)
-            SheetAction("Forward", Icons.forward, { onForward(cur); onDismiss() }, first = i == 0, index = i++)
-            SheetAction(if (p.isStarred(cur.key)) "Unstar" else "Star", Icons.star, { onStar(cur); onDismiss() }, index = i++)
-            SheetAction("Select", Icons.select, { onSelect(cur); onDismiss() }, index = i++)
-            if (p.on("readAloud") && cur.text.isNotEmpty()) SheetAction("Read aloud", Icons.volume, { Speaker.say(ctx, cur.text); onDismiss() }, index = i++)
-            SheetAction("Details", Icons.details, { onDetails(cur); onDismiss() }, index = i++)
-            SheetAction("Delete", Icons.trash, { onDelete(cur); onDismiss() }, danger = true, index = i)
+        val bubble: @Composable () -> Unit = {
+            val rc = lastRow
+            val a = lastAnchor
+            Box(
+                Modifier.then(if (a != null) Modifier.width(with(density) { a.width.toDp() }) else Modifier.fillMaxWidth(0.72f))
+                    .heightIn(max = 300.dp).clip(RoundedCornerShape(20.dp))
+                    .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {},
+                contentAlignment = if (me) Alignment.TopEnd else Alignment.TopStart,
+            ) {
+                if (rc != null) MenuBubble(cur, rc)
+                else T(msgPreview(cur), size = 15.sp, color = if (me) t.outInk else t.inInk, modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(t.inBg).padding(horizontal = 16.dp, vertical = 10.dp))
+            }
+        }
+        val actions: @Composable () -> Unit = {
+            Column(
+                Modifier.width(232.dp).shadow(12.dp, RoundedCornerShape(24.dp)).clip(RoundedCornerShape(24.dp)).background(t.sheet)
+                    .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
+                    .padding(vertical = 6.dp),
+            ) {
+                var i = 0
+                @Composable fun item(label: String, icon: String, danger: Boolean = false, go: () -> Unit) {
+                    Row(
+                        Modifier.enter(i++).fillMaxWidth().clickable { go(); close() }.padding(horizontal = 18.dp, vertical = 13.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Ico(icon, if (danger) t.danger else t.ink, 21.dp)
+                        Spacer(Modifier.width(16.dp))
+                        T(label, size = 15.5.sp, weight = FontWeight.Medium, color = if (danger) t.danger else t.ink)
+                    }
+                }
+                if (cur.id.isNotEmpty()) item("Reply", Icons.reply) { onReply(cur) }
+                item("Forward", Icons.forward) { onForward(cur) }
+                if (cur.text.isNotEmpty()) item("Copy", Icons.copy) { onCopy(cur) }
+                item(if (p.isStarred(cur.key)) "Unstar" else "Star", Icons.star) { onStar(cur) }
+                if (p.on("readAloud") && cur.text.isNotEmpty()) item("Read aloud", Icons.volume) { Speaker.say(ctx, cur.text) }
+                item("Delete", Icons.trash, danger = true) { onDelete(cur) }
+                item("Select more", Icons.select) { onSelect(cur) }
+                item("Info", Icons.details) { onDetails(cur) }
+            }
+        }
+        val gap = with(density) { 10.dp.roundToPx() }
+        val side = with(density) { 12.dp.roundToPx() }
+        androidx.compose.ui.layout.Layout(
+            contents = listOf(bar, bubble, actions),
+            modifier = Modifier.fillMaxSize(),
+        ) { (barM, bubM, actM), cons ->
+            val loose = cons.copy(minWidth = 0, minHeight = 0)
+            val b = barM.firstOrNull()?.measure(loose)
+            val u = bubM.first().measure(loose)
+            val ac = actM.first().measure(loose)
+            layout(cons.maxWidth, cons.maxHeight) {
+                val H = cons.maxHeight; val W = cons.maxWidth
+                val top0 = lastAnchor?.top?.toInt() ?: (H / 3)
+                val barH = if (b != null) b.height + gap else 0
+                val total = barH + u.height + gap + ac.height
+                var y = top0 - barH
+                if (y + total > H - bottomSafe) y = H - bottomSafe - total
+                if (y < topSafe) y = topSafe
+                val a = lastAnchor
+                val bubX = if (a != null) a.left.toInt().coerceIn(0, maxOf(0, W - u.width)) else if (me) W - side - u.width else side
+                val edgeX = { w: Int -> if (me) (bubX + u.width - w).coerceIn(side, maxOf(side, W - side - w)) else bubX.coerceIn(side, maxOf(side, W - side - w)) }
+                val lift = ((1f - k.value) * 24f).toInt()
+                b?.placeRelative(edgeX(b.width), y + lift)
+                u.placeRelative(bubX, y + barH)
+                ac.placeRelative(edgeX(ac.width), y + barH + u.height + gap - lift)
+            }
         }
     }
 }

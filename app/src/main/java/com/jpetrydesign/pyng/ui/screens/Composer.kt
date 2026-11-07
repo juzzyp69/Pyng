@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ContentUris
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
@@ -40,6 +41,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -204,12 +206,19 @@ fun Composer(
     val sms = conv != null && !conv.rcs
     Column(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            AnimatedVisibility(smart && panel == null && !recording, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+            var smartClosed by remember(conv?.id, lastIncoming) { mutableStateOf(false) }
+            AnimatedVisibility(smart && !smartClosed && panel == null && !recording, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                 val replies = if (lastIncoming.trim().endsWith("?")) listOf("Yes!", "Let me check", "Not sure 🤔") else listOf("Sounds good!", "Haha yes", "On it 👍")
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+                    // Close button sits right beside the first suggestion.
+                    Box(
+                        Modifier.enter(0, pop = true).size(36.dp).edge(CircleShape, elevation = 3.dp).frost(CircleShape, t.glassStrong, 14.dp)
+                            .press(0.9f) { smartClosed = true },
+                        contentAlignment = Alignment.Center,
+                    ) { Ico(Icons.close, t.soft, 15.dp, 2.2f) }
                     replies.forEachIndexed { i, r ->
                         Box(
-                            Modifier.enter(i, pop = true).height(36.dp).edge(RoundedCornerShape(18.dp), elevation = 3.dp).frost(RoundedCornerShape(18.dp), t.glassStrong, 14.dp)
+                            Modifier.enter(i + 1, pop = true).height(36.dp).edge(RoundedCornerShape(18.dp), elevation = 3.dp).frost(RoundedCornerShape(18.dp), t.glassStrong, 14.dp)
                                 .press(0.94f) { onSend(r) }.padding(horizontal = 15.dp),
                             contentAlignment = Alignment.Center,
                         ) { T(r, size = 13.5.sp, weight = FontWeight.Medium) }
@@ -351,7 +360,7 @@ fun Composer(
         ) {
             var last by remember { mutableStateOf(panel ?: "plus") }
             if (panel != null) last = panel!!
-            Column(Modifier.fillMaxWidth().height(if (last == "expr") 380.dp else 310.dp).background(t.sheet).navigationBarsPadding().padding(horizontal = 14.dp, vertical = 14.dp)) {
+            Column(Modifier.fillMaxWidth().height(when (last) { "expr" -> 380.dp; "plus" -> 270.dp; else -> 310.dp }).background(t.sheet).navigationBarsPadding().padding(horizontal = 14.dp, vertical = 14.dp)) {
                 when (last) {
                     "plus" -> PlusGrid(t) { what ->
                         when (what) {
@@ -419,17 +428,21 @@ private fun PlusGrid(t: Tok, onPick: (String) -> Unit) {
         "Gallery" to Icons.gallery, "Camera" to Icons.camera, "GIFs" to "", "Stickers" to Icons.sticker,
         "Files" to Icons.file, "Location" to Icons.pin, "Contact" to Icons.contact, "Schedule" to Icons.clock,
     )
-    Column(Modifier.fillMaxWidth().padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    // Even spacing: the two rows sit centered in the panel with matching gaps.
+    Column(Modifier.fillMaxSize().padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(26.dp, Alignment.CenterVertically)) {
         items.chunked(4).forEachIndexed { r, row ->
-            Row(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 row.forEachIndexed { i, (label, icon) ->
-                    Column(Modifier.weight(1f).enter(r * 4 + i, pop = true).clickable { onPick(label) }, horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(Modifier.size(58.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) {
-                            if (icon.isEmpty()) Box(Modifier.border(2.dp, t.p, RoundedCornerShape(6.dp)).padding(horizontal = 4.dp, vertical = 1.dp)) { T("GIF", size = 13.sp, weight = FontWeight.Bold, color = t.p, letterSpacing = 0.5.sp) }
+                    Column(
+                        Modifier.width(76.dp).enter(r * 4 + i, pop = true).clip(RoundedCornerShape(16.dp)).clickable { onPick(label) }.padding(vertical = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Box(Modifier.size(56.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) {
+                            if (icon.isEmpty()) Box(Modifier.border(2.dp, t.p, RoundedCornerShape(6.dp)).padding(horizontal = 4.dp, vertical = 1.dp)) { T("GIF", size = 12.sp, weight = FontWeight.Bold, color = t.p, letterSpacing = 0.5.sp) }
                             else Ico(icon, t.p, 22.dp, 1.9f)
                         }
-                        Spacer(Modifier.height(7.dp))
-                        T(label, size = 12.sp, weight = FontWeight.Medium)
+                        Spacer(Modifier.height(8.dp))
+                        T(label, size = 12.5.sp, weight = FontWeight.Medium, maxLines = 1)
                     }
                 }
             }
@@ -506,7 +519,7 @@ private data class Gif(val id: String, val preview: String, val full: String, va
 @Composable
 private fun GifTab(t: Tok, onGif: (Pending) -> Unit) {
     val repo = LocalRepo.current
-    val key = BuildConfig.GIPHY_KEY
+    val key = BuildConfig.GIPHY_KEY.ifBlank { repo.prefs.state.opt("giphyKey") }
     var q by remember { mutableStateOf("") }
     var cat by remember { mutableStateOf("Trending") }
     var gifs by remember { mutableStateOf<List<Gif>>(emptyList()) }
@@ -514,9 +527,29 @@ private fun GifTab(t: Tok, onGif: (Pending) -> Unit) {
     var sending by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     if (key.isBlank()) {
-        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            T("GIF search isn't set up yet", size = 15.sp, weight = FontWeight.SemiBold)
-            T("It needs a free GIPHY key added to the build.", size = 13.sp, color = t.soft, modifier = Modifier.padding(top = 4.dp))
+        val ctx = LocalContext.current
+        var entry by remember { mutableStateOf("") }
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Spacer(Modifier.height(10.dp))
+            T("Turn on GIF search", size = 16.sp, weight = FontWeight.SemiBold)
+            T("GIFs come from GIPHY, which needs a free key. Make one in a minute: sign in at GIPHY for Developers, tap Create an API key, pick API, then copy the key here.",
+                size = 13.sp, color = t.soft, lineHeight = 18.sp, align = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+            Spacer(Modifier.height(12.dp))
+            T("Open GIPHY for Developers", size = 14.sp, weight = FontWeight.SemiBold, color = t.p,
+                modifier = Modifier.clip(RoundedCornerShape(18.dp)).clickable { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://developers.giphy.com/dashboard/"))) } }.padding(horizontal = 14.dp, vertical = 8.dp))
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(22.dp)).background(t.field).padding(horizontal = 16.dp), contentAlignment = Alignment.CenterStart) {
+                    if (entry.isEmpty()) T("Paste your GIPHY key", size = 14.sp, color = t.soft)
+                    BasicTextField(entry, { entry = it.trim() }, singleLine = true, cursorBrush = SolidColor(t.p), textStyle = TextStyle(fontFamily = Geist, fontSize = 14.sp, color = t.ink), modifier = Modifier.fillMaxWidth())
+                }
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    Modifier.height(44.dp).clip(RoundedCornerShape(22.dp)).background(if (entry.length >= 16) t.plusBg else t.surface)
+                        .clickable(enabled = entry.length >= 16) { repo.prefs.setOpt("giphyKey", entry); repo.toast("GIF search is on") }.padding(horizontal = 18.dp),
+                    contentAlignment = Alignment.Center,
+                ) { T("Save", size = 14.sp, weight = FontWeight.SemiBold, color = if (entry.length >= 16) t.plusInk else t.soft) }
+            }
         }
         return
     }
@@ -651,11 +684,13 @@ private fun LocationPanel(t: Tok, onBack: () -> Unit, onSend: (String) -> Unit) 
         PanelHead(t, "Location", onBack)
         val l = loc
         Box(
-            Modifier.fillMaxWidth().height(130.dp).clip(RoundedCornerShape(20.dp)).background(Brush.linearGradient(listOf(t.p.copy(alpha = 0.25f), t.s.copy(alpha = 0.45f)))),
+            Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(20.dp)).background(Brush.linearGradient(listOf(t.p.copy(alpha = 0.25f), t.s.copy(alpha = 0.45f)))),
             contentAlignment = Alignment.Center,
         ) {
+            if (l != null) MapTiles(l.latitude, l.longitude, t.dark)
             if (l == null && !failed) CircularProgressIndicator(Modifier.size(26.dp), color = t.p, strokeWidth = 2.dp)
-            else Box(Modifier.size(44.dp).clip(CircleShape).background(t.fill), contentAlignment = Alignment.Center) { Ico(Icons.pin, t.onFill, 22.dp, 2f) }
+            else Box(Modifier.offset(y = (-14).dp).size(36.dp).edge(CircleShape, primary = true, elevation = 6.dp).clip(CircleShape).background(t.fill), contentAlignment = Alignment.Center) { Ico(Icons.pin, t.onFill, 19.dp, 2f) }
+            if (l != null) T("© OpenStreetMap", size = 9.5.sp, color = Color(0xFF3A3F4A), modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.7f)).padding(horizontal = 5.dp, vertical = 1.dp))
         }
         Spacer(Modifier.height(12.dp))
         if (l != null) {
@@ -670,6 +705,36 @@ private fun LocationPanel(t: Tok, onBack: () -> Unit, onSend: (String) -> Unit) 
                 }
             }
         } else if (failed) T("Couldn't find your location. Check that location is on and allowed for Messages.", size = 13.5.sp, color = t.soft, lineHeight = 19.sp)
+    }
+}
+
+/** A small street map around a point, built from OpenStreetMap tiles. */
+@Composable
+fun MapTiles(lat: Double, lon: Double, dark: Boolean, zoom: Int = 16) {
+    val ctx = LocalContext.current
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        val n = 1 shl zoom
+        val x = (lon + 180.0) / 360.0 * n
+        val latR = Math.toRadians(lat)
+        val y = (1.0 - kotlin.math.ln(kotlin.math.tan(latR) + 1.0 / kotlin.math.cos(latR)) / Math.PI) / 2.0 * n
+        val tx = kotlin.math.floor(x).toInt(); val ty = kotlin.math.floor(y).toInt()
+        val fx = (x - tx).toFloat(); val fy = (y - ty).toFloat()
+        val tile = 150.dp
+        val cx = maxWidth / 2; val cy = maxHeight / 2
+        for (dx in -2..2) for (dy in -1..1) {
+            val xi = ((tx + dx) % n + n) % n; val yi = ty + dy
+            if (yi < 0 || yi >= n) continue
+            val req = remember(zoom, xi, yi) {
+                coil.request.ImageRequest.Builder(ctx).data("https://tile.openstreetmap.org/$zoom/$xi/$yi.png")
+                    .addHeader("User-Agent", "Pyng/" + BuildConfig.VERSION_NAME + " (personal Android messaging app)")
+                    .crossfade(true).build()
+            }
+            AsyncImage(
+                req, null, contentScale = ContentScale.FillBounds,
+                colorFilter = if (dark) androidx.compose.ui.graphics.ColorFilter.colorMatrix(androidx.compose.ui.graphics.ColorMatrix().apply { setToScale(0.72f, 0.72f, 0.78f, 1f) }) else null,
+                modifier = Modifier.size(tile).offset(x = cx + tile * (dx - fx), y = cy + tile * (dy - fy)),
+            )
+        }
     }
 }
 
@@ -704,23 +769,26 @@ private fun SchedulePanel(t: Tok, onBack: () -> Unit, onPick: (Pair<Long, String
     }.filter { it.second > now }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         PanelHead(t, "Schedule send", onBack)
-        opts.forEach { (name, ms) ->
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { onPick(ms to label(ms)) }.padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Ico(Icons.clock, t.p, 18.dp); Spacer(Modifier.width(12.dp))
-                Column { T(name, size = 15.sp, weight = FontWeight.SemiBold); T(label(ms), size = 12.5.sp, color = t.soft) }
-            }
-        }
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(t.tone).clickable {
             val c = Calendar.getInstance()
             android.app.DatePickerDialog(ctx, { _, y, mo, d ->
                 android.app.TimePickerDialog(ctx, { _, h, mi ->
                     val pick = Calendar.getInstance().apply { set(y, mo, d, h, mi, 0) }.timeInMillis
                     if (pick > System.currentTimeMillis()) onPick(pick to label(pick))
                 }, c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), false).show()
-            }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show()
-        }.padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Ico(Icons.cal, t.p, 18.dp); Spacer(Modifier.width(12.dp))
-            T("Pick a date and time", size = 15.sp, weight = FontWeight.SemiBold)
+            }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).apply { datePicker.minDate = System.currentTimeMillis() - 1000 }.show()
+        }.padding(horizontal = 14.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(36.dp).clip(CircleShape).background(t.fill), contentAlignment = Alignment.Center) { Ico(Icons.cal, t.onFill, 18.dp) }
+            Spacer(Modifier.width(12.dp))
+            Column { T("Pick date and time", size = 15.sp, weight = FontWeight.SemiBold); T("Choose exactly when it sends", size = 12.5.sp, color = t.soft) }
+        }
+        Spacer(Modifier.height(8.dp))
+        T("Suggested", size = 12.sp, weight = FontWeight.SemiBold, color = t.soft, modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 2.dp))
+        opts.forEach { (name, ms) ->
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { onPick(ms to label(ms)) }.padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Ico(Icons.clock, t.p, 18.dp); Spacer(Modifier.width(12.dp))
+                Column { T(name, size = 15.sp, weight = FontWeight.SemiBold); T(label(ms), size = 12.5.sp, color = t.soft) }
+            }
         }
     }
 }

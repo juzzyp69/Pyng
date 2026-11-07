@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"go.mau.fi/mautrix-gmessages/pkg/libgm"
 	"go.mau.fi/mautrix-gmessages/pkg/libgm/events"
@@ -480,33 +482,38 @@ func (m *Messenger) FetchAvatars(participantIDsJSON string, contacts bool) (res 
 	if len(ids) == 0 {
 		return toJSON(out), nil
 	}
-	ctx, cancel := ctx60()
-	defer cancel()
-	var resp *gmproto.GetThumbnailResponse
-	if contacts {
-		resp, err = cli.GetContactThumbnail(ctx, ids...)
-	} else {
-		resp, err = cli.GetParticipantThumbnail(ctx, ids...)
-	}
-	if err != nil {
-		return "", err
-	}
+	dir := m.cacheDir("avatars")
+	// One request per person, like Google Messages for Web: batched requests
+	// don't reliably say which photo belongs to whom.
 	for _, id := range ids {
 		out[id] = ""
-	}
-	dir := m.cacheDir("avatars")
-	for _, t := range resp.GetThumbnail() {
-		buf := t.GetData().GetImageBuffer()
-		if len(buf) == 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		var resp *gmproto.GetThumbnailResponse
+		var rerr error
+		if contacts {
+			resp, rerr = cli.GetContactThumbnail(ctx, id)
+		} else {
+			resp, rerr = cli.GetParticipantThumbnail(ctx, id)
+		}
+		cancel()
+		if rerr != nil {
+			m.log.Debug().Err(rerr).Str("id", id).Msg("No avatar")
 			continue
 		}
-		p := filepath.Join(dir, safeName(t.GetIdentifier())+"-"+safeName(string(buf))[:8]+".jpg")
-		if _, statErr := os.Stat(p); statErr != nil {
-			if os.WriteFile(p, buf, 0o600) != nil {
+		for _, t := range resp.GetThumbnail() {
+			buf := t.GetData().GetImageBuffer()
+			if len(buf) == 0 {
 				continue
 			}
+			p := filepath.Join(dir, safeName(id)+"-"+safeName(string(buf))[:8]+".jpg")
+			if _, statErr := os.Stat(p); statErr != nil {
+				if os.WriteFile(p, buf, 0o600) != nil {
+					continue
+				}
+			}
+			out[id] = p
+			break
 		}
-		out[t.GetIdentifier()] = p
 	}
 	return toJSON(out), nil
 }

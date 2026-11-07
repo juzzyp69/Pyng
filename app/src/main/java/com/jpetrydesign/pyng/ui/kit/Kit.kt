@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -247,7 +248,7 @@ fun Avatar(
     }
     Box(m.clip(CircleShape).background(bg), contentAlignment = Alignment.Center) {
         if (!photo.isNullOrEmpty()) {
-            AsyncImage(model = File(photo), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            AsyncImage(model = if (photo.startsWith("http")) photo else File(photo), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         } else {
             T(initials, size = fontSize, weight = FontWeight.SemiBold, color = ink)
         }
@@ -437,6 +438,19 @@ fun PageTop(title: String, onBack: () -> Unit, sub: String? = null, trailing: (@
     }
 }
 
+/** How much the Text size setting scales text app-wide. */
+fun textScaleOf(size: String): Float = when (size) { "S" -> 0.95f; "L" -> 1.1f; "XL" -> 1.22f; else -> 1f }
+
+/** Keeps scrolled content from showing through under the status bar. */
+@Composable
+fun StatusScrim(modifier: Modifier = Modifier) {
+    val t = LocalTok.current
+    Column(modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth().windowInsetsTopHeight(androidx.compose.foundation.layout.WindowInsets.statusBars).background(t.bg.copy(alpha = 0.94f)))
+        Box(Modifier.fillMaxWidth().height(14.dp).background(Brush.verticalGradient(listOf(t.bg.copy(alpha = 0.94f), t.bg.copy(alpha = 0f)))))
+    }
+}
+
 /** A scrolling page with the glow background and a title bar. */
 @Composable
 fun Page(title: String, onBack: () -> Unit, sub: String? = null, trailing: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
@@ -447,6 +461,7 @@ fun Page(title: String, onBack: () -> Unit, sub: String? = null, trailing: (@Com
             PageTop(title, onBack, sub, trailing)
             Column(Modifier.padding(horizontal = 16.dp).navigationBarsPadding().padding(bottom = 32.dp), content = content)
         }
+        StatusScrim(Modifier.align(Alignment.TopCenter))
     }
 }
 

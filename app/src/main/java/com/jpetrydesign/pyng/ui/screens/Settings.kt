@@ -144,7 +144,7 @@ fun SettingsScreen(nav: Nav) {
             Sec("notifications", "Notifications", Icons.bell, if (p.on("notif")) "On · quick reply " + (if (p.on("quick")) "on" else "off") else "Off"),
             Sec("chatfeat", "Chat features", Icons.wifi, if (conn == "ready" || conn == "idle") "Connected through Google Messages" else "Connecting…"),
             Sec("privacy", "Privacy & safety", Icons.shield, (if (p.on("spam")) "Spam protection on" else "Spam protection off") + if (p.on("bioLock")) " · app lock on" else ""),
-            Sec("access", "Accessibility", Icons.access, "Text ${p.textSize}" + (if (p.on("boldText")) " · bold" else "") + (if (p.on("highContrast")) " · high contrast" else "") + (if (p.on("reduceBlur")) " · solid surfaces" else "")),
+            Sec("access", "Accessibility", Icons.access, "Text size, bold text, contrast, motion"),
             Sec("storage", "Storage", Icons.storage, "Cached photos and files"),
             Sec("about", "Help & about", Icons.about, "Version ${BuildConfig.VERSION_NAME}"),
         )
@@ -230,7 +230,7 @@ fun SectionScreen(nav: Nav, key: String) {
                     TogRow("Reply and mark as read from notifications", "quick")
                 }
                 Group("Staying connected") {
-                    TogRow("Keep connected in the background", "background", "Needed for notifications. Shows a quiet, silent notification while connected.") { on ->
+                    TogRow("Keep connected in the background", "background", "Needed for notifications. Runs quietly in the background with no notification of its own.") { on ->
                         if (on) LinkService.start(ctx) else LinkService.stop(ctx)
                     }
                     Hairline()
