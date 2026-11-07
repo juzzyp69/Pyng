@@ -32,11 +32,11 @@ shot 01-home
 shot 02-home-dark --es mode Dark
 for L in Large Pages Carousel Compact Chips Cards Spotlight List Dock; do shot "03-layout-$L" --es mode Light --es layout "$L"; done
 shot 04-home-rings --es layout Grid --es pinstyle Rings
-shot 05-home-rowmenu --es open rowmenu
+shot 05-home-rowmenu --es open rowmenu --es pinstyle Badges
 shot 06-home-strip --es open strip
 shot 07-home-perms --es open perms
-shot 08-home-duo --es theme "Grape Soda"
-shot 10-thread --es route thread:c1 --es pinstyle Badges --es theme Ocean
+shot 08-home-duo --es theme "'Grape Soda'"
+shot 10-thread --es route thread:c1 --es theme Ocean
 shot 11-thread-dark --es route thread:c1 --es mode Dark
 shot 12-thread-group --es route thread:c3 --es mode Light
 shot 13-thread-textXL --es route thread:c1 --es text XL
@@ -47,6 +47,8 @@ shot 17-thread-mist --es route thread:c1 --es bubble Rounded --es wall Mist
 shot 18-thread-info --es route thread:c1 --es wall None --es open info
 shot 19-thread-ts --es route thread:c1 --es open ts
 shot 20-thread-menu --es route thread:c1 --es open menu
+WAIT=10 shot 20b-thread-menu-late --es route thread:c1 --es open menu
+adb shell dumpsys gfxinfo $PKG > ci-logs/gfx-menu.txt 2>&1
 shot 21-thread-plus --es route thread:c1 --es open plus
 shot 22-thread-emoji --es route thread:c1 --es open expr
 shot 23-thread-stickers --es route thread:c1 --es open stickers
@@ -84,5 +86,6 @@ adb shell wm size reset
 adb shell wm density reset
 
 adb logcat -d -s AndroidRuntime:E > ci-logs/runtime-errors.txt 2>&1
+adb logcat -d | grep -E "Choreographer|pyng|Pyng" | tail -400 > ci-logs/logcat-app.txt 2>&1
 (command -v mogrify >/dev/null && mogrify -resize 50% "$OUT"/*.png) || true
 ls "$OUT" | wc -l

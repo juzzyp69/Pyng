@@ -402,7 +402,7 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     fun togglePin(convId: String): Boolean {
         val p = prefs.state
         if (p.isPinned(convId)) { prefs.edit { it.copy(pinned = it.pinned - convId) }; return true }
-        if (p.pinned.size >= 12) { toast("Unpin a chat first (12 max)"); return false }
+        if (p.pinned.size >= 8) { toast("Unpin a chat first (8 max)"); return false }
         prefs.edit { it.copy(pinned = it.pinned + convId) }
         if (convs[convId]?.status == "archived") setArchived(convId, false)
         return true

@@ -14,7 +14,7 @@ Every feature from the design prototype and our conversations, with where it sta
 ## Home
 - ✅ "Messages" header, live "N New Conversations" / "You're All Caught Up" / connection status
 - ✅ Profile photo button → Settings
-- ✅ Pinned chats seeded from Google Messages pins, up to 12
+- ✅ Pinned chats seeded from Google Messages pins, up to 8
 - ✅ 10 pinned layouts: Grid, Large, Pages, Carousel, Compact, Chips, Cards, Spotlight, List, Dock
 - ✅ Pinned notifications: Badges or Rings, typing dots on pinned faces
 - ✅ Hold a pinned chat and drag to rearrange ("Pinned order saved")

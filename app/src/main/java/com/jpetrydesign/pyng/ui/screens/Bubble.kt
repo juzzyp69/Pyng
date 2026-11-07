@@ -146,25 +146,16 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
         Box(
             Modifier.fillMaxWidth().padding(top = if (x.prevSame) 2.dp else 10.dp)
                 .graphicsLayer {
-                    translationX = x.tsShift
                     val k = enterA.value
                     alpha = k.coerceIn(0f, 1f) * (if (m.status == "OUTGOING_SCHEDULED") 0.7f else 1f)
                     if (k < 1f) {
-                        translationX += (if (me) 80f else -80f) * (1f - k) * density.density / 2.6f
+                        translationX = (if (me) 80f else -80f) * (1f - k) * density.density / 2.6f
                         val s = 0.9f + 0.1f * k; scaleX = s; scaleY = s
                         transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (me) 1f else 0f, 1f)
                     }
                 }
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = a.onSide),
         ) {
-            // Timestamp revealed on the right when the list is dragged left.
-            if (x.tsShift < -1f) {
-                T(
-                    x.timeLabel, size = 11.sp, weight = FontWeight.SemiBold, color = t.soft,
-                    modifier = Modifier.align(Alignment.CenterEnd).offset(x = 72.dp).width(64.dp)
-                        .graphicsLayer { alpha = (-x.tsShift / with(density) { 76.dp.toPx() }).coerceIn(0f, 1f) },
-                )
-            }
             // Reply arrow that appears while swiping a bubble.
             if (swipe.value != 0f) {
                 val k = (abs(swipe.value) / trigger).coerceIn(0f, 1f)
@@ -174,7 +165,8 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
                     contentAlignment = Alignment.Center,
                 ) { Ico(Icons.reply, t.p, 16.dp, 2.2f) }
             }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            // Like iMessage: dragging the list left slides your own bubbles over; replies stay put.
+            Row(Modifier.fillMaxWidth().graphicsLayer { translationX = if (me) x.tsShift else 0f }, verticalAlignment = Alignment.CenterVertically) {
                 if (x.selecting) {
                     Box(
                         Modifier.size(22.dp).clip(CircleShape).then(if (x.selected) Modifier.background(t.fill) else Modifier.border(2.dp, t.faint, CircleShape)),
@@ -260,6 +252,16 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
                         }
                     }
                 }
+            }
+            // Timestamp slides in from the right edge as the list is dragged left.
+            if (x.tsShift < -1f) {
+                val full = with(density) { 76.dp.toPx() }
+                T(
+                    x.timeLabel, size = 11.sp, weight = FontWeight.SemiBold, color = t.soft,
+                    align = androidx.compose.ui.text.style.TextAlign.End, maxLines = 1,
+                    modifier = Modifier.align(Alignment.CenterEnd).width(64.dp)
+                        .graphicsLayer { translationX = full + x.tsShift; alpha = (-x.tsShift / full).coerceIn(0f, 1f) },
+                )
             }
         }
     }

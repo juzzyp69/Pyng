@@ -100,6 +100,7 @@ import com.jpetrydesign.pyng.ui.kit.LocalMotion
 import com.jpetrydesign.pyng.ui.kit.LocalRepo
 import com.jpetrydesign.pyng.ui.kit.Seg
 import com.jpetrydesign.pyng.ui.kit.T
+import com.jpetrydesign.pyng.ui.kit.edge
 import com.jpetrydesign.pyng.ui.kit.enter
 import com.jpetrydesign.pyng.ui.kit.frost
 import com.jpetrydesign.pyng.ui.kit.press
@@ -208,7 +209,7 @@ fun Composer(
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                     replies.forEachIndexed { i, r ->
                         Box(
-                            Modifier.enter(i, pop = true).height(36.dp).clip(RoundedCornerShape(18.dp)).frost(RoundedCornerShape(18.dp), t.glassStrong, 14.dp)
+                            Modifier.enter(i, pop = true).height(36.dp).edge(RoundedCornerShape(18.dp), elevation = 3.dp).frost(RoundedCornerShape(18.dp), t.glassStrong, 14.dp)
                                 .press(0.94f) { onSend(r) }.padding(horizontal = 15.dp),
                             contentAlignment = Alignment.Center,
                         ) { T(r, size = 13.5.sp, weight = FontWeight.Medium) }
@@ -223,7 +224,7 @@ fun Composer(
                     people.forEachIndexed { i, person ->
                         val w = whoOf(person)
                         Row(
-                            Modifier.enter(i, pop = true).height(38.dp).clip(RoundedCornerShape(19.dp)).frost(RoundedCornerShape(19.dp), t.glassStrong, 14.dp)
+                            Modifier.enter(i, pop = true).height(38.dp).edge(RoundedCornerShape(19.dp), elevation = 3.dp).frost(RoundedCornerShape(19.dp), t.glassStrong, 14.dp)
                                 .clickable { onDraft(draft.replace(Regex("@(\\w*)$"), "@" + person.short + " ")) }.padding(start = 4.dp, end = 14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {

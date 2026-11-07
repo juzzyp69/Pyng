@@ -91,7 +91,7 @@ fun tok(P: Pal, dark: Boolean, solid: Boolean = false, highContrast: Boolean = f
         tone = p.a(if (dark) 0x2E else 0x1F),
         glass = if (solid) (if (dark) hex("#22252D") else if (P.bg != null) Color.White else hex("#EEF1F7")) else (if (dark) Color.White.copy(alpha = 0.08f) else p.a(0x14)),
         glassStrong = if (solid) (if (dark) hex("#1C1F26") else Color.White) else (if (dark) hex("#1E2028").copy(alpha = 0.72f) else Color.White.copy(alpha = 0.7f)),
-        sheet = if (solid) (if (dark) hex("#181A21") else Color.White) else (if (dark) hex("#181A21").copy(alpha = 0.94f) else Color.White.copy(alpha = 0.92f)),
+        sheet = if (solid) (if (dark) hex("#181A21") else Color.White) else (if (dark) hex("#181A21").copy(alpha = 0.97f) else Color.White.copy(alpha = 0.98f)),
         field = if (dark) Color.White.copy(alpha = if (highContrast) 0.16f else 0.09f) else p.a(if (highContrast) 0x26 else 0x14),
         card = if (dark) Color.White.copy(alpha = 0.05f) else p.a(0x0D),
         cardEdge = if (dark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.7f),

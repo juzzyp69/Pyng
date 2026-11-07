@@ -719,7 +719,8 @@ private fun Modifier.ring(on: Boolean, color: Color) = if (on) this.border(2.dp,
 /** A filled chat bubble with a plus cut through it, centered in its box. */
 @Composable
 fun SolidCompose(ink: Color, hole: Color, size: Dp) {
-    androidx.compose.foundation.Canvas(Modifier.size(size)) {
+    // Drawn on its own layer so the plus can be punched out of the bubble.
+    androidx.compose.foundation.Canvas(Modifier.size(size).graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }) {
         val k = this.size.minDimension / 24f
         scale(k, k, pivot = Offset.Zero) {
             val bubble = androidx.compose.ui.graphics.vector.PathParser().parsePathString("M12 3.2c-4.9 0-8.8 3.6-8.8 8.1 0 2 .8 3.9 2.1 5.3l-.9 3.6 3.9-1.6c1.1.5 2.4.8 3.7.8 4.9 0 8.8-3.6 8.8-8.1S16.9 3.2 12 3.2z").toPath()
