@@ -95,6 +95,35 @@ fun PermissionRows(onAnyResult: () -> Unit = {}) {
             ) { T(if (on) "Allowed" else "Allow", size = 13.5.sp, weight = FontWeight.SemiBold, color = if (on) t.onFill else t.p) }
         }
     }
+    // Special access: lets Pyng wake when a text arrives instead of running all the time.
+    Hairline()
+    val life = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(life) {
+        val o = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) tick++ }
+        life.lifecycle.addObserver(o); onDispose { life.lifecycle.removeObserver(o) }
+    }
+    val wake = com.jpetrydesign.pyng.data.Link.listenerOn(ctx)
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(40.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(Icons.bell, t.p, 19.dp) }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            T("New text alerts", size = 15.5.sp, weight = FontWeight.SemiBold)
+            T("Notification access, so texts arrive without Pyng running all the time", size = 12.5.sp, color = t.soft)
+        }
+        Box(
+            Modifier.height(36.dp).clip(RoundedCornerShape(18.dp)).background(if (wake) t.p else t.tone)
+                .clickable(enabled = !wake) { openListenerSettings(ctx) }.padding(horizontal = 16.dp),
+            contentAlignment = Alignment.Center,
+        ) { T(if (wake) "Allowed" else "Allow", size = 13.5.sp, weight = FontWeight.SemiBold, color = if (wake) t.onFill else t.p) }
+    }
+}
+
+/** Opens Android's notification access page for Pyng's listener. */
+fun openListenerSettings(ctx: Context) {
+    val comp = android.content.ComponentName(ctx, com.jpetrydesign.pyng.data.GmListener::class.java).flattenToString()
+    val detail = if (Build.VERSION.SDK_INT >= 30) Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS).putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, comp) else null
+    val ok = detail != null && runCatching { ctx.startActivity(detail.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+    if (!ok) runCatching { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
 
 fun openAppSettings(ctx: Context) {

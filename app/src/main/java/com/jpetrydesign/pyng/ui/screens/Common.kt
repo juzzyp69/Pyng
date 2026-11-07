@@ -28,7 +28,7 @@ fun whoOf(c: Conv): Who {
 fun whoOf(c: Conv, repo: Repo, t: Tok): Who {
     val show = repo.prefs.state.showPhotos == "Show"
     val photo = if (!show) null
-        else if (c.group) c.groupPhoto.takeIf { it.startsWith("http") }
+        else if (c.group) repo.prefs.state.opt("gphoto:" + c.id).takeIf { it.isNotBlank() && java.io.File(it).exists() } ?: c.groupPhoto.takeIf { it.startsWith("http") }
         else repo.avatars[c.avatarId]?.takeIf { it.isNotEmpty() }
     val tinted = c.group || c.business
     return Who(photo, initialsOf(c.title), if (tinted) t.tone else t.neutral, if (tinted) t.p else t.neutralInk)
@@ -162,4 +162,39 @@ fun jumboCount(text: String): Int {
         i += Character.charCount(cp)
     }
     return if (count in 1..3) count else 0
+}
+
+
+/** Texts from businesses and automated senders: no point suggesting "Haha yes" to these. */
+fun automated(c: com.jpetrydesign.pyng.data.Conv, lastText: String): Boolean {
+    if (c.business) return true
+    val digits = c.number.filter(Char::isDigit).removePrefix("1")
+    val tollFree = !c.group && digits.length == 10 && digits.take(3) in setOf("800", "833", "844", "855", "866", "877", "888")
+    if (tollFree && !c.known) return true
+    val t = lastText.lowercase()
+    return listOf("do not reply", "don't reply", "do not respond", "reply stop", "text stop", "stop to opt", "stop to end", "to unsubscribe", "unsubscribe", "msg&data rates", "msg & data rates", "verification code", "one-time code", "your code is").any { it in t }
+}
+
+
+enum class Enc { E2EE, RCS, SMS }
+
+/**
+ * Whether a chat is end-to-end encrypted. Google Messages marks it with a note in the chat
+ * ("…now end-to-end encrypted", "switched to text messages"), so the newest such note decides.
+ */
+fun encryptionOf(c: com.jpetrydesign.pyng.data.Conv, msgs: List<com.jpetrydesign.pyng.data.Msg>): Enc {
+    val note = msgs.lastOrNull { it.isSys && ("ENCRYPTED" in it.status || "E2EE" in it.status || "PROTOCOL_SWITCH" in it.status || it.status.endsWith("_RCS_CREATED") || it.status.endsWith("_SMS_CREATED") || it.status.endsWith("MMS_GROUP_CREATED") || it.status.endsWith("RCS_GROUP_CREATED")) }?.status
+    if (note != null) return when {
+        note.endsWith("E2EE_TO_TEXT") || note.endsWith("SWITCH_TO_TEXT") || note.endsWith("SMS_CREATED") || note.endsWith("MMS_GROUP_CREATED") -> Enc.SMS
+        note.endsWith("E2EE_TO_RCS") || note.endsWith("PROTOCOL_SWITCH_TO_RCS") || note == "TOMBSTONE_ONE_ON_ONE_RCS_CREATED" || note == "TOMBSTONE_RCS_GROUP_CREATED" -> if (c.rcs) Enc.RCS else Enc.SMS
+        else -> if (c.rcs) Enc.E2EE else Enc.SMS
+    }
+    return if (c.rcs) Enc.RCS else Enc.SMS
+}
+
+fun encLabel(e: Enc) = when (e) { Enc.E2EE -> "End-to-end encrypted"; Enc.RCS -> "RCS chat"; Enc.SMS -> "SMS/MMS · not encrypted" }
+fun encExplain(e: Enc) = when (e) {
+    Enc.E2EE -> "Messages and replies in this chat are end-to-end encrypted. Only the people in it can read them."
+    Enc.RCS -> "This chat uses RCS. Google Messages hasn't marked it end-to-end encrypted, so it may not be (for example, chats with some iPhones)."
+    Enc.SMS -> "This chat uses SMS/MMS text messages, which aren't encrypted. Your carrier can see them."
 }

@@ -301,6 +301,7 @@ fun Composer(
                                 when {
                                     schedule != null -> "Scheduled message"
                                     conv?.group == true -> if (conv.rcs) "Message ${conv.title}" else "Group text"
+                                    conv != null && encryptionOf(conv, LocalRepo.current.msgs[conv.id].orEmpty()) == Enc.E2EE -> "Encrypted message"
                                     conv?.rcs == true -> "Chat message"
                                     else -> "Text message"
                                 }, size = fontSize.sp, color = t.ink.copy(alpha = 0.5f), maxLines = 1,

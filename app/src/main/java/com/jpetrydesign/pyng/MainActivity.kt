@@ -143,16 +143,14 @@ class MainActivity : FragmentActivity() {
         repo.foreground = true
         if (repo.prefs.state.on("bioLock") && System.currentTimeMillis() - lastStop > 60_000 && lastStop > 0) locked = true
         if (locked) unlock()
-        if (!repo.demo) {
-            app.appScope.launch { app.hub.io { if (it.isPaired) it.start() } }
-            LinkService.start(this)
-        }
+        if (!repo.demo) com.jpetrydesign.pyng.data.Link.foreground(app)
     }
 
     override fun onStop() {
         super.onStop()
         app.repo.foreground = false
         lastStop = System.currentTimeMillis()
+        if (!app.repo.demo) com.jpetrydesign.pyng.data.Link.background(app)
     }
 
     private fun unlock() {

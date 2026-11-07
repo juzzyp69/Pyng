@@ -14,6 +14,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
@@ -250,7 +252,7 @@ fun Avatar(
     }
     Box(m.clip(CircleShape).background(bg), contentAlignment = Alignment.Center) {
         if (!photo.isNullOrEmpty()) {
-            AsyncImage(model = if (photo.startsWith("http")) photo else File(photo), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            AsyncImage(model = if (photo.startsWith("http") || photo.startsWith("content://")) photo else File(photo), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         } else {
             T(initials, size = fontSize, weight = FontWeight.SemiBold, color = ink)
         }
@@ -621,4 +623,42 @@ fun ToastHost(toast: com.jpetrydesign.pyng.data.Toast?, onUndo: () -> Unit, modi
 @Composable
 fun Provide(tok: Tok, content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalTok provides tok, content = content)
+}
+
+
+/** A centered yes/no card over a dimmed screen, used before anything destructive. */
+@Composable
+fun AskDialog(ask: com.jpetrydesign.pyng.data.Repo.Ask?, onClose: () -> Unit) {
+    val t = LocalTok.current
+    var last by remember { mutableStateOf(ask) }
+    if (ask != null) last = ask
+    if (ask != null) BackHandler(onBack = onClose)
+    Box(Modifier.fillMaxSize().zIndex(40f)) {
+        AnimatedVisibility(ask != null, enter = fadeIn(tween(160)), exit = fadeOut(tween(140))) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (t.dark) 0.55f else 0.32f))
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose))
+        }
+        AnimatedVisibility(
+            ask != null, modifier = Modifier.align(Alignment.Center),
+            enter = fadeIn(tween(160)) + scaleIn(spring(dampingRatio = 0.8f, stiffness = 520f), initialScale = 0.92f),
+            exit = fadeOut(tween(120)) + scaleOut(tween(120), targetScale = 0.96f),
+        ) {
+            val a = last ?: return@AnimatedVisibility
+            Column(
+                Modifier.padding(horizontal = 28.dp).widthIn(max = 380.dp).fillMaxWidth().edge(RoundedCornerShape(30.dp), elevation = 24.dp)
+                    .clip(RoundedCornerShape(30.dp)).background(t.sheet)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
+                    .padding(start = 22.dp, end = 22.dp, top = 22.dp, bottom = 18.dp),
+            ) {
+                T(a.title, size = 19.sp, weight = FontWeight.Bold, letterSpacing = (-0.3).sp)
+                Spacer(Modifier.height(8.dp))
+                T(a.body, size = 14.sp, color = t.soft, lineHeight = 20.sp)
+                Spacer(Modifier.height(20.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PillButton("Cancel", onClick = onClose, modifier = Modifier.weight(1f), primary = false, height = 46.dp)
+                    PillButton(a.action, onClick = { onClose(); a.go() }, modifier = Modifier.weight(1f), danger = a.danger, height = 46.dp)
+                }
+            }
+        }
+    }
 }

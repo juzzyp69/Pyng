@@ -76,9 +76,20 @@ object Notifier {
         return out
     }
 
+    /** When each chat last made a sound, so the same text arriving twice only alerts once. */
+    private val lastAlert = mutableMapOf<String, Pair<Long, String>>()
+    private val placeholders = mutableMapOf<String, String>()
+
     fun show(ctx: Context, repo: Repo, conv: Conv, m: Msg) {
         val p = repo.prefs.state
         if (!p.on("notif") || conv.id in p.muted || !canPost(ctx)) return
+        // Already shown from Google Messages' notification a moment ago? Update quietly.
+        val prev = lastAlert[conv.id]
+        val dupe = prev != null && System.currentTimeMillis() - prev.first < 20_000 && prev.second.trim() == m.text.trim()
+        if (dupe) {
+            history[conv.id]?.let { h -> if (h.isNotEmpty() && h.last().second.text.trim() == m.text.trim()) h.removeAt(h.lastIndex) }
+        }
+        lastAlert[conv.id] = System.currentTimeMillis() to m.text
         val alerts = p.alerts[conv.id]
         if (alerts?.on == false) return
         val body = when {
@@ -107,9 +118,13 @@ object Notifier {
             )
         }
         val code = conv.id.hashCode()
+        val placeholder = conv.id.startsWith("gm:")
+        // A real text for a chat that was only a placeholder: drop the placeholder alert.
+        if (!placeholder) placeholders.entries.removeAll { (pid, txt) -> (txt.trim() == m.text.trim()).also { same -> if (same) runCatching { NotificationManagerCompat.from(ctx).cancel(pid, 1) } } }
+        else placeholders[conv.id] = m.text
         val open = PendingIntent.getActivity(
             ctx, code,
-            Intent(ctx, MainActivity::class.java).setAction("open").putExtra("chat", conv.id).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            (if (placeholder) Intent(ctx, MainActivity::class.java) else Intent(ctx, MainActivity::class.java).setAction("open").putExtra("chat", conv.id)).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val b = NotificationCompat.Builder(ctx, CH_MESSAGES)
@@ -123,9 +138,10 @@ object Notifier {
             .setAutoCancel(true)
             .setShortcutId(conv.id)
             .setContentIntent(open)
-            .setOnlyAlertOnce(false)
+            .setOnlyAlertOnce(dupe)
+            .setSilent(dupe)
         if (!p.on("vibrate") || alerts?.vibrate == "Off") b.setVibrate(longArrayOf(0L))
-        if (p.on("quick")) {
+        if (p.on("quick") && !placeholder) {
             val replyPi = PendingIntent.getBroadcast(
                 ctx, code + 1, Intent(ctx, NotifyReceiver::class.java).setAction("reply").putExtra("chat", conv.id),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
@@ -139,6 +155,16 @@ object Notifier {
             b.addAction(NotificationCompat.Action.Builder(R.drawable.ic_stat_check, "Mark as read", readPi).setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_MARK_AS_READ).setShowsUserInterface(false).build())
         }
         runCatching { NotificationManagerCompat.from(ctx).notify(conv.id, 1, b.build()) }
+    }
+
+    /**
+     * Shows a text using what Google Messages' own notification said, for when Pyng isn't
+     * connected. Finds the matching chat so mute, photos and reply all work.
+     */
+    fun showFromGoogle(ctx: Context, repo: Repo, conv: Conv?, title: String, sender: String, text: String, ts: Long) {
+        val c = conv ?: Conv.placeholder("gm:" + title, title)
+        val m = Msg("", "gm-" + ts, c.id, "", sender, sender.substringBefore(' '), false, "INCOMING_COMPLETE", "", text, emptyList(), ts, emptyList(), "", 0, "text")
+        show(ctx, repo, c, m)
     }
 
     fun cancel(ctx: Context, convId: String) {
@@ -165,16 +191,19 @@ class NotifyReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         val app = ctx.applicationContext as PyngApp
         val chat = intent.getStringExtra("chat") ?: return
-        when (intent.action) {
-            "reply" -> {
-                val text = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(Notifier.KEY_REPLY)?.toString().orEmpty()
-                if (text.isNotBlank()) {
-                    app.repo.send(chat, text)
-                    app.repo.markRead(chat)
-                }
-                Notifier.cancel(ctx, chat)
+        val text = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(Notifier.KEY_REPLY)?.toString().orEmpty()
+        Notifier.cancel(ctx, chat)
+        if (chat.startsWith("gm:")) { Link.openFallback(ctx); return }
+        val pending = goAsync()
+        app.appScope.launch {
+            // Pyng may be asleep; connect, do the action, then let it sleep again.
+            Link.wake(app, "notification action")
+            kotlinx.coroutines.withTimeoutOrNull(12_000) { while (!app.hub.engine.isConnected) delay(250) }
+            when (intent.action) {
+                "reply" -> if (text.isNotBlank()) { app.repo.send(chat, text); app.repo.markRead(chat) }
+                "read" -> app.repo.markRead(chat)
             }
-            "read" -> { app.repo.markRead(chat); Notifier.cancel(ctx, chat) }
+            pending.finish()
         }
     }
 }
@@ -195,7 +224,7 @@ class LinkService : Service() {
     companion object {
         fun start(ctx: Context) {
             val app = ctx.applicationContext as PyngApp
-            if (!app.repo.paired || !app.repo.prefs.state.on("background")) return
+            if (!app.repo.paired || !app.repo.prefs.state.on("alwaysOn")) return
             runCatching { ContextCompat.startForegroundService(ctx, Intent(ctx, LinkService::class.java)) }
         }
 
@@ -237,4 +266,83 @@ class ScheduleWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
 
         fun cancel(ctx: Context, id: String) { WorkManager.getInstance(ctx).cancelAllWorkByTag("sched-$id") }
     }
+}
+
+
+/**
+ * When Pyng is connected to Google Messages. By default it connects while the app is open and
+ * for a short while after a text wakes it, then disconnects, so nothing runs in the background.
+ * "Always connected" in Settings keeps it connected instead.
+ */
+object Link {
+    private var sleepJob: kotlinx.coroutines.Job? = null
+    private const val AWAKE_MS = 45_000L
+
+    fun foreground(app: PyngApp) {
+        sleepJob?.cancel()
+        app.appScope.launch { app.hub.io { if (it.isPaired) it.start() } }
+        LinkService.start(app)
+    }
+
+    fun background(app: PyngApp) {
+        if (app.repo.prefs.state.on("alwaysOn")) return
+        sleepLater(app)
+    }
+
+    /** Connects for a little while, e.g. after a text arrives or a notification button is tapped. */
+    fun wake(app: PyngApp, why: String) {
+        if (!app.repo.paired || app.repo.demo) return
+        app.appScope.launch {
+            app.hub.io { if (it.isPaired) it.start() }
+            app.repo.refreshQuietly()
+        }
+        if (!app.repo.foreground && !app.repo.prefs.state.on("alwaysOn")) sleepLater(app)
+    }
+
+    private fun sleepLater(app: PyngApp) {
+        sleepJob?.cancel()
+        sleepJob = app.appScope.launch {
+            delay(AWAKE_MS)
+            if (!app.repo.foreground && !app.repo.prefs.state.on("alwaysOn")) app.hub.io { it.stop() }
+        }
+    }
+
+    fun openFallback(ctx: Context) {
+        runCatching { ctx.startActivity(Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    fun listenerOn(ctx: Context) = NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName)
+}
+
+/**
+ * Wakes Pyng when Google Messages gets a text. Google Messages is already woken by Google's push
+ * service for every text, so Pyng doesn't need its own connection running: it reads the alert,
+ * shows its own notification (your photos, mute rules, quick reply) and hides the original.
+ */
+class GmListener : android.service.notification.NotificationListenerService() {
+    override fun onNotificationPosted(sbn: android.service.notification.StatusBarNotification) {
+        if (sbn.packageName != GM) return
+        val n = sbn.notification ?: return
+        if (n.flags and android.app.Notification.FLAG_GROUP_SUMMARY != 0) return
+        if (n.flags and android.app.Notification.FLAG_ONGOING_EVENT != 0) return
+        val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n)
+        if (style == null && n.category != android.app.Notification.CATEGORY_MESSAGE) return
+        val app = applicationContext as PyngApp
+        val repo = app.repo
+        if (!repo.paired) return
+        val last = style?.messages?.lastOrNull()
+        val title = (style?.conversationTitle ?: n.extras.getCharSequence(android.app.Notification.EXTRA_TITLE))?.toString().orEmpty()
+        val sender = last?.person?.name?.toString() ?: title
+        val text = (last?.text ?: n.extras.getCharSequence(android.app.Notification.EXTRA_TEXT))?.toString().orEmpty()
+        if (text.isBlank()) return
+        val conv = repo.matchConversation(sbn.notification.shortcutId, title, sender)
+
+        // Pyng shows its own version; Google Messages' copy goes away.
+        val live = app.hub.engine.isConnected
+        if (!live) Notifier.showFromGoogle(this, repo, conv, if (style?.isGroupConversation == true) title else sender.ifBlank { title }, sender, text, last?.timestamp ?: System.currentTimeMillis())
+        if (repo.prefs.state.on("replaceGm") && Notifier.canPost(this)) runCatching { cancelNotification(sbn.key) }
+        Link.wake(app, "text from Google Messages")
+    }
+
+    companion object { const val GM = "com.google.android.apps.messaging" }
 }

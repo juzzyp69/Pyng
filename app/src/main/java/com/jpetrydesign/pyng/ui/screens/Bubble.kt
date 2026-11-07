@@ -41,6 +41,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.jpetrydesign.pyng.ui.kit.edge
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -322,12 +324,14 @@ private fun BubbleBody(m: Msg, x: RowCtx, shape: RoundedCornerShape, jumbo: Int,
     val sub = if (me) (if (t.dark) Color(0x9E101218) else Color(0xBFFFFFFF)) else t.soft
     val quoteBg = if (me) Color.White.copy(alpha = 0.18f) else t.neutral
     val bold = LocalRepo.current.prefs.state.on("boldText")
-    Column(Modifier.graphicsLayer { alpha = if (m.pending && m.media.isNotEmpty()) 0.7f else 1f }) {
+    Column(Modifier.graphicsLayer { alpha = if (m.pending && m.media.isNotEmpty()) 0.7f else 1f }, horizontalAlignment = if (me) Alignment.End else Alignment.Start) {
         m.media.forEachIndexed { i, ref ->
             if (i > 0) Spacer(Modifier.height(4.dp))
             MediaView(m, ref, shape, me, fg, sub, bg, a)
         }
-        val text = m.text
+        val url = if (x.showPreview && jumbo == 0) detect(m.text).url else null
+        // A message that's only a link shows just the card.
+        val text = if (url != null && x.quote == null && m.text.trim() == url) "" else m.text
         if (jumbo > 0) {
             T(text, size = listOf(58f, 58f, 48f, 40f)[jumbo].sp, lineHeight = (listOf(58f, 58f, 48f, 40f)[jumbo] * 1.15f).sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
         } else if (text.isNotEmpty() || x.quote != null) {
@@ -340,9 +344,11 @@ private fun BubbleBody(m: Msg, x: RowCtx, shape: RoundedCornerShape, jumbo: Int,
                     }
                 }
                 if (text.isNotEmpty()) LinkText(text, x.fontSize, fg, if (bold) FontWeight.Medium else FontWeight.Normal)
-                val url = if (x.showPreview) detect(text).url else null
-                if (url != null) LinkCard(url, quoteBg, fg)
             }
+        }
+        if (url != null) {
+            Spacer(Modifier.height(4.dp))
+            LinkCard(url, me)
         }
     }
 }
@@ -469,49 +475,108 @@ private fun VoiceBubble(ref: MediaRef, path: String, busy: Boolean, shape: Round
 
 // ---------- link previews ----------
 
-data class LinkMeta(val title: String, val host: String, val image: String?)
+data class LinkMeta(val title: String, val host: String, val image: String?, val desc: String = "", val icon: String? = null)
 
 object Links {
     val cache = mutableStateMapOf<String, LinkMeta?>()
     private val busy = mutableSetOf<String>()
+    const val UA = "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Mobile Safari/537.36"
 
     suspend fun load(url: String) {
         if (cache.containsKey(url) || !busy.add(url)) return
         val meta = withContext(Dispatchers.IO) {
             runCatching {
                 val c = URL(url).openConnection() as HttpURLConnection
-                c.connectTimeout = 6000; c.readTimeout = 6000; c.instanceFollowRedirects = true
-                c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Mobile Safari/537.36")
-                val html = c.inputStream.bufferedReader().use { r -> val buf = CharArray(120_000); val n = r.read(buf); if (n > 0) String(buf, 0, n) else "" }
-                fun og(p: String) = Regex("<meta[^>]+(?:property|name)=[\"']$p[\"'][^>]*content=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE).find(html)?.groupValues?.get(1)
-                    ?: Regex("<meta[^>]+content=[\"']([^\"']+)[\"'][^>]*(?:property|name)=[\"']$p[\"']", RegexOption.IGNORE_CASE).find(html)?.groupValues?.get(1)
-                val title = og("og:title") ?: Regex("<title[^>]*>([^<]+)</title>", RegexOption.IGNORE_CASE).find(html)?.groupValues?.get(1) ?: ""
-                var img = og("og:image")
-                if (img != null && img.startsWith("/")) img = URL(URL(url), img).toString()
-                LinkMeta(android.text.Html.fromHtml(title.trim(), 0).toString(), URL(url).host.removePrefix("www."), img)
+                c.connectTimeout = 7000; c.readTimeout = 7000; c.instanceFollowRedirects = true
+                c.setRequestProperty("User-Agent", UA)
+                c.setRequestProperty("Accept", "text/html,application/xhtml+xml")
+                c.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
+                // Short links (advmd.co, bit.ly…) hop between hosts; follow those hops by hand.
+                var conn = c
+                var hops = 0
+                while (conn.responseCode in 300..399 && hops < 6) {
+                    val next = conn.getHeaderField("Location") ?: break
+                    val u = URL(conn.url, next)
+                    conn.disconnect()
+                    conn = (u.openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 7000; readTimeout = 7000; instanceFollowRedirects = true
+                        setRequestProperty("User-Agent", UA); setRequestProperty("Accept", "text/html,application/xhtml+xml")
+                    }
+                    hops++
+                }
+                val base = conn.url
+                val html = conn.inputStream.bufferedReader().use { r -> val buf = CharArray(200_000); var n = 0; while (n < buf.size) { val k = r.read(buf, n, buf.size - n); if (k <= 0) break; n += k; if (String(buf, 0, n).contains("</head>", true)) break }; String(buf, 0, n) }
+                fun clean(v: String) = android.text.Html.fromHtml(v, 0).toString().trim()
+                fun og(vararg names: String): String? {
+                    for (p in names) {
+                        val e = Regex.escape(p)
+                        val v = Regex("<meta[^>]+(?:property|name|itemprop)\\s*=\\s*[\"']$e[\"'][^>]*content\\s*=\\s*[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE).find(html)?.groupValues?.get(1)
+                            ?: Regex("<meta[^>]+content\\s*=\\s*[\"']([^\"']+)[\"'][^>]*(?:property|name|itemprop)\\s*=\\s*[\"']$e[\"']", RegexOption.IGNORE_CASE).find(html)?.groupValues?.get(1)
+                        if (!v.isNullOrBlank()) return clean(v)
+                    }
+                    return null
+                }
+                fun abs(v: String?): String? = v?.let { runCatching { URL(base, if (it.startsWith("//")) base.protocol + ":" + it else it).toString() }.getOrNull() }
+                val title = og("og:title", "twitter:title") ?: Regex("<title[^>]*>([^<]+)</title>", RegexOption.IGNORE_CASE).find(html)?.groupValues?.get(1)?.let(::clean) ?: ""
+                val desc = og("og:description", "twitter:description", "description").orEmpty()
+                val img = abs(og("og:image:secure_url", "og:image", "og:image:url", "twitter:image", "twitter:image:src", "image")
+                    ?: Regex("<link[^>]+rel=[\"']image_src[\"'][^>]*href=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE).find(html)?.groupValues?.get(1)?.let(::clean))
+                val icon = abs(Regex("<link[^>]+rel=[\"'](?:apple-touch-icon|icon|shortcut icon)[\"'][^>]*href=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE).find(html)?.groupValues?.get(1)?.let(::clean))
+                    ?: "https://${base.host}/favicon.ico"
+                conn.disconnect()
+                LinkMeta(title, base.host.removePrefix("www."), img, desc, icon)
             }.getOrNull()
         }
         cache[url] = meta
     }
 }
 
+/** A link preview card: picture, title, a line of description and the site with its icon. */
 @Composable
-private fun LinkCard(url: String, bg: Color, fg: Color) {
+fun LinkCard(url: String, me: Boolean, modifier: Modifier = Modifier) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
+    val t = LocalTok.current
     LaunchedEffect(url) { Links.load(url) }
     val meta = Links.cache[url]
     val host = runCatching { URL(url).host.removePrefix("www.") }.getOrDefault(url)
+    var imgFailed by remember(meta?.image) { mutableStateOf(false) }
+    val shape = RoundedCornerShape(18.dp)
     Column(
-        Modifier.padding(top = 8.dp).widthIn(max = 260.dp).clip(RoundedCornerShape(12.dp)).background(bg)
+        modifier.widthIn(max = 300.dp).fillMaxWidth().edge(shape, elevation = 2.dp).clip(shape).background(if (t.dark) t.neutral else Color.White)
             .clickable { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) } },
     ) {
-        val t = LocalTok.current
-        Box(Modifier.fillMaxWidth().height(if (meta?.image != null) 120.dp else 64.dp).background(Brush.linearGradient(listOf(t.p.copy(alpha = 0.33f), t.s.copy(alpha = 0.53f))))) {
-            if (meta?.image != null) AsyncImage(model = meta.image, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        if (meta?.image != null && !imgFailed) {
+            val req = remember(meta.image) {
+                coil.request.ImageRequest.Builder(ctx).data(meta.image).addHeader("User-Agent", Links.UA).crossfade(true).build()
+            }
+            AsyncImage(
+                req, null, contentScale = ContentScale.Crop,
+                onState = { st -> if (st is coil.compose.AsyncImagePainter.State.Error) imgFailed = true },
+                modifier = Modifier.fillMaxWidth().aspectRatio(1.91f).background(t.tone),
+            )
         }
-        Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
-            T(meta?.title?.ifBlank { null } ?: "Link", size = 12.5.sp, weight = FontWeight.Bold, color = fg, maxLines = 2)
-            T(meta?.host ?: host, size = 11.5.sp, color = fg.copy(alpha = 0.75f), maxLines = 1)
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 11.dp)) {
+            if (meta == null && !Links.cache.containsKey(url)) {
+                Box(Modifier.fillMaxWidth(0.7f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(t.tone))
+                Spacer(Modifier.height(7.dp))
+                Box(Modifier.fillMaxWidth(0.45f).height(10.dp).clip(RoundedCornerShape(5.dp)).background(t.tone))
+            } else {
+                T(meta?.title?.ifBlank { null } ?: host, size = 14.sp, weight = FontWeight.SemiBold, maxLines = 2, lineHeight = 18.sp)
+                if (!meta?.desc.isNullOrBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    T(meta!!.desc, size = 12.5.sp, color = t.soft, maxLines = 2, lineHeight = 16.5.sp)
+                }
+            }
+            Spacer(Modifier.height(7.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                var iconFailed by remember(meta?.icon) { mutableStateOf(false) }
+                if (meta?.icon != null && !iconFailed) {
+                    AsyncImage(meta.icon, null, onState = { st -> if (st is coil.compose.AsyncImagePainter.State.Error) iconFailed = true },
+                        modifier = Modifier.size(15.dp).clip(RoundedCornerShape(4.dp)))
+                } else Ico(Icons.link, t.soft, 14.dp)
+                Spacer(Modifier.width(6.dp))
+                T(meta?.host ?: host, size = 12.sp, weight = FontWeight.Medium, color = t.soft, maxLines = 1)
+            }
         }
     }
 }

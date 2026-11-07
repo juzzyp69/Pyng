@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -89,21 +90,48 @@ fun ContactScreen(nav: Nav, convId: String) {
     val alerts = p.alerts[convId] ?: ChatAlerts()
     val look = p.looks[convId]
     val msgs = repo.msgs[convId].orEmpty()
+    val scope = rememberCoroutineScope()
+    var renaming by remember { mutableStateOf(false) }
+    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) scope.launch { repo.setGroupPhoto(convId, uri) } }
+    val enc = encryptionOf(c, msgs)
+    fun senderOf(m: com.jpetrydesign.pyng.data.Msg): String = if (m.fromMe) "You" else c.people.firstOrNull { it.id == m.participantId }?.short ?: m.senderFirst.ifBlank { m.sender.substringBefore(' ') }.ifBlank { c.shortTitle }
     Provide(t) {
         Box(Modifier.fillMaxSize()) {
             Glow(t)
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().navigationBarsPadding().padding(bottom = 30.dp)) {
                 Row(Modifier.padding(start = 6.dp, top = 12.dp)) { CircleButton(Icons.back, "Back", { nav.back() }) }
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(Modifier.enter(0, pop = true).edge(CircleShape, elevation = 16.dp)) { Avatar(w.photo, w.ini, 116.dp, w.bg, w.ink, 38.sp) }
+                    Box(Modifier.enter(0, pop = true)) {
+                        Box(Modifier.edge(CircleShape, elevation = 16.dp).then(if (c.group) Modifier.clip(CircleShape).clickable { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } else Modifier)) {
+                            Avatar(w.photo, w.ini, 116.dp, w.bg, w.ink, 38.sp)
+                        }
+                        // Groups: tap the photo to change it.
+                        if (c.group) Box(
+                            Modifier.align(Alignment.BottomEnd).size(36.dp).edge(CircleShape, elevation = 4.dp).clip(CircleShape).background(t.fill)
+                                .clickable { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                            contentAlignment = Alignment.Center,
+                        ) { Ico(Icons.camera2, t.onFill, 18.dp, 1.9f) }
+                    }
                     Spacer(Modifier.height(14.dp))
-                    T(c.title, size = 26.sp, weight = FontWeight.Bold, letterSpacing = (-0.6).sp, align = TextAlign.Center, modifier = Modifier.enter(1))
+                    Row(
+                        Modifier.enter(1).clip(RoundedCornerShape(14.dp)).then(if (c.group) Modifier.clickable { renaming = true } else Modifier).padding(horizontal = 8.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        T(c.title, size = 26.sp, weight = FontWeight.Bold, letterSpacing = (-0.6).sp, align = TextAlign.Center, modifier = Modifier.weight(1f, fill = false))
+                        if (c.group) { Spacer(Modifier.width(8.dp)); Ico(Icons.pencil, t.soft, 17.dp, 2f) }
+                    }
                     if (c.group) T(c.others.joinToString { it.short } + " and you", size = 14.sp, color = t.soft, align = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
                     else if (c.number.isNotEmpty() && c.number != c.title) T(c.number, size = 15.sp, color = t.soft, modifier = Modifier.padding(top = 4.dp))
                     Spacer(Modifier.height(10.dp))
-                    Row(Modifier.height(26.dp).clip(RoundedCornerShape(13.dp)).background(t.tone).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(6.dp).clip(CircleShape).background(t.p)); Spacer(Modifier.width(6.dp))
-                        T(if (c.rcs) "RCS" else "SMS/MMS", size = 12.sp, weight = FontWeight.SemiBold, color = t.p)
+                    // Tap for what it means.
+                    Row(
+                        Modifier.height(28.dp).clip(RoundedCornerShape(14.dp)).background(if (enc == Enc.SMS) t.neutral else t.tone)
+                            .clickable { repo.toast(encExplain(enc)) }.padding(horizontal = 11.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (enc == Enc.E2EE) Ico(Icons.lock, t.p, 13.dp, 2.1f) else Box(Modifier.size(6.dp).clip(CircleShape).background(if (enc == Enc.SMS) t.soft else t.p))
+                        Spacer(Modifier.width(6.dp))
+                        T(encLabel(enc), size = 12.sp, weight = FontWeight.SemiBold, color = if (enc == Enc.SMS) t.soft else t.p)
                     }
                     Spacer(Modifier.height(18.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -178,10 +206,23 @@ fun ContactScreen(nav: Nav, convId: String) {
                                     if (media.isEmpty()) T("No photos shared yet", size = 13.5.sp, color = t.soft, modifier = Modifier.padding(4.dp))
                                     media.take(12).chunked(3).forEach { row ->
                                         Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            row.forEach { (_, ref) ->
+                                            row.forEach { (m, ref) ->
                                                 val path = ref.localPath.ifEmpty { repo.media[ref.id] ?: repo.media[ref.thumbId].orEmpty() }
-                                                Box(Modifier.weight(1f).height(100.dp).clip(RoundedCornerShape(12.dp)).background(t.tone).clickable { openMedia(ctx, repo, nav, ref) }) {
+                                                LaunchedEffect(ref.id) { if (path.isEmpty()) repo.ensureMedia(ref, thumb = true) }
+                                                Box(Modifier.weight(1f).height(108.dp).clip(RoundedCornerShape(14.dp)).background(t.tone).clickable { openMedia(ctx, repo, nav, ref) }) {
                                                     if (path.isNotEmpty()) AsyncImage(File(path), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                                    // Who sent it, in groups.
+                                                    if (c.group) {
+                                                        val who = c.people.firstOrNull { it.id == m.participantId }
+                                                        Row(
+                                                            Modifier.align(Alignment.BottomStart).padding(5.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black.copy(alpha = 0.45f)).padding(start = 2.dp, end = 7.dp, top = 2.dp, bottom = 2.dp),
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                        ) {
+                                                            if (who != null && !m.fromMe) { val ww = whoOf(who); Avatar(ww.photo, ww.ini, 16.dp, ww.bg, ww.ink, 7.sp); Spacer(Modifier.width(4.dp)) }
+                                                            else Spacer(Modifier.width(5.dp))
+                                                            T(senderOf(m), size = 10.5.sp, weight = FontWeight.SemiBold, color = Color.White, maxLines = 1)
+                                                        }
+                                                    }
                                                 }
                                             }
                                             repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
@@ -191,20 +232,35 @@ fun ContactScreen(nav: Nav, convId: String) {
                                 "Links" -> {
                                     val links = msgs.mapNotNull { m -> detect(m.text).url?.let { m to it } }.asReversed()
                                     if (links.isEmpty()) T("No links shared yet", size = 13.5.sp, color = t.soft, modifier = Modifier.padding(4.dp))
-                                    links.take(15).forEach { (_, url) ->
-                                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            Ico(Icons.link, t.p, 18.dp); Spacer(Modifier.width(10.dp)); T(url, size = 13.5.sp, maxLines = 1)
+                                    links.take(15).forEach { (m, url) ->
+                                        LaunchedEffect(url) { Links.load(url) }
+                                        val meta = Links.cache[url]
+                                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }.padding(horizontal = 6.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Box(Modifier.size(44.dp).clip(RoundedCornerShape(11.dp)).background(t.tone), contentAlignment = Alignment.Center) {
+                                                if (meta?.image != null) AsyncImage(meta.image, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                                else Ico(Icons.link, t.p, 18.dp)
+                                            }
+                                            Spacer(Modifier.width(12.dp))
+                                            Column(Modifier.weight(1f)) {
+                                                T(meta?.title?.ifBlank { null } ?: url.removePrefix("https://").removePrefix("http://"), size = 14.sp, weight = FontWeight.SemiBold, maxLines = 1)
+                                                T(meta?.host ?: runCatching { java.net.URL(url).host.removePrefix("www.") }.getOrDefault(""), size = 12.sp, color = t.soft, maxLines = 1)
+                                                // Who shared it and when.
+                                                T((if (c.group || m.fromMe) "Sent by ${senderOf(m)} · " else "") + whenText(m.ts), size = 11.5.sp, color = t.faint, maxLines = 1)
+                                            }
                                         }
                                     }
                                 }
                                 else -> {
-                                    val files = msgs.flatMap { m -> m.media.filter { !it.isImage && !it.isVideo && !it.isAudio }.map { it } }.asReversed()
+                                    val files = msgs.flatMap { m -> m.media.filter { !it.isImage && !it.isVideo && !it.isAudio }.map { m to it } }.asReversed()
                                     if (files.isEmpty()) T("No files shared yet", size = 13.5.sp, color = t.soft, modifier = Modifier.padding(4.dp))
-                                    files.take(15).forEach { ref ->
-                                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { openMedia(ctx, repo, nav, ref) }.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            Ico(Icons.file, t.p, 18.dp); Spacer(Modifier.width(10.dp))
-                                            T(ref.name.ifBlank { "Attachment" }, size = 13.5.sp, maxLines = 1, modifier = Modifier.weight(1f))
-                                            T(sizeText(ref.size), size = 12.sp, color = t.soft)
+                                    files.take(15).forEach { (m, ref) ->
+                                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable { openMedia(ctx, repo, nav, ref) }.padding(horizontal = 6.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Box(Modifier.size(44.dp).clip(RoundedCornerShape(11.dp)).background(t.tone), contentAlignment = Alignment.Center) { Ico(Icons.file, t.p, 18.dp) }
+                                            Spacer(Modifier.width(12.dp))
+                                            Column(Modifier.weight(1f)) {
+                                                T(ref.name.ifBlank { "Attachment" }, size = 14.sp, weight = FontWeight.SemiBold, maxLines = 1)
+                                                T(sizeText(ref.size) + " · " + (if (c.group || m.fromMe) "Sent by ${senderOf(m)} · " else "") + whenText(m.ts), size = 12.sp, color = t.soft, maxLines = 1)
+                                            }
                                         }
                                     }
                                 }
@@ -230,10 +286,38 @@ fun ContactScreen(nav: Nav, convId: String) {
                             }, trailing = null)
                             Hairline()
                         }
-                        ListRow("Delete conversation", icon = Icons.trash, danger = true, onClick = { repo.deleteConversation(convId); repo.toast("Conversation deleted"); nav.home() }, trailing = null)
+                        ListRow("Delete conversation", icon = Icons.trash, danger = true, onClick = {
+                            repo.confirm("Delete this conversation?", "All of its messages will be deleted from Google Messages on your phone too.") { repo.deleteConversation(convId); repo.toast("Conversation deleted"); nav.home() }
+                        }, trailing = null)
                     }
                 }
             }
+            RenameSheet(renaming, c.title, { renaming = false }) { repo.setGroupName(convId, it) }
+        }
+    }
+}
+
+/** Rename a group (in Pyng only). */
+@Composable
+fun RenameSheet(visible: Boolean, current: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    val t = LocalTok.current
+    var v by remember(visible) { mutableStateOf(current) }
+    com.jpetrydesign.pyng.ui.kit.Sheet(visible, onDismiss) {
+        Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+            T("Group name", size = 18.sp, weight = FontWeight.Bold)
+            T("Shows in Pyng only. Google Messages doesn't let linked apps rename groups.", size = 13.sp, color = t.soft, lineHeight = 18.sp, modifier = Modifier.padding(top = 4.dp))
+            Spacer(Modifier.height(14.dp))
+            Box(Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(25.dp)).background(t.field).padding(horizontal = 18.dp), contentAlignment = Alignment.CenterStart) {
+                if (v.isEmpty()) T("Name this group", size = 15.sp, color = t.soft)
+                androidx.compose.foundation.text.BasicTextField(v, { v = it.take(60) }, singleLine = true, cursorBrush = androidx.compose.ui.graphics.SolidColor(t.p),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontFamily = com.jpetrydesign.pyng.ui.theme.Geist, fontSize = 15.sp, color = t.ink), modifier = Modifier.fillMaxWidth())
+            }
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PillButton("Reset", onClick = { onSave(""); onDismiss() }, modifier = Modifier.weight(1f), primary = false)
+                PillButton("Save", onClick = { onSave(v); onDismiss() }, modifier = Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(10.dp))
         }
     }
 }

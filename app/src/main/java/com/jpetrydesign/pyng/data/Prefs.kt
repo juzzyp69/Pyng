@@ -67,7 +67,7 @@ val DEFAULT_TOGGLES = mapOf(
     "translate" to true, "notif" to true, "sounds" to false, "vibrate" to true, "reactNotif" to true, "mentionsOnly" to false,
     "quick" to true, "counter" to true, "spam" to true, "otpChip" to true, "bioLock" to false, "hideSwitcher" to false,
     "reduceBlur" to false, "reduceMotion" to false, "boldText" to false, "highContrast" to false, "effects" to true,
-    "background" to true,
+    "alwaysOn" to false, "replaceGm" to true,
 )
 
 val DEFAULT_OPTS = mapOf(

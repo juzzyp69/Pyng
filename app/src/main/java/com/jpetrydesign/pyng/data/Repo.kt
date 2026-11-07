@@ -63,6 +63,39 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     val toasts: SharedFlow<Toast> = _toasts
     fun toast(text: String, undo: (() -> Unit)? = null) { _toasts.tryEmit(Toast(text, undo)) }
 
+    /** A yes/no question shown over everything, e.g. before deleting. */
+    data class Ask(val title: String, val body: String, val action: String, val danger: Boolean = true, val go: () -> Unit)
+    var ask by mutableStateOf<Ask?>(null)
+    fun confirm(title: String, body: String, action: String = "Delete", danger: Boolean = true, go: () -> Unit) { ask = Ask(title, body, action, danger, go) }
+
+    // Group names and photos you set in Pyng (Google Messages doesn't let linked apps change them).
+    private val rawNames = HashMap<String, String>()
+    private fun withLocalName(c: Conv): Conv {
+        if (!c.group) return c
+        val n = prefs.state.opt("gname:" + c.id)
+        return if (n.isNotBlank()) c.copy(name = n) else c
+    }
+    fun setGroupName(convId: String, name: String) {
+        prefs.setOpt("gname:$convId", name.trim())
+        convs[convId]?.let { c -> convs[convId] = if (name.isBlank()) c.copy(name = rawNames[convId] ?: c.name) else c.copy(name = name.trim()) }
+        saveCacheSoon(); com.jpetrydesign.pyng.widget.Widgets.refresh(app)
+    }
+    suspend fun setGroupPhoto(convId: String, uri: Uri?) {
+        if (uri == null) { prefs.setOpt("gphoto:$convId", ""); return }
+        val f = withContext(Dispatchers.IO) {
+            runCatching {
+                val src = app.contentResolver.openInputStream(uri)!!.use { android.graphics.BitmapFactory.decodeStream(it) }
+                val side = minOf(src.width, src.height)
+                val sq = android.graphics.Bitmap.createBitmap(src, (src.width - side) / 2, (src.height - side) / 2, side, side)
+                val out = android.graphics.Bitmap.createScaledBitmap(sq, minOf(side, 512), minOf(side, 512), true)
+                val file = File(File(app.filesDir, "group-photos").apply { mkdirs() }, "$convId-${System.currentTimeMillis()}.jpg")
+                file.outputStream().use { out.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, it) }
+                file.absolutePath
+            }.getOrNull()
+        }
+        if (f != null) { prefs.setOpt("gphoto:$convId", f); toast("Group photo updated") } else toast("Couldn't use that photo")
+    }
+
     var onIncoming: ((Conv, Msg) -> Unit)? = null
 
     /** In-app banner for a message from another chat while the app is open. */
@@ -85,7 +118,7 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         runCatching {
             if (paired && avatarFile.exists()) {
                 val o = org.json.JSONObject(avatarFile.readText())
-                o.keys().forEach { k -> val v = o.optString(k); if (v.isNotEmpty() && File(v).exists()) avatars[k] = v }
+                o.keys().forEach { k -> val v = o.optString(k); if (v.isNotEmpty() && (v.startsWith("content://") || File(v).exists())) avatars[k] = v }
             }
         }
         scope.launch { hub.events.collect { handle(it) } }
@@ -142,7 +175,8 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         if (c.id.isEmpty()) return
         if (c.status == "deleted") { convs.remove(c.id); return }
         val old = convs[c.id]
-        convs[c.id] = c
+        if (c.group) rawNames[c.id] = c.name
+        convs[c.id] = withLocalName(c)
         if (old == null || old.avatarId != c.avatarId) ensureAvatars(c.others.map { it.id })
         if (old != null && old.unread && !c.unread) onRead?.invoke(c.id)
         saveCacheSoon()
@@ -187,6 +221,23 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         list.distinctBy { it.key }.sortedBy { if (it.ts > 0) it.ts else Long.MAX_VALUE }
 
     // ---------- loading ----------
+
+    /** Finds the chat a Google Messages notification is about. */
+    fun matchConversation(shortcutId: String?, title: String, sender: String): Conv? {
+        shortcutId?.let { convs[it] }?.let { return it }
+        val all = convs.values.filter { it.status == "active" || it.status == "archived" }
+        fun digits(s: String) = s.filter(Char::isDigit).takeLast(10)
+        return all.firstOrNull { it.title == title && it.group } ?: all.firstOrNull { !it.group && (it.title == title || it.title == sender) }
+            ?: all.firstOrNull { !it.group && digits(title).length >= 7 && digits(it.number) == digits(title) }
+            ?: all.firstOrNull { it.group && (rawNames[it.id] == title) }
+    }
+
+    /** Catches up after being asleep: newest chats, plus any chat you have open. */
+    fun refreshQuietly() {
+        refresh()
+        activeChat?.let { if (msgs.containsKey(it)) loadMessages(it) }
+        convs.values.sortedByDescending { it.ts }.take(3).forEach { c -> if (msgs.containsKey(c.id)) loadMessages(c.id) }
+    }
 
     fun refresh() {
         if (loading || demo) return
@@ -261,7 +312,16 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
             delay(150)
             // Most recent chats first, a few at a time, so the visible photos land quickly.
             val order = need.sortedByDescending { id -> convs.values.filter { c -> c.others.any { it.id == id } }.maxOfOrNull { it.ts } ?: 0L }
-            order.chunked(6).forEach { batch ->
+            // First choice: the photo saved on this phone's contact card, same as Google Messages shows.
+            val local = withContext(Dispatchers.IO) {
+                order.associateWith { id ->
+                    val person = convs.values.firstNotNullOfOrNull { c -> c.others.firstOrNull { it.id == id } }
+                    person?.let { contactPhoto(it.number.ifBlank { it.formatted }) }
+                }
+            }
+            local.forEach { (id, uri) -> if (uri != null) avatars[id] = uri }
+            val rest = order.filter { local[it] == null }
+            rest.chunked(6).forEach { batch ->
                 hub.io { it.fetchAvatars(JSONArray(batch).toString(), contactsKind) }.onSuccess { j ->
                     val o = org.json.JSONObject(j)
                     batch.forEach { id -> avatars[id] = o.optString(id) }
@@ -269,6 +329,18 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
             }
             saveAvatars()
         }
+    }
+
+    /** Looks up a phone number in this phone's contacts and returns its photo, if it has one. */
+    private fun contactPhoto(number: String): String? {
+        if (number.isBlank()) return null
+        if (androidx.core.content.ContextCompat.checkSelfPermission(app, android.Manifest.permission.READ_CONTACTS) != android.content.pm.PackageManager.PERMISSION_GRANTED) return null
+        return runCatching {
+            val uri = android.net.Uri.withAppendedPath(android.provider.ContactsContract.PhoneLookup.CONTENT_FILTER_URI, android.net.Uri.encode(number))
+            app.contentResolver.query(uri, arrayOf(android.provider.ContactsContract.PhoneLookup.PHOTO_URI, android.provider.ContactsContract.PhoneLookup.PHOTO_THUMBNAIL_URI), null, null, null)?.use { c ->
+                if (c.moveToFirst()) (c.getString(0) ?: c.getString(1))?.takeIf { it.isNotBlank() } else null
+            }
+        }.getOrNull()
     }
 
     private fun saveAvatars() {

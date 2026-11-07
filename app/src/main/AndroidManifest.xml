@@ -104,6 +104,17 @@
             android:exported="false"
             android:foregroundServiceType="remoteMessaging" />
 
+        <service
+            android:name=".data.GmListener"
+            android:exported="true"
+            android:label="Messages: new text alerts"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+            <meta-data android:name="android.service.notification.default_filter_types" android:value="conversations|alerting" />
+        </service>
+
         <receiver android:name=".data.NotifyReceiver" android:exported="false" />
         <receiver android:name=".data.BootReceiver" android:exported="true">
             <intent-filter>

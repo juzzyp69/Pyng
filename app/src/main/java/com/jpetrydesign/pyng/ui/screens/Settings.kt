@@ -229,8 +229,30 @@ fun SectionScreen(nav: Nav, key: String) {
                     TogRow("Vibrate", "vibrate"); Hairline()
                     TogRow("Reply and mark as read from notifications", "quick")
                 }
-                Group("Staying connected") {
-                    TogRow("Keep connected in the background", "background", "Needed for notifications. Runs quietly in the background with no notification of its own.") { on ->
+                Group("New texts") {
+                    // Re-check access each time this screen shows.
+                    var tick by remember { mutableStateOf(0) }
+                    val life = androidx.lifecycle.compose.LocalLifecycleOwner.current
+                    androidx.compose.runtime.DisposableEffect(life) {
+                        val o = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) tick++ }
+                        life.lifecycle.addObserver(o); onDispose { life.lifecycle.removeObserver(o) }
+                    }
+                    @Suppress("UNUSED_EXPRESSION") tick
+                    val access = com.jpetrydesign.pyng.data.Link.listenerOn(ctx)
+                    ListRow(
+                        "Wake for new texts",
+                        if (access) "On. Pyng sleeps until Google Messages gets a text, then shows it here." else "Off. Tap to allow notification access so texts reach you without Pyng running all the time.",
+                        onClick = { openListenerSettings(ctx) },
+                        trailing = { Toggle(access) },
+                    )
+                    Hairline()
+                    TogRow("Hide Google Messages' alerts", "replaceGm", "Pyng shows its own notification and clears the Google Messages copy")
+                    Hairline()
+                    ListRow("Silence Google Messages", "Set its notifications to Silent (not off) so you only hear Pyng", onClick = {
+                        runCatching { ctx.startActivity(Intent(SysSettings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(SysSettings.EXTRA_APP_PACKAGE, com.jpetrydesign.pyng.data.GmListener.GM)) }
+                    })
+                    Hairline()
+                    TogRow("Always connected", "alwaysOn", "Faster, but runs in the background all the time and uses more battery") { on ->
                         if (on) LinkService.start(ctx) else LinkService.stop(ctx)
                     }
                     Hairline()
@@ -240,6 +262,7 @@ fun SectionScreen(nav: Nav, key: String) {
                         }
                     })
                 }
+                Note("If Android says notification access is a restricted setting: open App info for Messages, tap ⋮ in the top corner, choose Allow restricted settings, then try again.")
                 Note("Each chat can turn its own alerts off in its contact card. Do Not Disturb follows your phone settings.")
             }
             "chatfeat" -> {

@@ -485,6 +485,10 @@ func (m *Messenger) FetchAvatars(participantIDsJSON string, contacts bool) (res 
 	dir := m.cacheDir("avatars")
 	// One request per person, like Google Messages for Web: batched requests
 	// don't reliably say which photo belongs to whom.
+	got, failed := 0, 0
+	defer func() {
+		m.log.Info().Int("asked", len(ids)).Int("photos", got).Int("errors", failed).Bool("contacts", contacts).Msg("Avatar fetch")
+	}()
 	for _, id := range ids {
 		out[id] = ""
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -497,7 +501,8 @@ func (m *Messenger) FetchAvatars(participantIDsJSON string, contacts bool) (res 
 		}
 		cancel()
 		if rerr != nil {
-			m.log.Debug().Err(rerr).Str("id", id).Msg("No avatar")
+			failed++
+			m.log.Warn().Err(rerr).Str("id", id).Msg("Avatar request failed")
 			continue
 		}
 		for _, t := range resp.GetThumbnail() {
@@ -512,6 +517,7 @@ func (m *Messenger) FetchAvatars(participantIDsJSON string, contacts bool) (res 
 				}
 			}
 			out[id] = p
+			got++
 			break
 		}
 	}

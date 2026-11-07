@@ -50,6 +50,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -219,7 +220,6 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
             if (!last.fromMe) repo.markRead(convId)
             if (p.on("effects") && motion) fxKind(last.text)?.let { fx = it }
         }
-        if (list.firstVisibleItemIndex <= 2) list.animateScrollToItem(0)
     }
     LaunchedEffect(fx) { if (fx != null) { delay(3800); fx = null } }
     LaunchedEffect(burst) { if (burst != null) { delay(900); burst = null } }
@@ -231,6 +231,19 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     // The newest messages rise in, staggered, the first time a chat opens.
     val introPlayed = remember(convId) { HashSet<String>() }
     val introKeys = remember(convId, loaded) { if (loaded) reversed.take(10).map { it.key }.toSet() else emptySet() }
+    // Stay on the newest message: when the chat opens, and whenever new ones load or arrive,
+    // unless you've scrolled up to read older ones yourself.
+    var stick by remember(convId) { mutableStateOf(true) }
+    LaunchedEffect(list) {
+        snapshotFlow { list.isScrollInProgress }.collect { moving -> if (!moving) stick = list.firstVisibleItemIndex <= 1 }
+    }
+    val newestKey = reversed.firstOrNull()?.key
+    var opened by remember(convId) { mutableStateOf(false) }
+    LaunchedEffect(newestKey, typing) {
+        if (newestKey == null || hl != null && !opened) { if (newestKey != null) opened = true; return@LaunchedEffect }
+        if (!opened) { list.scrollToItem(0); opened = true }
+        else if (stick) list.animateScrollToItem(0)
+    }
     LaunchedEffect(curMatch, hl) {
         val k = curMatch ?: hl ?: return@LaunchedEffect
         val i = reversed.indexOfFirst { it.key == k || it.id == k }
@@ -390,7 +403,12 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                             onClose = { selected.clear() },
                             onCopy = { copy(ctx, msgs.filter { it.key in selected }.joinToString("\n") { it.text }); repo.toast("Copied"); selected.clear() },
                             onStar = { star(repo, msgs.filter { it.key in selected }); selected.clear() },
-                            onDelete = { val del = msgs.filter { it.key in selected }; repo.deleteMessages(del); repo.toast(if (del.size > 1) "${del.size} messages deleted" else "Message deleted"); selected.clear() })
+                            onDelete = {
+                                val del = msgs.filter { it.key in selected }
+                                repo.confirm(if (del.size > 1) "Delete ${del.size} messages?" else "Delete message?", "They'll be deleted from Google Messages on your phone too. The other person still has their copy.") {
+                                    repo.deleteMessages(del); repo.toast(if (del.size > 1) "${del.size} messages deleted" else "Message deleted"); selected.clear()
+                                }
+                            })
                         searching -> SearchHeader(t, query, { query = it; matchIdx = 0 }, matches.size, matchIdx, { matchIdx++ }, { matchIdx = (matchIdx - 1 + maxOf(1, matches.size)) % maxOf(1, matches.size) }) { searching = false; query = "" }
                         else -> ThreadHeader(t, conv, typing, wide, onBack = { nav.back() }, onContact = { nav.go(Route.Contact(convId)) }, onCall = { callSheet = true })
                     }
@@ -401,7 +419,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                     Composer(
                         t = t, conv = conv, draft = draft, onDraft = { draft = it; if (it.isNotEmpty()) repo.typingPing(convId) },
                         replyTo = replyTo, onCancelReply = { replyTo = null }, attachments = attachments, schedule = schedule,
-                        onSchedule = { schedule = it }, onSend = { send(it) }, smart = p.on("smart") && msgs.lastOrNull()?.fromMe == false && draft.isEmpty() && !selecting && conv?.business != true,
+                        onSchedule = { schedule = it }, onSend = { send(it) }, smart = p.on("smart") && msgs.lastOrNull()?.fromMe == false && draft.isEmpty() && !selecting && conv != null && !automated(conv, msgs.lastOrNull()?.text.orEmpty()),
                         lastIncoming = msgs.lastOrNull { !it.fromMe }?.text.orEmpty(),
                         fontSize = fontSize, initialPanel = demoPanel,
                     )
@@ -421,7 +439,10 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                         com.jpetrydesign.pyng.data.ScheduleWorker.cancel(ctx, id)
                         repo.prefs.edit { pr -> pr.copy(scheduled = pr.scheduled.filter { s -> s.id != id }) }
                         repo.toast("Scheduled message canceled")
-                    } else { repo.deleteMessages(listOf(it)); repo.toast("Message deleted") }
+                    } else {
+                        val m = it
+                        repo.confirm("Delete message?", "It'll be deleted from Google Messages on your phone too. The other person still has their copy.") { repo.deleteMessages(listOf(m)); repo.toast("Message deleted") }
+                    }
                 })
             DetailsSheet(detailsFor, conv) { detailsFor = null }
             ForwardSheet(forward) { target, m ->
@@ -507,12 +528,18 @@ private fun ThreadHeader(t: Tok, c: Conv?, typing: Boolean, wide: Boolean, onBac
                         T(c.title, size = 19.sp, weight = FontWeight.Bold, letterSpacing = (-0.5).sp, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
                         Ico("M9.5 6.5l5.5 5.5-5.5 5.5", t.soft, 16.dp, 2.4f)
                     }
+                    val enc = encryptionOf(c, LocalRepo.current.msgs[c.id].orEmpty())
                     val sub = when {
                         typing -> "typing…"
                         c.group -> c.others.joinToString { it.short } + " and you"
+                        enc == Enc.E2EE -> "Encrypted"
+                        enc == Enc.SMS && !c.business -> "Text message"
                         else -> null
                     }
-                    if (sub != null) T(sub, size = 12.sp, color = if (typing) t.p else t.soft, maxLines = 1)
+                    if (sub != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (!typing && enc == Enc.E2EE) { Ico(Icons.lock, t.soft, 11.dp, 2f); Spacer(Modifier.width(3.dp)) }
+                        T(sub, size = 12.sp, color = if (typing) t.p else t.soft, maxLines = 1)
+                    }
                 }
             }
         }

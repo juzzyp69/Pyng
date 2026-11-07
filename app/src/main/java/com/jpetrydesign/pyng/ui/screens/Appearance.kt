@@ -430,17 +430,20 @@ fun ColorWheel(value: Hsl, onChange: (Hsl) -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             val wheel = 168.dp
             val r = with(density) { wheel.toPx() / 2 }
+            val live by androidx.compose.runtime.rememberUpdatedState(value)
+            val change by androidx.compose.runtime.rememberUpdatedState(onChange)
             fun at(o: Offset) {
                 val dx = o.x - r; val dy = o.y - r
                 val dist = (hypot(dx, dy) / r).coerceIn(0f, 1f)
-                var h = Math.toDegrees(atan2(dx.toDouble(), -dy.toDouble())).toFloat()
+                // Same angle as the drawn colors: red at 3 o'clock, going clockwise.
+                var h = Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat()
                 if (h < 0) h += 360f
-                onChange(value.copy(h = h, s = dist)); hexText = null
+                change(live.copy(h = h, s = dist)); hexText = null
             }
             Box(
-                Modifier.size(wheel).pointerInput(value.l) {
+                Modifier.size(wheel).pointerInput(Unit) {
                     detectTapGestures { at(it) }
-                }.pointerInput(value.l) { detectDragGestures(onDragStart = { at(it) }) { ch, _ -> ch.consume(); at(ch.position) } },
+                }.pointerInput(Unit) { detectDragGestures(onDragStart = { at(it) }) { ch, _ -> ch.consume(); at(ch.position) } },
             ) {
                 Canvas(Modifier.fillMaxSize()) {
                     val hues = List(13) { i -> hsl(i * 30f, 100f, 50f) }
@@ -451,8 +454,8 @@ fun ColorWheel(value: Hsl, onChange: (Hsl) -> Unit) {
                     else if (l > 0.5f) drawCircle(Color.White.copy(alpha = (l - 0.5f) * 1.4f))
                 }
                 val rad = Math.toRadians(value.h.toDouble())
-                val tx = r + sin(rad).toFloat() * value.s * r
-                val ty = r - cos(rad).toFloat() * value.s * r
+                val tx = r + cos(rad).toFloat() * value.s * r
+                val ty = r + sin(rad).toFloat() * value.s * r
                 val th = with(density) { 12.dp.toPx() }
                 Box(Modifier.offset { IntOffset((tx - th).roundToInt(), (ty - th).roundToInt()) }.size(24.dp).shadow(3.dp, CircleShape).clip(CircleShape).background(Color.White).padding(3.dp).clip(CircleShape).background(cur))
             }
@@ -495,12 +498,15 @@ fun ColorWheel(value: Hsl, onChange: (Hsl) -> Unit) {
 private fun LightSlider(value: Hsl, onL: (Float) -> Unit) {
     val density = LocalDensity.current
     var w by remember { mutableStateOf(1f) }
-    fun at(x: Float) = onL((0.06f + (x / w).coerceIn(0f, 1f) * 0.88f))
+    val knobPx = with(density) { 26.dp.toPx() }
+    val set by androidx.compose.runtime.rememberUpdatedState(onL)
+    // The knob's center follows your finger exactly, edge to edge.
+    fun at(x: Float) = set(0.06f + ((x - knobPx / 2) / (w - knobPx).coerceAtLeast(1f)).coerceIn(0f, 1f) * 0.88f)
     Box(
         Modifier.fillMaxWidth().height(30.dp)
             .onSizeChanged { w = it.width.toFloat() }
-            .pointerInput(value.h, value.s) { detectTapGestures { at(it.x) } }
-            .pointerInput(value.h, value.s) { detectDragGestures(onDragStart = { at(it.x) }) { ch, _ -> ch.consume(); at(ch.position.x) } },
+            .pointerInput(Unit) { detectTapGestures { at(it.x) } }
+            .pointerInput(Unit) { detectDragGestures(onDragStart = { at(it.x) }) { ch, _ -> ch.consume(); at(ch.position.x) } },
         contentAlignment = Alignment.CenterStart,
     ) {
         Box(Modifier.fillMaxWidth().height(12.dp).clip(RoundedCornerShape(6.dp)).background(Brush.horizontalGradient(listOf(hsl(value.h, value.s * 100, 6f), hsl(value.h, value.s * 100, 50f), hsl(value.h, value.s * 100, 94f)))))

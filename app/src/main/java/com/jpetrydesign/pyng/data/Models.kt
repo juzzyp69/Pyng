@@ -65,6 +65,9 @@ data class Conv(
     val read get() = fromMe && lastStatus == "OUTGOING_DISPLAYED"
 
     companion object {
+        /** A stand-in for a chat Pyng hasn't loaded yet (used for notifications only). */
+        fun placeholder(id: String, title: String) = Conv(id, title, "", false, "", "", System.currentTimeMillis(), true, false, false, "", false, false, "active", emptyList(), "")
+
         fun from(o: JSONObject) = Conv(
             id = o.optString("id"),
             name = o.optString("name"),

@@ -405,7 +405,7 @@ fun swipeAct(repo: com.jpetrydesign.pyng.data.Repo, c: Conv, action: String) {
     val p = repo.prefs.state
     when (action) {
         "Archive" -> { repo.setArchived(c.id, true); repo.toast("Chat archived") { repo.setArchived(c.id, false) } }
-        "Delete" -> repo.deleteConversation(c.id).also { repo.toast("Conversation deleted") }
+        "Delete" -> repo.confirm("Delete this conversation?", "All of ${c.shortTitle}'s messages will be deleted from Google Messages on your phone too.") { repo.deleteConversation(c.id); repo.toast("Conversation deleted") }
         "Pin" -> if (repo.togglePin(c.id)) repo.toast(if (p.isPinned(c.id)) "Unpinned" else "Pinned to top")
         "Mute" -> { val on = !p.isMuted(c.id); repo.setMuted(c.id, on); repo.toast(if (on) "Muted" else "Notifications on") }
         "Read/Unread" -> { val was = c.unread || c.id in p.markedUnread; repo.toggleUnread(c.id); repo.toast(if (was) "Marked as read" else "Marked as unread") }
@@ -849,7 +849,7 @@ fun RowMenu(c: Conv?, onDismiss: () -> Unit) {
                 if (!cur.group) add(Triple("Block", Icons.block) { repo.setBlocked(cur.id, true); repo.toast("Blocked ${cur.shortTitle}") { repo.setBlocked(cur.id, false) } })
             }
             acts.forEachIndexed { i, (label, icon, go) -> SheetAction(label, icon, { go(); onDismiss() }, first = i == 0, index = i) }
-            SheetAction("Delete", Icons.trash, { repo.deleteConversation(cur.id); repo.toast("Conversation deleted"); onDismiss() }, danger = true, index = acts.size)
+            SheetAction("Delete", Icons.trash, { onDismiss(); repo.confirm("Delete this conversation?", "All of ${cur.shortTitle}'s messages will be deleted from Google Messages on your phone too.") { repo.deleteConversation(cur.id); repo.toast("Conversation deleted") } }, danger = true, index = acts.size)
         }
     }
 }
