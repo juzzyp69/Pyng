@@ -186,8 +186,9 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
         onDispose { val d = draft; repo.prefs.edit { if (d.isBlank()) it.copy(drafts = it.drafts - convId) else it.copy(drafts = it.drafts + (convId to d)) } }
     }
 
-    val msgs = repo.msgs[convId].orEmpty().let { all ->
-        if (p.on("spam") && conv != null && conv.id !in p.notSpam && spamCheck(conv, all.lastOrNull { !it.fromMe }?.text.orEmpty()) != null) all else all
+    // Messages from Google Messages, plus your scheduled ones shown faded at the end.
+    val msgs = repo.msgs[convId].orEmpty() + p.scheduled.filter { it.convId == convId }.sortedBy { it.at }.map { s ->
+        Msg("", "sched-" + s.id, convId, "", "", "", true, "OUTGOING_SCHEDULED", s.label, s.text, emptyList(), s.at, emptyList(), "", 0, "text")
     }
     val loaded = repo.msgs.containsKey(convId)
     val typing = (repo.typing[convId] ?: 0L) > System.currentTimeMillis() && p.on("typing")
@@ -211,6 +212,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     val curMatch = if (matches.isNotEmpty()) matches[(matches.size - 1 - (matchIdx % matches.size)).coerceIn(0, matches.size - 1)] else null
     val reversed = msgs.asReversed()
     // The newest messages rise in, staggered, the first time a chat opens.
+    val introPlayed = remember(convId) { HashSet<String>() }
     val introKeys = remember(convId, loaded) { if (loaded) reversed.take(10).map { it.key }.toSet() else emptySet() }
     LaunchedEffect(curMatch, hl) {
         val k = curMatch ?: hl ?: return@LaunchedEffect
@@ -278,7 +280,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                         modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(t.neutral).padding(horizontal = 14.dp, vertical = 6.dp))
                                 }
                             } else {
-                                val inf = if (info == m.key || p.opt("stamps") == "Every message") infoFor(m, conv, p.on("receipts")) else null
+                                val inf = if (info == m.key || p.opt("stamps") == "Every message" || m.status == "OUTGOING_SCHEDULED") infoFor(m, conv, p.on("receipts")) else null
                                 val det = if (!m.fromMe && spamWhy == null) detect(m.text) else Detected()
                                 val chips = buildList<Triple<String, String, () -> Unit>> {
                                     det.date?.let { d -> add(Triple("Add to calendar", Icons.cal) { runCatching { ctx.startActivity(Intent(Intent.ACTION_INSERT).setData(CalendarContract.Events.CONTENT_URI).putExtra(CalendarContract.Events.TITLE, m.text.take(60)).putExtra(CalendarContract.Events.DESCRIPTION, d)) } }) }
@@ -300,7 +302,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                         quote = quote, senderName = if (conv?.group == true && !m.fromMe && !prevSame) (sender?.short ?: m.senderFirst.ifBlank { m.sender }) else null,
                                         senderWho = sender?.let { whoOf(it) }, starred = p.isStarred(m.key), chips = if (m.fromMe) emptyList() else chips,
                                         showPreview = p.on("previews") && spamWhy == null, tsShift = tsShift, timeLabel = clock(m.ts),
-                                        enterDelay = if (i < 10 && m.key in introKeys) (80 + i * 45) else -1,
+                                        enterDelay = if (i < 10 && m.key in introKeys && introPlayed.add(m.key)) (80 + i * 45) else -1,
                                         isNew = m.ts > openedAt, burst = burst?.takeIf { it.first == m.key }?.second, myId = myId,
                                     ),
                                     RowActs(
@@ -374,7 +376,14 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                 onReply = { replyTo = it }, onCopy = { copy(ctx, it.text); repo.toast("Copied") },
                 onForward = { forward = it }, onStar = { star(repo, listOf(it)) },
                 onSelect = { selected.add(it.key) }, onDetails = { detailsFor = it },
-                onDelete = { repo.deleteMessages(listOf(it)); repo.toast("Message deleted") })
+                onDelete = {
+                    if (it.tmpId.startsWith("sched-")) {
+                        val id = it.tmpId.removePrefix("sched-")
+                        com.jpetrydesign.pyng.data.ScheduleWorker.cancel(ctx, id)
+                        repo.prefs.edit { pr -> pr.copy(scheduled = pr.scheduled.filter { s -> s.id != id }) }
+                        repo.toast("Scheduled message canceled")
+                    } else { repo.deleteMessages(listOf(it)); repo.toast("Message deleted") }
+                })
             DetailsSheet(detailsFor, conv) { detailsFor = null }
             ForwardSheet(forward) { target, m ->
                 forward = null
@@ -421,6 +430,7 @@ fun openMedia(ctx: Context, repo: com.jpetrydesign.pyng.data.Repo, nav: Nav, ref
 
 /** The status line shown under a message when you tap beside it: text, icon, and whether it's the "read" accent. */
 private fun infoFor(m: Msg, c: Conv?, receipts: Boolean): Triple<String, String, Boolean> = when {
+    m.status == "OUTGOING_SCHEDULED" -> Triple("Scheduled for " + m.statusText, Icons.clock, false)
     !m.fromMe -> Triple("Received " + whenText(m.ts), Icons.inbox, false)
     m.failed -> Triple("Not sent", Icons.warn, false)
     m.pending -> Triple("Sending…", Icons.clock, false)

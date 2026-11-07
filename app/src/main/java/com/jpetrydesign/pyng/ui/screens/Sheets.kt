@@ -67,6 +67,7 @@ fun MessageMenu(
     onDelete: (Msg) -> Unit,
 ) {
     val repo = LocalRepo.current
+    val ctx = LocalContext.current
     var last by remember { mutableStateOf(m) }
     if (m != null) last = m
     var more by remember(m) { mutableStateOf(false) }
@@ -108,6 +109,7 @@ fun MessageMenu(
             SheetAction("Forward", Icons.forward, { onForward(cur); onDismiss() }, first = i == 0, index = i++)
             SheetAction(if (p.isStarred(cur.key)) "Unstar" else "Star", Icons.star, { onStar(cur); onDismiss() }, index = i++)
             SheetAction("Select", Icons.select, { onSelect(cur); onDismiss() }, index = i++)
+            if (p.on("readAloud") && cur.text.isNotEmpty()) SheetAction("Read aloud", Icons.volume, { Speaker.say(ctx, cur.text); onDismiss() }, index = i++)
             SheetAction("Details", Icons.details, { onDetails(cur); onDismiss() }, index = i++)
             SheetAction("Delete", Icons.trash, { onDelete(cur); onDismiss() }, danger = true, index = i)
         }
@@ -202,6 +204,24 @@ fun CallSheet(open: Boolean, conv: Conv?, onDismiss: () -> Unit) {
                 onDismiss()
             }, index = 1)
             SheetAction("Copy number", Icons.copy, { copy(ctx, c.number); onDismiss() }, index = 2)
+        }
+    }
+}
+
+/** Reads a message out loud with the phone's text-to-speech voice. */
+object Speaker {
+    private var tts: android.speech.tts.TextToSpeech? = null
+    private var ready = false
+    private var pending: String? = null
+
+    fun say(ctx: android.content.Context, text: String) {
+        val cur = tts
+        if (cur != null && ready) { cur.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "msg"); return }
+        pending = text
+        if (cur == null) tts = android.speech.tts.TextToSpeech(ctx.applicationContext) { status ->
+            ready = status == android.speech.tts.TextToSpeech.SUCCESS
+            if (ready) pending?.let { tts?.speak(it, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "msg") }
+            pending = null
         }
     }
 }

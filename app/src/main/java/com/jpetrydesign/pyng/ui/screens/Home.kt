@@ -373,7 +373,9 @@ fun ConvRow(
     val action = if (dx.value > 0) p.opt("swipeR") else p.opt("swipe")
     val cfg = swipeCfg(action, c, p.isPinned(c.id), p.isMuted(c.id), unread, t)
 
-    Column(Modifier.enter(index).fillMaxWidth()) {
+    val seen = remember { SeenRows.contains(c.id) }
+    androidx.compose.runtime.SideEffect { SeenRows.add(c.id) }
+    Column(Modifier.then(if (index < 10 && !seen) Modifier.enter(index) else Modifier).fillMaxWidth()) {
         Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(if (dx.value != 0f) 18.dp else 0.dp))) {
             if (dx.value != 0f) {
                 Row(
@@ -498,13 +500,7 @@ private fun PinItem(pin: Pin, ctl: PinCtl, modifier: Modifier = Modifier, conten
         modifier
             .zIndex(if (dragging) 6f else 0f)
             .onGloballyPositioned { coords -> val r = coords.boundsInRoot(); ctl.slots[id] = r; origin = r.topLeft }
-            .graphicsLayer {
-                scaleX = k; scaleY = k
-                if (dragging) {
-                    val r = ctl.slots[id]
-                    if (r != null) { val target = ctl.pointer - ctl.grab; translationX = target.x - r.center.x; translationY = target.y - r.center.y }
-                }
-            }
+            // Gestures sit outside the lift transform so finger positions stay in the slot's own coordinates.
             .pointerInput(id) { detectTapGestures(onTap = { ctl.open(id) }, onLongPress = { }) }
             .pointerInput(id) {
                 detectDragGesturesAfterLongPress(
@@ -512,6 +508,13 @@ private fun PinItem(pin: Pin, ctl: PinCtl, modifier: Modifier = Modifier, conten
                     onDragEnd = { ctl.drop() },
                     onDragCancel = { ctl.drop() },
                 ) { ch, _ -> ch.consume(); ctl.move(origin + ch.position) }
+            }
+            .graphicsLayer {
+                scaleX = k; scaleY = k
+                if (dragging) {
+                    val r = ctl.slots[id]
+                    if (r != null) { val target = ctl.pointer - ctl.grab; translationX = target.x - r.center.x; translationY = target.y - r.center.y }
+                }
             },
     ) { content() }
 }
@@ -737,4 +740,11 @@ fun SolidSearch(ink: Color, size: Dp) {
             drawLine(ink, Offset(15.4f, 15.4f), Offset(20.2f, 20.2f), strokeWidth = 3f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
         }
     }
+}
+
+/** Rows that already played their entrance this session, so scrolling doesn't replay it. */
+object SeenRows {
+    private val ids = HashSet<String>()
+    fun contains(id: String) = id in ids
+    fun add(id: String) { ids += id }
 }

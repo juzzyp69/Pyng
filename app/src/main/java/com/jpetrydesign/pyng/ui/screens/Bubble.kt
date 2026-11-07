@@ -148,7 +148,7 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
                 .graphicsLayer {
                     translationX = x.tsShift
                     val k = enterA.value
-                    alpha = k.coerceIn(0f, 1f)
+                    alpha = k.coerceIn(0f, 1f) * (if (m.status == "OUTGOING_SCHEDULED") 0.7f else 1f)
                     if (k < 1f) {
                         translationX += (if (me) 80f else -80f) * (1f - k) * density.density / 2.6f
                         val s = 0.9f + 0.1f * k; scaleX = s; scaleY = s

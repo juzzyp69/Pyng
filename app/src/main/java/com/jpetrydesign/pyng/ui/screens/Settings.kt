@@ -295,6 +295,9 @@ fun SectionScreen(nav: Nav, key: String) {
                     TogRow("Reduce transparency", "reduceBlur", "Solid surfaces instead of frosted glass"); Hairline()
                     TogRow("Reduce motion", "reduceMotion", "Turns off animations like typing dots and effects")
                 }
+                Group("Audio") {
+                    TogRow("Read messages aloud", "readAloud", "Adds \"Read aloud\" when you long-press a message")
+                }
                 val scale = remember { runCatching { SysSettings.Global.getFloat(ctx.contentResolver, SysSettings.Global.ANIMATOR_DURATION_SCALE, 1f) }.getOrDefault(1f) }
                 if (scale == 0f) {
                     Spacer(Modifier.height(12.dp))
