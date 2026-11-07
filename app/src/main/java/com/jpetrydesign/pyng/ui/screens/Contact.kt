@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -92,7 +93,9 @@ fun ContactScreen(nav: Nav, convId: String) {
     val msgs = repo.msgs[convId].orEmpty()
     val scope = rememberCoroutineScope()
     var renaming by remember { mutableStateOf(false) }
-    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) scope.launch { repo.setGroupPhoto(convId, uri) } }
+    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) { if (c.group) repo.setGroupPhoto(convId, uri) else repo.setContactPhoto(c.avatarId, uri) }
+    }
     val enc = encryptionOf(c, msgs)
     fun senderOf(m: com.jpetrydesign.pyng.data.Msg): String = if (m.fromMe) "You" else c.people.firstOrNull { it.id == m.participantId }?.short ?: m.senderFirst.ifBlank { m.sender.substringBefore(' ') }.ifBlank { c.shortTitle }
     Provide(t) {
@@ -102,11 +105,11 @@ fun ContactScreen(nav: Nav, convId: String) {
                 Row(Modifier.padding(start = 6.dp, top = 12.dp)) { CircleButton(Icons.back, "Back", { nav.back() }) }
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.enter(0, pop = true)) {
-                        Box(Modifier.edge(CircleShape, elevation = 16.dp).then(if (c.group) Modifier.clip(CircleShape).clickable { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } else Modifier)) {
+                        Box(Modifier.edge(CircleShape, elevation = 16.dp).clip(CircleShape).clickable { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
                             Avatar(w.photo, w.ini, 116.dp, w.bg, w.ink, 38.sp)
                         }
-                        // Groups: tap the photo to change it.
-                        if (c.group) Box(
+                        // Tap the photo to change it (in Pyng only), with a crop step.
+                        Box(
                             Modifier.align(Alignment.BottomEnd).size(36.dp).edge(CircleShape, elevation = 4.dp).clip(CircleShape).background(t.fill)
                                 .clickable { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                             contentAlignment = Alignment.Center,
@@ -335,6 +338,9 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
     val t = chatTok(convId)
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf("c1") }
+    var customizing by remember { mutableStateOf(look.custom.isNotEmpty()) }
+    var part by remember { mutableStateOf("inBg") }
+    val scroll = rememberScrollState()
     BackHandler { nav.back() }
     fun set(f: (ChatLook) -> ChatLook) = repo.prefs.edit { it.copy(looks = it.looks + (convId to f(it.looks[convId] ?: ChatLook()))) }
     val pickWall = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -349,7 +355,7 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
     Provide(t) {
         Box(Modifier.fillMaxSize()) {
             Glow(t)
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 30.dp)) {
+            Column(Modifier.fillMaxSize().verticalScroll(scroll).navigationBarsPadding().padding(bottom = 30.dp)) {
                 com.jpetrydesign.pyng.ui.kit.PageTop("Chat theme", { nav.back() }, sub = "Only for ${c?.title ?: "this chat"}")
                 Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(230.dp).clip(RoundedCornerShape(28.dp))) {
                     Wallpaper(wall, t)
@@ -358,6 +364,33 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
                         Spacer(Modifier.weight(1f))
                         Box(Modifier.align(Alignment.End)) { Bubble1("Yes! 7 is perfect", true, t) }
                         Box(Modifier.align(Alignment.End)) { Bubble1("See you there", true, t) }
+                    }
+                }
+                // Customize more: every color on its own, right under the preview.
+                AnimatedVisibility(customizing) {
+                    Column(Modifier.padding(horizontal = 16.dp).padding(top = 14.dp)) {
+                        val parts = listOf("bg" to "Background", "inBg" to "Received bubble", "inInk" to "Received text", "outBg" to "Sent bubble", "outInk" to "Sent text", "accent" to "Accent")
+                        fun shown(k: String): Color = when (k) { "bg" -> t.bg; "inBg" -> t.inBg; "inInk" -> t.inInk; "outBg" -> t.outFlat; "outInk" -> t.outInk; else -> t.p }
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            parts.forEach { (k, label) ->
+                                val on = part == k
+                                Row(
+                                    Modifier.height(40.dp).clip(RoundedCornerShape(20.dp)).background(if (on) t.fill else t.tone).clickable { part = k }.padding(start = 6.dp, end = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Box(Modifier.size(28.dp).clip(CircleShape).background(shown(k)).border(1.5.dp, if (on) Color.White.copy(alpha = 0.7f) else t.hair, CircleShape))
+                                    Spacer(Modifier.width(8.dp))
+                                    T(label, size = 13.5.sp, weight = FontWeight.SemiBold, color = if (on) t.onFill else t.ink)
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(14.dp))
+                        val cur = look.custom[part] ?: com.jpetrydesign.pyng.ui.theme.toHsl(shown(part))
+                        ColorWheel(cur) { h -> set { it.copy(custom = it.custom + (part to h)) } }
+                        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
+                            if (look.custom.containsKey(part)) T("Use automatic", size = 13.5.sp, weight = FontWeight.SemiBold, color = t.p,
+                                modifier = Modifier.clip(RoundedCornerShape(14.dp)).clickable { set { it.copy(custom = it.custom - part) } }.padding(horizontal = 10.dp, vertical = 6.dp))
+                        }
                     }
                 }
                 com.jpetrydesign.pyng.ui.kit.SectionLabel("Color", Modifier.padding(start = 16.dp))
@@ -384,7 +417,13 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
                     Palettes.walls.forEach { name -> WallTile(name, name, (look.wall.ifEmpty { p.defWall }) == name && !look.wall.startsWith("photo:"), t) { set { it.copy(wall = name) } } }
                 }
                 Spacer(Modifier.height(20.dp))
-                PillButton("Reset to app theme", { repo.prefs.edit { it.copy(looks = it.looks - convId) } }, Modifier.padding(horizontal = 16.dp).fillMaxWidth(), primary = false, height = 50.dp)
+                Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PillButton("Reset to app theme", { customizing = false; repo.prefs.edit { it.copy(looks = it.looks - convId) } }, Modifier.weight(1f), primary = false, height = 50.dp)
+                    PillButton(if (customizing) "Done" else "Customize more", {
+                        customizing = !customizing
+                        if (customizing) scope.launch { scroll.animateScrollTo(0) }
+                    }, Modifier.weight(1f), height = 50.dp)
+                }
             }
             com.jpetrydesign.pyng.ui.kit.StatusScrim(Modifier.align(Alignment.TopCenter))
         }

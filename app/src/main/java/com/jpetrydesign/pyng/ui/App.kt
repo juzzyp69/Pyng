@@ -165,6 +165,7 @@ fun PyngRoot(repo: Repo, nav: Nav) {
                 if (wide) WideLayout(nav, maxWidth) else Pane(nav, Modifier.fillMaxSize(), wide = false)
                 ToastHost(toast, onUndo = { toast?.undo?.invoke(); toast = null }, Modifier.align(Alignment.BottomCenter))
                 com.jpetrydesign.pyng.ui.kit.AskDialog(repo.ask) { repo.ask = null }
+                com.jpetrydesign.pyng.ui.screens.PhotoCropper(repo.crop) { repo.crop = null }
                 Box(Modifier.align(Alignment.TopCenter)) {
                     com.jpetrydesign.pyng.ui.screens.InAppBanner(banner, onOpen = { id -> banner = null; nav.openChat(id) }, onClose = { banner = null })
                 }

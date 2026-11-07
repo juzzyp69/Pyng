@@ -41,6 +41,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import com.jpetrydesign.pyng.ui.kit.edge
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -142,13 +143,17 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
     }
     val shape = bubbleShape(me, x.prevSame, x.nextSame, x.shape.first, x.shape.second)
     val jumbo = if (m.media.isEmpty() && x.quote == null) jumboCount(m.text) else 0
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    // Pressing a bubble shrinks it a touch; holding hands it to the menu with a buzz.
+    val press = remember { Animatable(1f) }
 
     Column(Modifier.fillMaxWidth()) {
         if (x.senderName != null) {
-            T(x.senderName, size = 11.5.sp, weight = FontWeight.SemiBold, color = t.p, modifier = Modifier.padding(start = if (x.group) 44.dp else 12.dp, top = 10.dp))
+            T(x.senderName, size = 12.sp, weight = FontWeight.SemiBold, color = t.soft, modifier = Modifier.padding(start = if (x.group) 46.dp else 14.dp, top = 14.dp))
         }
         Box(
-            Modifier.fillMaxWidth().padding(top = if (x.prevSame) 2.dp else 10.dp)
+            // Tight within a run from one person, more room when the sender changes.
+            Modifier.fillMaxWidth().padding(top = if (x.senderName != null) 4.dp else if (x.prevSame) 3.dp else 12.dp)
                 .graphicsLayer {
                     val k = enterA.value
                     alpha = k.coerceIn(0f, 1f) * (if (m.status == "OUTGOING_SCHEDULED") 0.7f else 1f)
@@ -186,23 +191,30 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
                     ) {
                         if (x.group && !me) {
                             val w = x.senderWho
-                            Box(Modifier.size(26.dp).graphicsLayer { alpha = if (x.nextSame) 0f else 1f }) {
-                                if (w != null) Avatar(w.photo, w.ini, 26.dp, t.tone, t.p, 10.sp)
+                            Box(Modifier.size(30.dp).graphicsLayer { alpha = if (x.nextSame) 0f else 1f }) {
+                                if (w != null) Avatar(w.photo, w.ini, 30.dp, t.tone, t.p, 11.sp)
                             }
-                            Spacer(Modifier.width(6.dp))
+                            Spacer(Modifier.width(8.dp))
                         }
                         Box(Modifier.weight(1f, fill = false)) {
                             Box(
                                 Modifier
                                     .onGloballyPositioned { a.onPlaced(it) }
                                     .offset { IntOffset(swipe.value.roundToInt(), 0) }
-                                    .padding(bottom = if (m.reactions.isNotEmpty()) 14.dp else 0.dp)
+                                    .padding(bottom = if (m.reactions.isNotEmpty()) 16.dp else 0.dp)
                                     .then(if (x.highlighted) Modifier.border(3.dp, t.p, shape) else Modifier)
+                                    .graphicsLayer { scaleX = press.value; scaleY = press.value }
                                     .pointerInput(m.key, x.selecting) {
                                         detectTapGestures(
+                                            onPress = {
+                                                val held = scope.launch { delay(90); press.animateTo(0.96f, tween(260)) }
+                                                tryAwaitRelease()
+                                                held.cancel()
+                                                scope.launch { press.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 600f)) }
+                                            },
                                             onTap = { a.onTap() },
                                             onDoubleTap = if (x.selecting) null else ({ a.onDouble() }),
-                                            onLongPress = { a.onLong() },
+                                            onLongPress = { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); a.onLong() },
                                         )
                                     }
                                     .swipeDir(m.key, +1,
@@ -219,7 +231,7 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
                             if (m.reactions.isNotEmpty()) {
                                 val all = m.reactions.sumOf { it.count }
                                 val txt = m.reactions.joinToString("") { it.emoji } + if (all > 1) " $all" else ""
-                                ReactionPill(txt, t, Modifier.align(if (me) Alignment.BottomEnd else Alignment.BottomStart).padding(horizontal = 10.dp).offset(y = 2.dp))
+                                ReactionPill(txt, t, Modifier.align(if (me) Alignment.BottomStart else Alignment.BottomEnd).padding(horizontal = 8.dp).offset(y = 2.dp))
                             }
                         }
                     }
@@ -286,8 +298,9 @@ private fun ReactionPill(text: String, t: Tok, modifier: Modifier) {
     LaunchedEffect(text) { k.snapTo(0f); k.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 500f)) }
     Box(
         modifier.graphicsLayer { scaleX = k.value; scaleY = k.value }
-            .border(2.dp, t.bg, RoundedCornerShape(12.dp)).padding(2.dp)
-            .height(22.dp).clip(RoundedCornerShape(11.dp)).background(if (t.dark) Color(0xFF2A2D36) else Color.White).padding(horizontal = 7.dp),
+            .shadow(4.dp, RoundedCornerShape(13.dp), clip = false, ambientColor = t.shadow, spotColor = t.shadow)
+            .height(26.dp).widthIn(min = 26.dp).clip(RoundedCornerShape(13.dp)).background(if (t.dark) Color(0xFF2A2D36) else Color.White)
+            .border(1.dp, t.edgeLine, RoundedCornerShape(13.dp)).padding(horizontal = 6.dp),
         contentAlignment = Alignment.Center,
     ) { T(text, size = 12.5.sp, color = t.ink, maxLines = 1) }
 }
@@ -336,7 +349,7 @@ private fun BubbleBody(m: Msg, x: RowCtx, shape: RoundedCornerShape, jumbo: Int,
             T(text, size = listOf(58f, 58f, 48f, 40f)[jumbo].sp, lineHeight = (listOf(58f, 58f, 48f, 40f)[jumbo] * 1.15f).sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
         } else if (text.isNotEmpty() || x.quote != null) {
             if (m.media.isNotEmpty()) Spacer(Modifier.height(4.dp))
-            Column(Modifier.clip(shape).background(bg).padding(horizontal = 14.dp, vertical = 9.dp).widthIn(min = 20.dp)) {
+            Column(Modifier.clip(shape).background(bg).padding(horizontal = 16.dp, vertical = 11.dp).widthIn(min = 24.dp)) {
                 if (x.quote != null) {
                     Column(Modifier.padding(top = 1.dp, bottom = 7.dp).clip(RoundedCornerShape(12.dp)).background(quoteBg).padding(horizontal = 10.dp, vertical = 6.dp)) {
                         T(x.quote.first, size = 12.5.sp, weight = FontWeight.Bold, color = fg)
@@ -374,9 +387,15 @@ private fun MediaView(m: Msg, ref: MediaRef, shape: RoundedCornerShape, me: Bool
             val ratio = if (ref.w > 0 && ref.h > 0) ref.h.toFloat() / ref.w else 1f
             val w = 232.dp
             val h = (232f * ratio).coerceIn(140f, 320f).dp
-            Box(Modifier.size(w, h).clip(shape).background(t.tone).clickable { a.onOpenMedia(ref) }, contentAlignment = Alignment.Center) {
-                val show = if (ref.isImage && full.isNotEmpty()) full else thumb
-                if (show.isNotEmpty()) AsyncImage(model = File(show), contentDescription = if (ref.isVideo) "Video" else "Photo", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            val show = if (ref.isImage && full.isNotEmpty()) full else thumb
+            // PNGs, GIFs and stickers can be see-through: no box behind them, shown whole.
+            val clear = ref.isImage && (ref.mime.contains("png") || ref.mime.contains("gif") || ref.mime.contains("webp"))
+            Box(
+                Modifier.size(w, h).clip(shape).then(if (show.isEmpty() || !clear) Modifier.background(if (show.isEmpty()) t.tone else Color.Transparent) else Modifier)
+                    .clickable { a.onOpenMedia(ref) },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (show.isNotEmpty()) AsyncImage(model = File(show), contentDescription = if (ref.isVideo) "Video" else "Photo", contentScale = if (clear) ContentScale.Fit else ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 else if (ref.isVideo && full.isNotEmpty()) AsyncImage(model = File(full), contentDescription = "Video", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 if (ref.isVideo) {
                     Box(Modifier.size(52.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {

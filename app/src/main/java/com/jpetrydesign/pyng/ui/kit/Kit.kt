@@ -270,8 +270,17 @@ fun initialsOf(name: String): String {
 
 @Composable
 fun CountBadge(n: Int, bg: Color = LocalTok.current.badgeBg, ink: Color = LocalTok.current.badgeInk, h: Dp = 21.dp, modifier: Modifier = Modifier) {
+    // Frosted: a lighter, see-through tint with a bright rim, so what's behind shows softly through.
+    val t = LocalTok.current
+    val shape = RoundedCornerShape(h / 2)
+    val glass = androidx.compose.ui.graphics.lerp(bg, Color.White, if (t.dark) 0.06f else 0.14f).copy(alpha = if (t.solid) 1f else 0.8f)
     Box(
-        modifier.heightIn(min = h).widthIn(min = h).clip(RoundedCornerShape(h / 2)).background(bg).padding(horizontal = 6.dp),
+        modifier.heightIn(min = h).widthIn(min = h)
+            .shadow(3.dp, shape, clip = false, ambientColor = bg.copy(alpha = 0.35f), spotColor = bg.copy(alpha = 0.35f))
+            .clip(shape)
+            .background(Brush.verticalGradient(listOf(glass, glass.copy(alpha = glass.alpha * 0.86f))))
+            .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.5f), Color.White.copy(alpha = 0.1f))), shape)
+            .padding(horizontal = 6.dp),
         contentAlignment = Alignment.Center,
     ) { T(if (n > 99) "99+" else n.toString(), size = (h.value * 0.52f).sp, weight = FontWeight.Bold, color = ink) }
 }
@@ -477,7 +486,7 @@ fun Card(modifier: Modifier = Modifier, radius: Dp = 26.dp, bg: Color = LocalTok
 
 @Composable
 fun SectionLabel(text: String, modifier: Modifier = Modifier) {
-    T(text, size = 12.5.sp, weight = FontWeight.SemiBold, color = LocalTok.current.soft, modifier = modifier.padding(start = 4.dp, top = 18.dp, bottom = 8.dp))
+    T(text, size = 13.sp, weight = FontWeight.SemiBold, color = LocalTok.current.soft, modifier = modifier.padding(start = 6.dp, top = 24.dp, bottom = 10.dp))
 }
 
 @Composable
@@ -498,7 +507,7 @@ fun ListRow(
 ) {
     val t = LocalTok.current
     Row(
-        Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(horizontal = 16.dp, vertical = 14.dp),
+        Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {

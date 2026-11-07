@@ -17,8 +17,8 @@ Every feature from the design prototype and our conversations, with where it sta
 - ✅ Pinned chats seeded from Google Messages pins, up to 8
 - ✅ 10 pinned layouts: Grid, Large, Pages, Carousel, Compact, Chips, Cards, Spotlight, List, Dock
 - ✅ Pinned notifications: Badges or Rings, typing dots on pinned faces
-- ✅ Hold a pinned chat and drag it: the others slide aside to show where it lands, and it saves when you let go
-- ✅ Drag a pinned chat out to unpin it; hold a chat in the list and drag it up to pin it
+- ✅ Hold a chat or pin: its menu opens. Start moving your finger and it lifts instead; the others slide aside, the pinned area lights up, and it glides into place when you let go
+- ✅ Drag a pinned chat out to unpin it (with Undo); drag a chat from the list up to pin it; a hint at the bottom says what letting go will do
 - ✅ Rows: photo or initials, name, time, preview, typing, draft, read check, muted, pin mark, unread badge
 - ✅ Copy button for verification codes
 - ✅ Swipe left and right with your chosen actions (archive, read/unread, delete, pin, mute, off)
@@ -76,6 +76,7 @@ Every feature from the design prototype and our conversations, with where it sta
 
 ## Contact card
 - ✅ Photo, name, number, encryption status (tap it for what it means)
+- ✅ Set a photo for anyone (shows in Pyng only), with a circle crop step; same crop for group and profile photos
 - ✅ Contact photos from your phone's contacts, with Google Messages as backup
 - ✅ Call, Search, Mute, Pin
 - ✅ Chat theme, notifications on/off, vibration
@@ -90,6 +91,7 @@ Every feature from the design prototype and our conversations, with where it sta
 ## Chat theme
 - ✅ App theme, all palettes and duotones, Custom (Mono / Duotone / Gradient) with the color wheel
 - ✅ Wallpapers: Custom photo, None, Mist, Dusk, Paper, Aurora; Reset to app theme
+- ✅ Customize more: set the background, received bubble and text, sent bubble and text, and accent one by one
 
 ## Settings
 - ✅ Profile card, Archived / Starred / Scheduled tiles
@@ -113,4 +115,4 @@ Every feature from the design prototype and our conversations, with where it sta
 - ✅ Home-screen widgets: Conversations and Pinned people
 - ✅ App-icon shortcuts: New message plus your top 3 pinned chats
 - ✅ Fold inner screen: chat list and conversation side by side
-- ✅ Five app icons: Classic, Duotone, Soft, Mono, Glass
+- ✅ Five app icons, solid and frosted with the two-bubble mark: Classic, Duotone, Soft, Mono, Glass (plus a themed-icon version)

@@ -369,11 +369,7 @@ fun ProfileScreen(nav: Nav) {
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf(p.profileName) }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) scope.launch {
-            val f = repo.importUri(uri) ?: return@launch
-            val dest = repo.keepFile("me"); File(f.path).copyTo(dest, overwrite = true)
-            repo.prefs.edit { it.copy(profilePhoto = dest.path) }
-        }
+        if (uri != null) repo.cropThen(uri, "Your photo", "me") { f -> repo.prefs.edit { it.copy(profilePhoto = f) } }
     }
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { repo.prefs.edit { it.copy(profileName = name.trim()) } } }
     Page("Your profile", { nav.back() }) {

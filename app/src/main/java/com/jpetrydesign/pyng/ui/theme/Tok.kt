@@ -96,7 +96,8 @@ fun tok(P: Pal, dark: Boolean, solid: Boolean = false, highContrast: Boolean = f
         card = if (dark) Color.White.copy(alpha = 0.05f) else p.a(0x0D),
         cardEdge = if (dark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.7f),
         surface = if (dark) Color.White.copy(alpha = 0.05f) else inkL.copy(alpha = 0.035f),
-        inBg = if (dark) Color.White.copy(alpha = 0.10f) else (if (P.bg != null) Color.White.copy(alpha = 0.85f) else p.a(0x12)),
+        // Received bubbles in light mode: nearly white with just a hint of the theme color.
+        inBg = if (dark) Color.White.copy(alpha = 0.10f) else (if (P.bg != null) Color.White.copy(alpha = 0.9f) else androidx.compose.ui.graphics.lerp(Color.White, p, 0.045f)),
         inInk = if (dark) inkD else inkL,
         outBg = outBrush, outFlat = fill, outInk = onFill,
         badgeBg = fill.a(0xD9), badgeInk = onFill,
@@ -153,3 +154,17 @@ class FractionalRadial(private val color: Color, private val fx: Float, private 
 }
 
 val LocalTok = staticCompositionLocalOf { tok(Palettes.favorites[1], false) }
+
+
+/** Applies the colors picked one by one in "Customize more". */
+fun Tok.withCustom(m: Map<String, com.jpetrydesign.pyng.data.Hsl>): Tok {
+    if (m.isEmpty()) return this
+    var t = this
+    m["bg"]?.color()?.let { t = t.copy(bg = it) }
+    m["inBg"]?.color()?.let { t = t.copy(inBg = it) }
+    m["inInk"]?.color()?.let { t = t.copy(inInk = it) }
+    m["outBg"]?.color()?.let { t = t.copy(outBg = Brush.linearGradient(listOf(it, it)), outFlat = it) }
+    m["outInk"]?.color()?.let { t = t.copy(outInk = it) }
+    m["accent"]?.color()?.let { t = t.copy(p = it, fill = it, badgeBg = it, plusFlat = it, plusBg = Brush.linearGradient(listOf(it, it))) }
+    return t
+}

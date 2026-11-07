@@ -27,13 +27,17 @@ data class ChatLook(
     val mode: String = "Mono",
     val c1: Hsl = Hsl(214f, 0.75f, 0.47f),
     val c2: Hsl = Hsl(340f, 0.62f, 0.62f),
+    /** Colors set one by one under "Customize more": bg, inBg, inInk, outBg, outInk, accent. */
+    val custom: Map<String, Hsl> = emptyMap(),
 ) {
     fun json(): JSONObject = JSONObject().put("key", key).put("wall", wall).put("mode", mode).put("c1", c1.json()).put("c2", c2.json())
+        .put("custom", JSONObject().apply { custom.forEach { (k, v) -> put(k, v.json()) } })
 
     companion object {
         fun from(o: JSONObject) = ChatLook(
             o.optString("key"), o.optString("wall"), o.optString("mode", "Mono"),
             Hsl.from(o.optJSONObject("c1"), Hsl(214f, 0.75f, 0.47f)), Hsl.from(o.optJSONObject("c2"), Hsl(340f, 0.62f, 0.62f)),
+            o.optJSONObject("custom")?.let { c -> c.keys().asSequence().associateWith { k -> Hsl.from(c.optJSONObject(k), Hsl(0f, 0f, 0.5f)) } } ?: emptyMap(),
         )
     }
 }

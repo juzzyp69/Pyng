@@ -7,6 +7,9 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -161,7 +164,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current
     val ghostLift = with(density) { 46.dp.toPx() }
-    val previewIds = dragId.let { id ->
+    val previewIds = dragId.takeIf { dragMoved }.let { id ->
         if (id == null) pinnedIds
         else {
             val without = pinnedIds - id
@@ -176,49 +179,106 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
     val spamCount = all.count { it.status == "spam" || it.status == "blocked" } + spamLocal.size
     val newCount = active.count { unreadOf(it) && it.id !in p.muted }
 
-    fun liftAt(id: String, at: Offset, fromRow: Boolean) {
+    // Hold = menu. Only once the finger moves does the chat lift and follow it (like the home screen).
+    val dragScope = rememberCoroutineScope()
+    val ghostPos = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+    val ghostScale = remember { Animatable(1f) }
+    val ghostAlpha = remember { Animatable(1f) }
+    var ghostId by remember { mutableStateOf<String?>(null) }
+    var ghostSize by remember { mutableStateOf(64.dp) }
+    var grab by remember { mutableStateOf(Offset.Zero) }
+    var origin by remember { mutableStateOf(Offset.Zero) }
+    val shake = remember { Animatable(0f) }
+    val slop = with(density) { 10.dp.toPx() }
+
+    fun liftAt(id: String, at: Offset, center: Offset, size: androidx.compose.ui.unit.Dp, fromRow: Boolean) {
         dragId = id; dragFromRow = fromRow; dragMoved = false
         dragPointer = at; dragStart = at
+        grab = center - at; origin = center; ghostSize = size
         inZone = !fromRow
         target = pinnedIds.indexOf(id).coerceAtLeast(0)
         dh.active = true
-        dh.animUntil = Long.MAX_VALUE
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        menuFor = repo.convs[id]
+    }
+    fun startDrag(id: String) {
+        dragMoved = true
+        menuFor = null
+        ghostId = id
+        dh.animUntil = Long.MAX_VALUE
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        dragScope.launch {
+            ghostPos.snapTo(dragPointer + grab)
+            ghostAlpha.snapTo(1f)
+            launch { ghostScale.snapTo(1f); ghostScale.animateTo(1.12f, spring(dampingRatio = 0.6f, stiffness = 500f)) }
+            launch { ghostAlpha.animateTo(0.94f, tween(140)) }
+        }
     }
     dh.onMove = move@{ at ->
         val id = dragId ?: return@move
         dragPointer = at
-        if ((at - dragStart).getDistance() > 14f) dragMoved = true
-        val g = at - Offset(0f, ghostLift)
+        if (!dragMoved) { if ((at - dragStart).getDistance() > slop) startDrag(id) else return@move }
+        val g = at + grab
+        dragScope.launch { ghostPos.snapTo(g) }
         val z = dh.zone
-        val now = z != null && z.inflate(28f).contains(g)
-        if (now != inZone) { inZone = now; haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
+        // The pinned area reaches a little past its edges, so it's easy to hit.
+        val now = z != null && z.inflate(with(density) { 20.dp.toPx() }).contains(g)
+        if (now != inZone) {
+            inZone = now
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            if (now && dragFromRow && pinnedIds.size >= 8) dragScope.launch { shake.snapTo(0f); for (x in listOf(10f, -9f, 7f, -5f, 3f, 0f)) shake.animateTo(x, tween(45)) }
+        }
         if (now) {
             val n = (pinnedIds - id).size + 1
-            val best = (0 until n).mapNotNull { i -> dh.slots[i]?.let { i to (it.center - g).getDistanceSquared() } }.minByOrNull { it.second }?.first
-            if (best != null && best != target) { target = best; haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
-        }
+            // Move only once the chat's center is inside another slot: no flicker on the boundaries.
+            val inside = (0 until n).firstOrNull { i -> dh.slots[i]?.contains(g) == true }
+            val next = inside ?: if (!dh.hadSlot) (0 until n).mapNotNull { i -> dh.slots[i]?.let { i to (it.center - g).getDistanceSquared() } }.minByOrNull { it.second }?.first else null
+            if (next != null) dh.hadSlot = true
+            if (next != null && next != target) { target = next; haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
+        } else dh.hadSlot = false
     }
     dh.onDrop = drop@{
         val id = dragId ?: return@drop
         dh.active = false
-        dh.animUntil = System.currentTimeMillis() + 700
+        dh.hadSlot = false
+        if (!dragMoved) { dragId = null; return@drop } // the menu is already open
+        dh.animUntil = System.currentTimeMillis() + 900
         val order = previewIds
-        dragId = null
-        if (!dragMoved) { menuFor = repo.convs[id]; return@drop }
         val cur = repo.prefs.state.pinned
+        val full = pinnedIds.size >= 8 && id !in pinnedIds
+        val landing = dh.slots[target]?.center
+        var vanish = false
+        var dest: Offset = origin
         when {
-            dragFromRow && inZone -> {
-                if (pinnedIds.size >= 8) repo.toast("Unpin a chat first (8 max)")
-                else { repo.prefs.edit { it.copy(pinned = order + cur.filter { x -> x !in order }) }; repo.toast("Pinned") }
+            dragFromRow && inZone && !full -> {
+                repo.prefs.edit { it.copy(pinned = order + cur.filter { x -> x !in order }) }
+                repo.toast("Pinned") { repo.prefs.edit { it.copy(pinned = cur) } }
+                dest = landing ?: origin
             }
+            dragFromRow && inZone -> repo.toast("Unpin a chat first (8 max)")
             dragFromRow -> {}
-            inZone -> repo.prefs.edit { it.copy(pinned = order + cur.filter { x -> x !in order }) }
-            else -> {
-                val before = cur
-                repo.prefs.edit { it.copy(pinned = cur.filter { x -> x != id }) }
-                repo.toast("Unpinned") { repo.prefs.edit { it.copy(pinned = before) } }
+            inZone -> {
+                if (order != pinnedIds) repo.prefs.edit { it.copy(pinned = order + cur.filter { x -> x !in order }) }
+                dest = landing ?: origin
             }
+            else -> {
+                repo.prefs.edit { it.copy(pinned = cur.filter { x -> x != id }) }
+                repo.toast("Unpinned") { repo.prefs.edit { it.copy(pinned = cur) } }
+                vanish = true
+            }
+        }
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        dragId = null
+        // The lifted chat glides into place (or back home, or fades away when unpinned).
+        dragScope.launch {
+            if (vanish) {
+                launch { ghostScale.animateTo(0.6f, tween(200)) }
+                ghostAlpha.animateTo(0f, tween(200))
+            } else {
+                launch { ghostScale.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 420f)) }
+                ghostPos.animateTo(dest, spring(dampingRatio = 0.82f, stiffness = 380f))
+            }
+            ghostId = null
         }
     }
     if (layout == "List") dh.zone = null
@@ -233,7 +293,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
             else if (dh.height > 0 && y > dh.height - edge) listState.scrollBy((y - (dh.height - edge)) / 10f)
         }
     }
-    val pinCtl = PinCtl(dh = dh, dragId = dragId, open = { id -> nav.openChat(id) }, lift = { id, at -> liftAt(id, at, false) })
+    val pinCtl = PinCtl(dh = dh, dragId = ghostId, open = { id -> nav.openChat(id) }, lift = { id, at, center -> liftAt(id, at, center, 72.dp, false) }, dropActive = dragId != null && dragMoved && inZone, shake = shake.value)
 
     Box(
         Modifier.fillMaxSize()
@@ -255,7 +315,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
             LazyColumn(
                 Modifier.fillMaxSize().hazeSource(haze),
                 state = listState,
-                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 130.dp),
+                contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 150.dp),
             ) {
                 item("head") {
                     Row(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 24.dp, bottom = 24.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -321,8 +381,8 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                         c = c, index = i, pinMark = layout == "List" && c.id in pinnedIds, count = countOf(c), unread = unreadOf(c),
                         typing = typingOf(c), selected = wide && (nav.top as? Route.Thread)?.id == c.id,
                         onOpen = { nav.openChat(c.id) }, onMenu = { menuFor = c },
-                        lifted = dragId == c.id,
-                        onLift = if (layout == "List") null else ({ at -> liftAt(c.id, at, true) }), home = dh,
+                        lifted = ghostId == c.id,
+                        onLift = if (layout == "List") null else ({ at, center, size -> liftAt(c.id, at, center, size, true) }), home = dh,
                         onSwipe = { side -> swipeAct(repo, c, if (side > 0) p.opt("swipeR") else p.opt("swipe")) },
                     )
                 }
@@ -357,8 +417,9 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                 }
             }
 
+            val fabAlpha by androidx.compose.animation.core.animateFloatAsState(if (dragId != null && dragMoved) 0f else 1f, label = "fab")
             Row(
-                Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 20.dp, bottom = 28.dp),
+                Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 20.dp, bottom = 28.dp).graphicsLayer { alpha = fabAlpha },
                 horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically,
             ) {
                 // Frosted glass: light blur, mostly see-through, with a bright rim instead of a heavy shadow.
@@ -373,24 +434,43 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
             }
         }
 
-        dragId?.let { id -> repo.convs[id] }?.let { c ->
+        ghostId?.let { id -> repo.convs[id] }?.let { c ->
             val w = whoOf(c)
-            val size = 68.dp
-            val half = with(density) { size.toPx() / 2 }
-            Column(
-                Modifier.zIndex(30f).offset { IntOffset((dragPointer.x - half).roundToInt(), (dragPointer.y - ghostLift - half).roundToInt()) },
-                horizontalAlignment = Alignment.CenterHorizontally,
+            val half = with(density) { ghostSize.toPx() / 2 }
+            Box(
+                Modifier.zIndex(30f)
+                    .offset { IntOffset((ghostPos.value.x - half).roundToInt(), (ghostPos.value.y - half).roundToInt()) }
+                    .size(ghostSize)
+                    .graphicsLayer { scaleX = ghostScale.value; scaleY = ghostScale.value; alpha = ghostAlpha.value }
+                    .edge(CircleShape, elevation = 18.dp).clip(CircleShape),
+            ) { Avatar(w.photo, w.ini, ghostSize, w.bg, w.ink, 21.sp) }
+        }
+        // While dragging: a hint at the bottom says what letting go will do.
+        val hint = when {
+            dragId == null || !dragMoved -> null
+            dragFromRow && inZone -> if (pinnedIds.size >= 8) "Pinned is full (8 max)" else "Release to pin"
+            dragFromRow -> "Drag up to pin"
+            !inZone -> "Release to unpin"
+            else -> "Release to place"
+        }
+        androidx.compose.animation.AnimatedVisibility(
+            hint != null,
+            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 34.dp),
+            enter = fadeIn(tween(150)) + androidx.compose.animation.slideInVertically(spring(dampingRatio = 0.8f, stiffness = 500f)) { it / 2 },
+            exit = fadeOut(tween(150)),
+        ) {
+            var lastHint by remember { mutableStateOf("") }
+            if (hint != null) lastHint = hint
+            val danger = lastHint == "Release to unpin" || lastHint.startsWith("Pinned is full")
+            androidx.compose.runtime.CompositionLocalProvider(LocalHaze provides haze) {
+            Row(
+                Modifier.height(46.dp).glassRim(RoundedCornerShape(23.dp)).frost(RoundedCornerShape(23.dp), if (danger) t.danger.copy(alpha = 0.16f) else t.fab.copy(alpha = if (t.dark) 0.2f else 0.32f), 10.dp).padding(horizontal = 18.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(Modifier.size(size).graphicsLayer { scaleX = 1.08f; scaleY = 1.08f }.edge(CircleShape, elevation = 16.dp).clip(CircleShape)) {
-                    Avatar(w.photo, w.ini, size, w.bg, w.ink, 21.sp)
-                }
-                val label = when {
-                    dragFromRow && inZone -> if (pinnedIds.size >= 8) "8 max" else "Pin"
-                    !dragFromRow && !inZone && dragMoved -> "Unpin"
-                    else -> null
-                }
-                if (label != null) T(label, size = 12.sp, weight = FontWeight.SemiBold, color = t.onFill,
-                    modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(12.dp)).background(t.fill).padding(horizontal = 10.dp, vertical = 4.dp))
+                Ico(if (danger) Icons.trash else Icons.pinned, if (danger) t.danger else t.p, 17.dp, 2f)
+                Spacer(Modifier.width(8.dp))
+                T(lastHint, size = 14.sp, weight = FontWeight.SemiBold, color = if (danger) t.danger else t.ink)
+            }
             }
         }
 
@@ -436,7 +516,7 @@ fun ConvRow(
     onMenu: () -> Unit,
     onSwipe: (Int) -> Unit,
     lifted: Boolean = false,
-    onLift: ((Offset) -> Unit)? = null,
+    onLift: ((Offset, Offset, androidx.compose.ui.unit.Dp) -> Unit)? = null,
     home: DragHolder? = null,
 ) {
     val repo = LocalRepo.current
@@ -449,9 +529,9 @@ fun ConvRow(
     val bold = p.on("boldText")
     val draft = p.drafts[c.id]?.takeIf { it.isNotBlank() }
     val compact = p.density == "Compact"
-    val nameSize = 15.5f
-    val prevSize = 14f
-    val av = if (compact) 40.dp else 48.dp
+    val nameSize = 16.5f
+    val prevSize = 14.5f
+    val av = if (compact) 46.dp else 56.dp
     val density = LocalDensity.current
     val maxPx = with(density) { 150.dp.toPx() }
     val trigger = with(density) { 90.dp.toPx() }
@@ -495,11 +575,16 @@ fun ConvRow(
             }
             Column(
                 Modifier.fillMaxWidth().offset { IntOffset(dx.value.roundToInt(), 0) }
+                    .clip(RoundedCornerShape(20.dp))
                     .background(if (dx.value != 0f) t.bg else if (selected) t.tone else Color.Transparent)
                     .pointerInput(c.id) {
                         detectTapGestures(onTap = { openNow() }, onLongPress = { at ->
                             val h = home?.home; val rc = rowCoords[0]; val lift = liftNow
-                            if (lift != null && h != null && rc != null) runCatching { lift(h.localPositionOf(rc, at)) }.onFailure { menuNow() }
+                            if (lift != null && h != null && rc != null) runCatching {
+                                val b = h.localBoundingBoxOf(rc)
+                                val avPx = with(this) { av.toPx() }
+                                lift(h.localPositionOf(rc, at), Offset(b.left + avPx / 2, b.center.y), av)
+                            }.onFailure { menuNow() }
                             else menuNow()
                         })
                     }
@@ -519,11 +604,11 @@ fun ConvRow(
                     },
             ) {
                 Row(
-                    Modifier.fillMaxWidth().padding(vertical = if (compact) 8.dp else 12.dp),
+                    Modifier.fillMaxWidth().padding(vertical = if (compact) 9.dp else 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Avatar(who.photo, who.ini, av, who.bg, who.ink, 15.sp)
-                    Spacer(Modifier.width(14.dp))
+                    Avatar(who.photo, who.ini, av, who.bg, who.ink, 17.sp)
+                    Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
@@ -531,10 +616,10 @@ fun ConvRow(
                                 if (pinMark) { Spacer(Modifier.width(6.dp)); Ico(Icons.pinned, t.p, 13.dp, 1.6f, fill = t.p) }
                                 if (muted) { Spacer(Modifier.width(6.dp)); Ico(Icons.bellOff, t.faint, 13.dp, 2.2f) }
                             }
-                            Spacer(Modifier.width(10.dp))
+                            Spacer(Modifier.width(14.dp))
                             T(listTime(c.ts), size = 12.5.sp, color = if (hot) t.p else t.soft, weight = if (hot) FontWeight.SemiBold else FontWeight.Normal)
                         }
-                        Spacer(Modifier.height(3.dp))
+                        Spacer(Modifier.height(4.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (c.read && p.on("receipts") && !typing && draft == null) { Ico(Icons.read, t.p, 16.dp, 2.2f); Spacer(Modifier.width(6.dp)) }
                             if (draft != null && !typing) { T("Draft:", size = 14.sp, weight = FontWeight.SemiBold, color = t.danger); Spacer(Modifier.width(6.dp)) }
@@ -542,17 +627,15 @@ fun ConvRow(
                                 preview, size = prevSize.sp, maxLines = 1,
                                 color = if (typing) t.p else if (hot) t.ink else t.soft,
                                 weight = if (hot || typing || bold) FontWeight.Medium else FontWeight.Normal,
-                                modifier = Modifier.weight(1f),
+                                // Ends with "…" well before the badge and time column.
+                                modifier = Modifier.weight(1f).padding(end = 14.dp),
                             )
-                            if (count > 0) {
-                                Spacer(Modifier.width(6.dp))
-                                CountBadge(count, if (muted) t.neutral else t.badgeBg, if (muted) t.soft else t.badgeInk, 22.dp)
-                            }
+                            if (count > 0) CountBadge(count, if (muted) t.neutral else t.badgeBg, if (muted) t.soft else t.badgeInk, 22.dp)
                         }
                     }
                 }
                 if (det.code != null) {
-                    Row(Modifier.padding(start = 62.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.padding(start = av + 16.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Row(
                             Modifier.height(34.dp).clip(RoundedCornerShape(17.dp)).background(t.tone).clickable {
                                 val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -569,7 +652,7 @@ fun ConvRow(
                 }
             }
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(t.hair))
+        Spacer(Modifier.height(if (compact) 2.dp else 4.dp))
     }
 }
 
@@ -594,6 +677,7 @@ class DragHolder {
     val lastPos = HashMap<String, Offset>()
     var active = false
     var animUntil = 0L
+    var hadSlot = false
     var onMove: (Offset) -> Unit = {}
     var onDrop: () -> Unit = {}
 }
@@ -609,7 +693,9 @@ private class PinCtl(
     val dh: DragHolder,
     val dragId: String?,
     val open: (String) -> Unit,
-    val lift: (String, Offset) -> Unit,
+    val lift: (String, Offset, Offset) -> Unit,
+    val dropActive: Boolean = false,
+    val shake: Float = 0f,
 )
 
 /** Wraps one pinned slot: records where it sits, opens on tap, lifts on long-press, and glides when the order changes. */
@@ -647,12 +733,12 @@ private fun PinItem(pin: Pin, index: Int, ctl: PinCtl, modifier: Modifier = Modi
             .pointerInput(id) {
                 detectTapGestures(onTap = { open(id) }, onLongPress = { at ->
                     val h = dh.home; val c = coords[0]
-                    if (h != null && c != null) runCatching { lift(id, h.localPositionOf(c, at)) }
+                    if (h != null && c != null) runCatching { lift(id, h.localPositionOf(c, at), h.localBoundingBoxOf(c).center) }
                 })
             }
             .graphicsLayer {
                 translationX = shift.value.x; translationY = shift.value.y
-                alpha = if (placeholder) 0.35f else 1f
+                alpha = if (placeholder) 0.28f else 1f
             },
     ) { content() }
 }
@@ -692,7 +778,14 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
     val pins = all.take(limit)
     val dh = ctl.dh
     DisposableEffect(Unit) { onDispose { dh.zone = null; dh.area = null } }
-    Box(Modifier.fillMaxWidth().onGloballyPositioned { c -> dh.area = c; dh.home?.let { h -> runCatching { dh.zone = h.localBoundingBoxOf(c) } } }) {
+    val glow by androidx.compose.animation.core.animateFloatAsState(if (ctl.dropActive) 1f else 0f, tween(160), label = "drop")
+    Box(
+        Modifier.fillMaxWidth()
+            .onGloballyPositioned { c -> dh.area = c; dh.home?.let { h -> runCatching { dh.zone = h.localBoundingBoxOf(c) } } }
+            .graphicsLayer { translationX = ctl.shake * density; val k = 1f + 0.015f * glow; scaleX = k; scaleY = k }
+            // Lights up while a dragged chat is over it.
+            .then(if (glow > 0.01f) Modifier.border(2.dp, LocalTok.current.p.copy(alpha = 0.55f * glow), RoundedCornerShape(30.dp)) else Modifier),
+    ) {
     when (layout) {
         "Large", "Grid" -> {
             val cols = if (layout == "Large") 3 else 4

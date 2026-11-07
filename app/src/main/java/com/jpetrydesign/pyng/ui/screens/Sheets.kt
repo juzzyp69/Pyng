@@ -148,7 +148,8 @@ fun MessageMenu(
             val rc = lastRow
             val a = lastAnchor
             Box(
-                Modifier.heightIn(max = 300.dp).clip(RoundedCornerShape(20.dp))
+                Modifier.graphicsLayer { val s = 1f + 0.035f * k.value; scaleX = s; scaleY = s; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (me) 1f else 0f, 0.5f) }
+                    .heightIn(max = 300.dp).clip(RoundedCornerShape(20.dp))
                     .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {},
                 contentAlignment = if (me) Alignment.TopEnd else Alignment.TopStart,
             ) {

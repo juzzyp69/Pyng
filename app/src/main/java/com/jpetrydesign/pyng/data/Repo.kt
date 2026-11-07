@@ -80,20 +80,36 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         convs[convId]?.let { c -> convs[convId] = if (name.isBlank()) c.copy(name = rawNames[convId] ?: c.name) else c.copy(name = name.trim()) }
         saveCacheSoon(); scope.launch { com.jpetrydesign.pyng.widget.Widgets.refresh(app) }
     }
-    suspend fun setGroupPhoto(convId: String, uri: Uri?) {
-        if (uri == null) { prefs.setOpt("gphoto:$convId", ""); return }
-        val f = withContext(Dispatchers.IO) {
-            runCatching {
-                val src = app.contentResolver.openInputStream(uri)!!.use { android.graphics.BitmapFactory.decodeStream(it) }
-                val side = minOf(src.width, src.height)
-                val sq = android.graphics.Bitmap.createBitmap(src, (src.width - side) / 2, (src.height - side) / 2, side, side)
-                val out = android.graphics.Bitmap.createScaledBitmap(sq, minOf(side, 512), minOf(side, 512), true)
-                val file = File(File(app.filesDir, "group-photos").apply { mkdirs() }, "$convId-${System.currentTimeMillis()}.jpg")
-                file.outputStream().use { out.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, it) }
-                file.absolutePath
-            }.getOrNull()
+    /** A photo waiting in the crop screen (group, contact or profile photo). */
+    var crop by mutableStateOf<com.jpetrydesign.pyng.ui.screens.CropRequest?>(null)
+
+    /** Saves a cropped photo and returns where it went (a new file each time, so it never shows stale). */
+    suspend fun savePhoto(name: String, bmp: android.graphics.Bitmap): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val dir = File(app.filesDir, "photos").apply { mkdirs() }
+            dir.listFiles { f -> f.name.startsWith("$name-") }?.forEach { it.delete() }
+            val file = File(dir, "$name-${System.currentTimeMillis()}.jpg")
+            file.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, it) }
+            file.absolutePath
+        }.getOrNull()
+    }
+
+    /** Opens the crop screen for a picked photo, then saves it as a group, contact or profile photo. */
+    fun cropThen(uri: Uri, title: String, name: String, done: (String) -> Unit) {
+        crop = com.jpetrydesign.pyng.ui.screens.CropRequest(uri, title) { bmp ->
+            scope.launch { val f = savePhoto(name, bmp); if (f != null) done(f) else toast("Couldn't use that photo") }
         }
-        if (f != null) { prefs.setOpt("gphoto:$convId", f); toast("Group photo updated") } else toast("Couldn't use that photo")
+    }
+
+    fun setGroupPhoto(convId: String, uri: Uri?) {
+        if (uri == null) { prefs.setOpt("gphoto:$convId", ""); return }
+        cropThen(uri, "Group photo", "group-" + convId.filter(Char::isLetterOrDigit)) { f -> prefs.setOpt("gphoto:$convId", f); toast("Group photo updated") }
+    }
+
+    /** A photo for someone that shows in Pyng only (their contact card stays as it is). */
+    fun setContactPhoto(personId: String, uri: Uri?) {
+        if (uri == null) { prefs.setOpt("cphoto:$personId", ""); toast("Photo removed"); return }
+        cropThen(uri, "Contact photo", "contact-" + personId.filter(Char::isLetterOrDigit)) { f -> prefs.setOpt("cphoto:$personId", f); toast("Photo updated") }
     }
 
     var onIncoming: ((Conv, Msg) -> Unit)? = null

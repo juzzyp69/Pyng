@@ -2,5 +2,5 @@
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@drawable/icon_glass_bg" />
     <foreground android:drawable="@drawable/icon_glass_fg" />
-    <monochrome android:drawable="@drawable/icon_glass_fg" />
+    <monochrome android:drawable="@drawable/icon_themed" />
 </adaptive-icon>

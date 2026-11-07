@@ -29,7 +29,7 @@ fun whoOf(c: Conv, repo: Repo, t: Tok): Who {
     val show = repo.prefs.state.showPhotos == "Show"
     val photo = if (!show) null
         else if (c.group) repo.prefs.state.opt("gphoto:" + c.id).takeIf { it.isNotBlank() && java.io.File(it).exists() } ?: c.groupPhoto.takeIf { it.startsWith("http") }
-        else repo.avatars[c.avatarId]?.takeIf { it.isNotEmpty() }
+        else repo.prefs.state.opt("cphoto:" + c.avatarId).takeIf { it.isNotBlank() && java.io.File(it).exists() } ?: repo.avatars[c.avatarId]?.takeIf { it.isNotEmpty() }
     val tinted = c.group || c.business
     return Who(photo, initialsOf(c.title), if (tinted) t.tone else t.neutral, if (tinted) t.p else t.neutralInk)
 }
@@ -39,7 +39,7 @@ fun whoOf(p: Person): Who {
     val repo = LocalRepo.current
     val t = LocalTok.current
     val show = repo.prefs.state.showPhotos == "Show"
-    val photo = if (show) repo.avatars[p.id]?.takeIf { it.isNotEmpty() } else null
+    val photo = if (show) repo.prefs.state.opt("cphoto:" + p.id).takeIf { it.isNotBlank() && java.io.File(it).exists() } ?: repo.avatars[p.id]?.takeIf { it.isNotEmpty() } else null
     return Who(photo, initialsOf(p.display), t.tone, t.p)
 }
 
@@ -71,10 +71,10 @@ fun listTime(ms: Long): String {
 fun stamp(ms: Long): String {
     val d = dayDiff(ms)
     return when {
-        d <= 0 -> "Today " + clock(ms)
-        d == 1 -> "Yesterday " + clock(ms)
-        d < 7 -> SimpleDateFormat("EEEE", Locale.getDefault()).format(Date(ms)) + " " + clock(ms)
-        else -> SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()).format(Date(ms))
+        d <= 0 -> "Today • " + clock(ms)
+        d == 1 -> "Yesterday • " + clock(ms)
+        d < 7 -> SimpleDateFormat("EEEE", Locale.getDefault()).format(Date(ms)) + " • " + clock(ms)
+        else -> SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(ms)) + " • " + clock(ms)
     }
 }
 

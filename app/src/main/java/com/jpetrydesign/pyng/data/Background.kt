@@ -105,7 +105,7 @@ object Notifier {
         list += senderName to m
         while (list.size > 7) list.removeAt(0)
 
-        val avatarPath = if (conv.group) repo.prefs.state.opt("gphoto:" + conv.id) else repo.avatars[conv.avatarId].orEmpty()
+        val avatarPath = if (conv.group) repo.prefs.state.opt("gphoto:" + conv.id) else repo.prefs.state.opt("cphoto:" + conv.avatarId).ifBlank { repo.avatars[conv.avatarId].orEmpty() }
         val icon = circle(loadBitmap(ctx, avatarPath))
         val me = NPerson.Builder().setName("You").build()
         val style = NotificationCompat.MessagingStyle(me).setConversationTitle(if (conv.group) conv.title else null).setGroupConversation(conv.group)

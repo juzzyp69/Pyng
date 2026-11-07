@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -344,8 +345,13 @@ object AppIcons {
 
 @Composable
 private fun AppIconPreview(ic: AppIcons.Ic) {
-    Box(Modifier.size(56.dp).shadow(6.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp)).background(ic.bg), contentAlignment = Alignment.Center) {
-        Ico(Icons.message, ic.fg, 28.dp, 2.2f)
+    // The real launcher artwork, drawn the way a round icon mask shows it.
+    val key = ic.alias.removePrefix(".Icon").lowercase()
+    val bgRes = when (key) { "duotone" -> com.jpetrydesign.pyng.R.drawable.icon_duotone_bg; "soft" -> com.jpetrydesign.pyng.R.drawable.icon_soft_bg; "mono" -> com.jpetrydesign.pyng.R.drawable.icon_mono_bg; "glass" -> com.jpetrydesign.pyng.R.drawable.icon_glass_bg; else -> com.jpetrydesign.pyng.R.drawable.icon_classic_bg }
+    val fgRes = when (key) { "duotone" -> com.jpetrydesign.pyng.R.drawable.icon_duotone_fg; "soft" -> com.jpetrydesign.pyng.R.drawable.icon_soft_fg; "mono" -> com.jpetrydesign.pyng.R.drawable.icon_mono_fg; "glass" -> com.jpetrydesign.pyng.R.drawable.icon_glass_fg; else -> com.jpetrydesign.pyng.R.drawable.icon_classic_fg }
+    Box(Modifier.size(58.dp).shadow(6.dp, CircleShape).clip(CircleShape), contentAlignment = Alignment.Center) {
+        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(bgRes), null, modifier = Modifier.requiredSize(58.dp * 1.5f))
+        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(fgRes), null, modifier = Modifier.requiredSize(58.dp * 1.5f))
     }
 }
 

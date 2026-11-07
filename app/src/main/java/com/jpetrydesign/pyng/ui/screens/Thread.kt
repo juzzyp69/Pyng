@@ -101,6 +101,7 @@ import com.jpetrydesign.pyng.ui.kit.press
 import com.jpetrydesign.pyng.ui.theme.Geist
 import com.jpetrydesign.pyng.ui.theme.LocalTok
 import com.jpetrydesign.pyng.ui.theme.Palettes
+import com.jpetrydesign.pyng.ui.theme.withCustom
 import com.jpetrydesign.pyng.ui.theme.Tok
 import com.jpetrydesign.pyng.ui.theme.tok
 import dev.chrisbanes.haze.HazeState
@@ -116,9 +117,12 @@ fun chatTok(convId: String): Tok {
     val app = LocalTok.current
     val p = repo.prefs.state
     val look = p.looks[convId]
-    if (look == null || look.key.isEmpty()) return app
-    val pal = if (look.key == "chat-custom") Palettes.chatCustom(look) else Palettes.byKey(look.key, p.c1, p.c2)
-    return remember(pal, app.dark, app.solid) { tok(pal, app.dark, app.solid, p.on("highContrast")) }
+    if (look == null || (look.key.isEmpty() && look.custom.isEmpty())) return app
+    val base = if (look.key.isEmpty()) app else {
+        val pal = if (look.key == "chat-custom") Palettes.chatCustom(look) else Palettes.byKey(look.key, p.c1, p.c2)
+        remember(pal, app.dark, app.solid) { tok(pal, app.dark, app.solid, p.on("highContrast")) }
+    }
+    return remember(base, look.custom) { base.withCustom(look.custom) }
 }
 
 fun openFile(ctx: Context, path: String, mime: String) {
@@ -205,7 +209,8 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     }
 
     // Messages from Google Messages, plus your scheduled ones shown faded at the end.
-    val msgs = repo.msgs[convId].orEmpty() + p.scheduled.filter { it.convId == convId }.sortedBy { it.at }.map { s ->
+    // Empty messages (nothing to show) are skipped, so they don't leave blank gaps.
+    val msgs = repo.msgs[convId].orEmpty().filter { it.isSys || it.text.isNotBlank() || it.media.isNotEmpty() } + p.scheduled.filter { it.convId == convId }.sortedBy { it.at }.map { s ->
         Msg("", "sched-" + s.id, convId, "", "", "", true, "OUTGOING_SCHEDULED", s.label, s.text, emptyList(), s.at, emptyList(), "", 0, "text")
     }
     val loaded = repo.msgs.containsKey(convId)
@@ -252,7 +257,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
 
     // Pinch the chat to make bubbles bigger or smaller; it sticks for every chat.
     var zoom by remember { mutableStateOf(p.opt("chatZoom").toFloatOrNull() ?: 1f) }
-    val fontSize = 15.5f * zoom
+    val fontSize = 16f * zoom
     val shape = when (p.bubble) { "Soft" -> 14.dp to 4.dp; "Pill" -> 22.dp to 22.dp; else -> 20.dp to 6.dp }
     val wall = p.looks[convId]?.wall?.ifEmpty { null } ?: p.defWall
     val selecting = selected.isNotEmpty()
@@ -322,7 +327,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                         val newerGap = newer != null && (newer.ts - m.ts > 60 * 60_000L || dayOf(newer.ts) != dayOf(m.ts))
                         val nextSame = !newerGap && same(newer, m)
                         Column {
-                            if (gap && m.ts > 0) T(stamp(m.ts), size = 11.5.sp, weight = FontWeight.SemiBold, color = t.soft, modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 6.dp), align = androidx.compose.ui.text.style.TextAlign.Center)
+                            if (gap && m.ts > 0) T(stamp(m.ts), size = 12.sp, weight = FontWeight.Medium, color = t.soft, modifier = Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 8.dp), align = androidx.compose.ui.text.style.TextAlign.Center)
                             if (m.isSys) {
                                 Box(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 4.dp), contentAlignment = Alignment.Center) {
                                     T(m.text.ifEmpty { sysText(m.status) }, size = 12.sp, weight = FontWeight.Medium, color = t.soft, align = androidx.compose.ui.text.style.TextAlign.Center,
