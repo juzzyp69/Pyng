@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.withLink
 import coil.compose.AsyncImage
 import com.jpetrydesign.pyng.data.MediaRef
 import com.jpetrydesign.pyng.data.Msg
