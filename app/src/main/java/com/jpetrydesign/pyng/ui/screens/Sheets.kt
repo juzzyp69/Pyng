@@ -345,7 +345,7 @@ fun SelectTextSheet(m: Msg?, onDismiss: () -> Unit) {
         Spacer(Modifier.height(12.dp))
         androidx.compose.foundation.layout.Box(
             Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(22.dp)).background(t.surface)
-                .heightIn(max = 420.dp).scrollY().padding(horizontal = 18.dp, vertical = 16.dp),
+                .heightIn(max = 420.dp).verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 18.dp, vertical = 16.dp),
         ) {
             androidx.compose.foundation.text.selection.SelectionContainer {
                 androidx.compose.material3.Text(
@@ -358,5 +358,3 @@ fun SelectTextSheet(m: Msg?, onDismiss: () -> Unit) {
         com.jpetrydesign.pyng.ui.kit.PillButton("Copy all", { copy(ctx, cur.text); onDismiss() }, Modifier.padding(horizontal = 16.dp).fillMaxWidth(), primary = false, height = 50.dp)
     }
 }
-
-private fun Modifier.scrollY(): Modifier = androidx.compose.ui.composed { this.verticalScroll(androidx.compose.foundation.rememberScrollState()) }
