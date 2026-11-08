@@ -49,6 +49,7 @@ type Messenger struct {
 func NewMessenger(dataDir string, listener Listener) *Messenger {
 	_ = os.MkdirAll(dataDir, 0o700)
 	m := &Messenger{dir: dataDir, listener: listener, convs: map[string]*gmproto.Conversation{}}
+	inlineDir = m.cacheDir("media")
 	logPath := filepath.Join(dataDir, "engine.log")
 	if st, err := os.Stat(logPath); err == nil && st.Size() > 2<<20 {
 		_ = os.Rename(logPath, logPath+".old")

@@ -46,12 +46,10 @@ import kotlin.math.min
 import kotlin.math.sin
 
 /*
- * The send glide. When you tap send, the message box becomes the bubble: it narrows from the left,
- * glides up into place on soft springs and stretches a touch while it moves. Your words ride along
- * inside, turning from the box's ink to the bubble's ink. It settles with a small jelly wobble, a
- * faint shine passes through it from right to left, and the real bubble takes over.
- *
- * Every color comes from the chat's own bubble color, so it suits any theme or custom color.
+ * The send jelly. When you tap send, the message box becomes the bubble: it narrows, glides up
+ * into place on soft springs and stretches a touch while it moves, with your words riding inside.
+ * The moment it arrives, the real bubble takes over and does one small jelly squish, so there's
+ * never a second copy on screen. Colors come from the chat's own bubble, so it suits any theme.
  */
 
 /** Where things are on screen, and what's currently flying. Shared by the chat screen, composer and bubbles. */
@@ -63,6 +61,9 @@ class SendFx {
     var run by mutableStateOf<MeltRun?>(null)
     var hideTmp by mutableStateOf<String?>(null)
     var bubbleAlpha by mutableFloatStateOf(1f)
+    /** The landing squish, applied to the real bubble. */
+    var bubbleScaleX by mutableFloatStateOf(1f)
+    var bubbleScaleY by mutableFloatStateOf(1f)
     /** True for a moment after sending, so the box's placeholder doesn't show through the flying bubble. */
     var quiet by mutableStateOf(false)
     // The send button stays put now; kept so the composer's hookup doesn't change.
@@ -71,11 +72,14 @@ class SendFx {
 
     /** The new bubble stays hidden until the glide lands on it. */
     fun alphaFor(m: Msg): Float = if (m.tmpId.isNotEmpty() && m.tmpId == hideTmp) bubbleAlpha else 1f
+    fun scaleXFor(m: Msg): Float = if (m.tmpId.isNotEmpty() && m.tmpId == hideTmp) bubbleScaleX else 1f
+    fun scaleYFor(m: Msg): Float = if (m.tmpId.isNotEmpty() && m.tmpId == hideTmp) bubbleScaleY else 1f
     fun isTarget(m: Msg) = m.tmpId.isNotEmpty() && m.tmpId == run?.tmpId
 
     fun start(r: MeltRun) {
         bubble = null
         bubbleAlpha = 0f
+        bubbleScaleX = 1f; bubbleScaleY = 1f
         hideTmp = r.tmpId
         quiet = true
         run = r
@@ -86,6 +90,7 @@ class SendFx {
         hideTmp = null
         quiet = false
         bubbleAlpha = 1f
+        bubbleScaleX = 1f; bubbleScaleY = 1f
         btnScale = 1f
         btnAlpha = 1f
     }
@@ -98,8 +103,6 @@ val LocalSendFx = compositionLocalOf<SendFx?> { null }
 // ---------- motion ----------
 
 private const val SUB = 1f / 240f // fixed steps: identical motion at 60, 90 or 120 Hz
-private const val SHINE_DUR = 0.32f
-private const val SHINE_AMT = 0.6f
 
 /** A spring described like Apple's: how long it takes to respond, and how much it bounces. */
 private class Sp(start: Float, response: Float, damping: Float) {
@@ -122,32 +125,36 @@ private class Glide(run: MeltRun, val d: Float) {
     val F = run.field
     val T0 = run.textBox.topLeft
     val L = Sp(F.left, 0.24f, 0.95f)
-    val R = Sp(F.right, 0.36f, 0.92f)
-    val T = Sp(F.top, 0.36f, 0.88f)
-    val H = Sp(F.height, 0.3f, 0.95f)
+    val R = Sp(F.right, 0.34f, 0.92f)
+    val T = Sp(F.top, 0.34f, 0.9f)
+    val H = Sp(F.height, 0.28f, 0.95f)
     val SX = Sp(1f, 0.3f, 0.42f)
     val SY = Sp(1f, 0.3f, 0.42f)
     var sx = 1f
     var sy = 1f
     var time = 0f
-    var landAt = -1f
+    /** Set once the flying bubble reaches its spot and the real one takes over. */
+    var landed = false
     var done = false
 
     fun step(dt: Float, t: Float, B: Rect) {
         time = t
         L.to = B.left; R.to = B.right; T.to = B.top; H.to = B.height
-        L.step(dt); R.step(dt); T.step(dt); H.step(dt); SX.step(dt); SY.step(dt)
-        // A soft stretch while it moves fast.
-        val v = min(0.1f, abs(T.vel) / (9000f * d)); sy = 1f + v; sx = 1f - v * 0.6f
-        // A small jelly wobble as it lands.
-        if (landAt < 0f && abs(T.v - T.to) < 4f * d && t > 0.08f) { landAt = t; SX.vel = 1.1f; SY.vel = -1.1f }
-        val eps = 0.3f * d
-        done = L.still(eps) && R.still(eps) && T.still(eps) && H.still(eps) && SX.still(0.002f) && SY.still(0.002f) &&
-            landAt > 0f && t - landAt > SHINE_DUR && t > 0.2f
+        if (!landed) {
+            L.step(dt); R.step(dt); T.step(dt); H.step(dt)
+            // A soft stretch while it moves fast.
+            val v = min(0.08f, abs(T.vel) / (9000f * d)); sy = 1f + v; sx = 1f - v * 0.6f
+            val near = 2.5f * d
+            if (t > 0.12f && abs(T.v - T.to) < near && abs(L.v - L.to) < near && abs(R.v - R.to) < near && abs(H.v - H.to) < near) {
+                landed = true
+                // One small squish on the real bubble: a touch wider and shorter, then settle.
+                SX.vel = 1.1f; SY.vel = -1.1f
+            }
+        } else {
+            SX.step(dt); SY.step(dt)
+            done = SX.still(0.002f) && SY.still(0.002f)
+        }
     }
-
-    /** 0 → 1 through the landing shine, or -1 before it starts. */
-    val shine get() = if (landAt < 0f) -1f else ((time - landAt) / SHINE_DUR).coerceIn(0f, 1f)
 }
 
 // ---------- drawing ----------
@@ -179,7 +186,6 @@ fun SendMeltLayer(fx: SendFx, t: Tok, fontSize: Float, bold: Boolean, corner: Fl
         var waited = 0f
         var carry = 0f
         var t = 0f
-        var gone = false
         while (true) {
             val now = withFrameNanos { it }
             val dt = ((now - last) / 1e9f).coerceAtMost(0.1f); last = now
@@ -187,7 +193,7 @@ fun SendMeltLayer(fx: SendFx, t: Tok, fontSize: Float, bold: Boolean, corner: Fl
             if (B == null && t == 0f) {
                 // Waiting a frame or two for the new bubble to be laid out.
                 waited += dt
-                if (waited > 0.45f) { gone = true; break } // it never showed (scrolled away, or an emoji-only message)
+                if (waited > 0.45f) break // it never showed (scrolled away, or an emoji-only message)
                 frame++
                 continue
             }
@@ -198,79 +204,33 @@ fun SendMeltLayer(fx: SendFx, t: Tok, fontSize: Float, bold: Boolean, corner: Fl
             carry += dt
             val target = B ?: Rect(glide.L.to, glide.T.to, glide.R.to, glide.T.to + glide.H.to)
             while (carry >= SUB) { carry -= SUB; t += SUB; glide.step(SUB, t, target) }
-            if (t > 0.22f) fx.quiet = false
+            if (t > 0.2f) fx.quiet = false
+            if (glide.landed) {
+                // Swap in the real bubble in the same frame the flying one disappears.
+                layerAlpha = 0f
+                fx.bubbleAlpha = 1f
+                fx.bubbleScaleX = glide.SX.v
+                fx.bubbleScaleY = glide.SY.v
+            }
             frame++
-            if (glide.done || t > 2f) break
-        }
-        // Hand over to the real bubble with a very short crossfade, so there's no pop.
-        val start = withFrameNanos { it }
-        val fade = if (gone) 0.12f else 0.09f
-        while (true) {
-            val now = withFrameNanos { it }
-            val k = ((now - start) / 1e9f / fade).coerceIn(0f, 1f)
-            layerAlpha = 1f - k
-            fx.bubbleAlpha = k
-            if (k >= 1f) break
+            if (glide.done || t > 1.6f) break
         }
         fx.finish()
     }
 
-    val accent = t.outFlat
-    val light = accent.luminance() > 0.6f
-    // On a pale bubble a white shine wouldn't show, so the light is a deeper shade of the bubble itself.
-    val glowColor = if (light) lerpColor(accent, Color.Black, 0.28f) else lerpColor(accent, Color.White, 0.25f)
-    val shineColor = if (light) lerpColor(accent, Color.Black, 0.22f).copy(alpha = 0.3f) else Color.White.copy(alpha = 0.26f)
-
     Canvas(Modifier.fillMaxSize().graphicsLayer { alpha = layerAlpha }) {
         if (frame < 0) return@Canvas // reading frame redraws every frame
         val g = glide
+        if (g.landed) return@Canvas
         val top = g.T.v
         val w = max(1f, g.R.v - g.L.v)
         val h = max(1f, g.H.v)
         val tint = ease(g.time / 0.13f)
-        val kx = g.sx * g.SX.v
-        val ky = g.sy * g.SY.v
         val r = min(h / 2f, lerp(24f * d, corner * d, g.T.prog(g.F.top)))
         val pivot = Offset(g.L.v + w / 2f, top + h / 2f)
-        scale(kx, ky, pivot) {
-            val k = g.shine
-            val fade = if (k <= 0f || k >= 1f) 0f else sin(PI.toFloat() * k)
-            val x = 0.94f - ease(k) * 0.88f // the light travels right to left
-            // A thin glow hugging the edge.
-            if (fade > 0f) {
-                val pad = 6f * d
-                val gl = g.L.v - pad; val gt = top - pad; val gw = w + pad * 2; val gh = h + pad * 2
-                val edge = Path().apply { addRoundRect(RoundRect(gl, gt, gl + gw, gt + gh, CornerRadius(r + pad))) }
-                val rx = gw * 0.26f; val ry = gh * 0.7f
-                val c = Offset(gl + gw * x, gt + gh / 2f)
-                clipPath(edge) {
-                    scale(1f, ry / rx, c) {
-                        drawCircle(
-                            Brush.radialGradient(0f to glowColor, 0.72f to glowColor.copy(alpha = 0f), center = c, radius = rx),
-                            radius = rx, center = c, alpha = fade * 0.38f * SHINE_AMT,
-                        )
-                    }
-                }
-            }
-            // The bubble itself.
+        scale(g.sx, g.sy, pivot) {
             drawRoundRect(t.outBg, topLeft = Offset(g.L.v, top), size = Size(w, h), cornerRadius = CornerRadius(r), alpha = lerp(0.22f, 1f, tint))
-            // A fine shine passing through it.
-            if (fade > 0f) {
-                val body = Path().apply { addRoundRect(RoundRect(g.L.v, top, g.L.v + w, top + h, CornerRadius(r))) }
-                val span0 = g.L.v - w * 0.5f
-                fun at(f: Float) = ((f + 0.5f) / 2f).coerceIn(0f, 1f)
-                val tilt = w * 0.09f
-                clipPath(body) {
-                    drawRect(
-                        Brush.linearGradient(
-                            at(x - 0.16f) to Color.Transparent, at(x) to shineColor, at(x + 0.16f) to Color.Transparent,
-                            start = Offset(span0, top + h / 2f - tilt), end = Offset(span0 + w * 2f, top + h / 2f + tilt),
-                        ),
-                        topLeft = Offset(g.L.v, top), size = Size(w, h), alpha = fade * SHINE_AMT,
-                    )
-                }
-            }
-            // Your words: box ink fading out as the bubble's ink fades in.
+            // Your words: the box's ink fading out as the bubble's ink fades in.
             val tx = g.L.v + lerp(g.T0.x - g.F.left, padL, g.L.prog(g.F.left))
             val ty = top + lerp(g.T0.y - g.F.top, padT, g.T.prog(g.F.top))
             val dryA = 1f - ease(g.time / 0.1f)

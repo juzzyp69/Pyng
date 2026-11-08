@@ -20,6 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import java.io.File
@@ -393,50 +394,79 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     }
 
     /** Up to 3 downloads at once; the newest messages ask first, so they load first. */
-    private val dlGate = kotlinx.coroutines.sync.Semaphore(3)
+    private val dlGate = kotlinx.coroutines.sync.Semaphore(4)
 
     /**
      * Downloads an attachment. Waits for the connection to be ready first, gives each try a time
      * limit, and retries twice. If it still fails, the bubble shows a retry button instead of
      * spinning forever; [manual] is a tap on that button.
      */
+    /**
+     * Gets an attachment onto the phone. Mirrors how the Google Messages bridge does it: download
+     * the full file; if only a small preview exists (or the full one fails), show the preview and
+     * ask your phone to upload the full-size file, then try again once it has.
+     */
     fun ensureMedia(ref: MediaRef, thumb: Boolean = false, manual: Boolean = false) {
-        if (demo) return
-        val id = if (thumb && ref.thumbId.isNotEmpty()) ref.thumbId else ref.id
-        val key = if (thumb && ref.thumbId.isNotEmpty()) ref.thumbKey else ref.key
+        if (demo || ref.localPath.isNotEmpty()) return
+        if (!thumb && ref.id.isEmpty()) {
+            // Only a preview so far.
+            if (ref.thumbId.isNotEmpty()) { ensureMedia(ref, thumb = true, manual = manual); askFull(ref) }
+            return
+        }
+        val id = if (thumb) ref.thumbId else ref.id
+        val key = if (thumb) ref.thumbKey else ref.key
         if (id.isEmpty() || media.containsKey(id) || mediaBusy[id] == true) return
         if (mediaFailed[id] == true && !manual) return
         mediaFailed.remove(id)
         mediaBusy[id] = true
         scope.launch {
-            dlGate.acquire()
             try {
-                kotlinx.coroutines.withTimeoutOrNull(20_000) { while (!hub.engine.isConnected) delay(300) }
-                var tries = 0
-                while (true) {
-                    val r = kotlinx.coroutines.withTimeoutOrNull(45_000) { hub.io { it.downloadMedia(id, key, if (thumb) "jpg" else ref.ext) } }
-                        ?: Result.failure(Exception("timed out"))
-                    if (r.isSuccess && r.getOrNull().orEmpty().isNotEmpty()) { media[id] = r.getOrThrow(); break }
-                    tries++
-                    android.util.Log.w("Pyng", "Attachment download failed (try " + tries + "): " + r.exceptionOrNull()?.message)
-                    if (tries >= 3) {
-                        mediaFailed[id] = true
-                        if (manual) toast("Couldn't download it. Check your connection and try again.")
-                        break
+                dlGate.withPermit {
+                    kotlinx.coroutines.withTimeoutOrNull(15_000) { while (!hub.engine.isConnected) delay(300) }
+                    var tries = 0
+                    while (true) {
+                        val r = hub.io { it.downloadMedia(id, key, if (thumb) "jpg" else ref.ext) }
+                        val path = r.getOrNull().orEmpty()
+                        if (path.isNotEmpty()) { media[id] = path; break }
+                        tries++
+                        val why = r.exceptionOrNull()?.message.orEmpty()
+                        // A 4xx means Google doesn't have the file; trying again right away won't help.
+                        if (tries >= 2 || Regex("answered 4\\d\\d").containsMatchIn(why)) {
+                            mediaFailed[id] = true
+                            hub.io { it.logNote("Couldn't get " + (if (thumb) "preview" else ref.kindLabel.lowercase()) + " after " + tries + " tries: " + why.take(160)) }
+                            if (!thumb) {
+                                if (ref.thumbId.isNotEmpty()) ensureMedia(ref, thumb = true)
+                                askFull(ref)
+                            }
+                            if (manual) toast("Couldn't download it yet. Pyng asked your phone for it, so try again in a moment.")
+                            break
+                        }
+                        delay(1500)
                     }
-                    delay(if (tries == 1) 1200 else 3000)
                 }
             } finally {
-                dlGate.release()
                 mediaBusy.remove(id)
             }
         }
     }
 
-    /**
-     * While an open chat has a picture still on its way, keep asking Google for the latest copy
-     * (like Google Messages does when you look at it) until it arrives. Runs while the chat is open.
-     */
+    private val fullAsked = HashSet<String>()
+
+    /** Asks your phone to upload the full-size file, then retries the download a couple of times. */
+    private fun askFull(ref: MediaRef) {
+        if (ref.msgId.isEmpty() || ref.part.isEmpty() || !fullAsked.add(ref.msgId + "|" + ref.part)) return
+        scope.launch {
+            val ok = hub.io { it.requestFullMedia(ref.msgId, ref.part) }.isSuccess
+            if (!ok || ref.id.isEmpty()) return@launch // a new id arrives with the message update
+            for (wait in listOf(6_000L, 20_000L)) {
+                delay(wait)
+                if (media.containsKey(ref.id)) return@launch
+                mediaFailed.remove(ref.id)
+                ensureMedia(ref)
+            }
+        }
+    }
+
     suspend fun watchPending(convId: String) {
         repeat(40) {
             delay(3000)

@@ -292,7 +292,8 @@ private fun ZoomPage(ref: MediaRef, current: Boolean, dismissY: Float, onZoomed:
             .clip(RoundedCornerShape(if (scale > 1.01f) 0.dp else 18.dp))
         if (show.isNotEmpty()) AsyncImage(File(show), "Photo", contentScale = if (ratio > 0f) ContentScale.Crop else ContentScale.Fit, modifier = imgMod)
         else Box(Modifier.size(220.dp).clip(RoundedCornerShape(18.dp)).background(t.tone))
-        if (full.isEmpty()) CircularProgressIndicator(Modifier.size(28.dp), color = t.p, strokeWidth = 2.dp)
+        if (full.isEmpty() && repo.mediaBusy[ref.id] == true) CircularProgressIndicator(Modifier.size(28.dp), color = t.p, strokeWidth = 2.dp)
+        else if (full.isEmpty() && show.isEmpty()) T("Asking your phone for this photo…", size = 13.sp, color = t.soft)
     }
 }
 

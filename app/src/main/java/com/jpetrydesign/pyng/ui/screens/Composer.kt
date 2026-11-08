@@ -306,7 +306,7 @@ fun Composer(
                                     schedule != null -> "Scheduled message"
                                     conv?.rcs == true -> "RCS Message"
                                     else -> "SMS Message"
-                                }, size = fontSize.sp, color = t.ink.copy(alpha = 0.5f), maxLines = 1, modifier = Modifier.graphicsLayer { alpha = phA },
+                                }, size = fontSize.sp, color = t.ink.copy(alpha = 0.5f), maxLines = 1, modifier = Modifier.graphicsLayer { alpha = if (fx?.quiet == true) 0f else phA },
                             )
                             BasicTextField(
                                 draft, onDraft,

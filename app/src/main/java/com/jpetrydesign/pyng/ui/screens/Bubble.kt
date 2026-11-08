@@ -364,7 +364,7 @@ private fun BubbleBody(m: Msg, x: RowCtx, shape: RoundedCornerShape, jumbo: Int,
             Column(
                 Modifier
                     .then(if (fx != null && fx.isTarget(m)) Modifier.onGloballyPositioned { fx.bubble = it } else Modifier)
-                    .then(if (fx != null) Modifier.graphicsLayer { alpha = fx.alphaFor(m) } else Modifier)
+                    .then(if (fx != null) Modifier.graphicsLayer { alpha = fx.alphaFor(m); scaleX = fx.scaleXFor(m); scaleY = fx.scaleYFor(m) } else Modifier)
                     .clip(shape).background(bg).padding(horizontal = 16.dp, vertical = 11.dp).widthIn(min = 24.dp),
             ) {
                 if (x.quote != null) {
@@ -407,13 +407,15 @@ private fun MediaView(m: Msg, ref: MediaRef, shape: RoundedCornerShape, me: Bool
     val full = ref.localPath.ifEmpty { repo.media[ref.id].orEmpty() }
     val thumb = repo.media[ref.thumbId].orEmpty()
     val auto = remember { repo.autoDownloadAllowed() }
-    LaunchedEffect(ref.id, repo.connEpoch.intValue) {
+    LaunchedEffect(ref.id, ref.thumbId, repo.connEpoch.intValue) {
         if (ref.localPath.isEmpty()) {
-            if ((ref.isImage || ref.isAudio) && auto) repo.ensureMedia(ref)
+            // The small preview first (it's quick), then the full file.
             if ((ref.isVideo || ref.isImage) && ref.thumbId.isNotEmpty()) repo.ensureMedia(ref, thumb = true)
+            if ((ref.isImage || ref.isAudio) && auto) repo.ensureMedia(ref)
         }
     }
-    val busy = repo.mediaBusy[ref.id] == true
+    // Only spin while something is actually downloading.
+    val busy = repo.mediaBusy[ref.id] == true || (ref.id.isEmpty() && repo.mediaBusy[ref.thumbId] == true)
     val failed = repo.mediaFailed[ref.id] == true && !busy
     when {
         ref.isImage || ref.isVideo -> {
@@ -425,7 +427,7 @@ private fun MediaView(m: Msg, ref: MediaRef, shape: RoundedCornerShape, me: Bool
             val clear = ref.isImage && (ref.mime.contains("png") || ref.mime.contains("gif") || ref.mime.contains("webp"))
             Box(
                 Modifier.size(w, h).clip(shape).then(if (show.isEmpty() || !clear) Modifier.background(if (show.isEmpty()) t.tone else Color.Transparent) else Modifier)
-                    .clickable { a.onOpenMedia(ref) },
+                    .clickable { if (ref.isImage && full.isEmpty() && show.isEmpty()) repo.ensureMedia(ref, manual = true) else a.onOpenMedia(ref) },
                 contentAlignment = Alignment.Center,
             ) {
                 if (show.isNotEmpty()) AsyncImage(model = File(show), contentDescription = if (ref.isVideo) "Video" else "Photo", contentScale = if (clear) ContentScale.Fit else ContentScale.Crop, modifier = Modifier.fillMaxSize())
@@ -435,13 +437,14 @@ private fun MediaView(m: Msg, ref: MediaRef, shape: RoundedCornerShape, me: Bool
                         if (busy) CircularProgressIndicator(Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp) else Ico(Icons.play, Color.White, 24.dp, 1f, fill = Color.White)
                     }
                 } else if (full.isEmpty()) {
-                    if (failed) Box(Modifier.size(48.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f)).clickable { repo.ensureMedia(ref, manual = true) }, contentAlignment = Alignment.Center) {
-                        Ico(Icons.refresh, Color.White, 22.dp, 2f)
+                    Box(Modifier.size(48.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.42f)).clickable(enabled = !busy) { repo.ensureMedia(ref, manual = true) }, contentAlignment = Alignment.Center) {
+                        if (busy) CircularProgressIndicator(Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)
+                        else Ico(if (failed) Icons.refresh else Icons.download, Color.White, 22.dp, 2f)
                     }
-                    else if (busy || auto) CircularProgressIndicator(Modifier.size(26.dp), color = t.p, strokeWidth = 2.dp)
-                    else Box(Modifier.size(48.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f)).clickable { repo.ensureMedia(ref, manual = true) }, contentAlignment = Alignment.Center) {
-                        Ico(Icons.download, Color.White, 22.dp, 2f)
-                    }
+                    if (failed) T(
+                        if (show.isNotEmpty()) "Preview · tap to load full photo" else "Tap to try again", size = 11.5.sp, weight = FontWeight.SemiBold, color = Color.White,
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 9.dp, vertical = 4.dp),
+                    )
                 }
             }
         }

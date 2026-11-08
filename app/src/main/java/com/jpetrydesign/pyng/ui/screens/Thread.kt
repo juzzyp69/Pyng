@@ -554,7 +554,7 @@ private fun star(repo: com.jpetrydesign.pyng.data.Repo, list: List<Msg>) {
 
 fun openMedia(ctx: Context, repo: com.jpetrydesign.pyng.data.Repo, nav: Nav, ref: MediaRef) {
     val path = ref.localPath.ifEmpty { repo.media[ref.id].orEmpty() }
-    if (path.isEmpty()) { repo.ensureMedia(ref); repo.toast("Downloading…"); return }
+    if (path.isEmpty()) { repo.ensureMedia(ref, manual = true); repo.toast("Downloading…"); return }
     if (ref.isImage) nav.go(Route.Viewer(path, ref.mime)) else openFile(ctx, path, ref.mime)
 }
 

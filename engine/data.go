@@ -9,12 +9,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+	"google.golang.org/protobuf/proto"
+
 	"go.mau.fi/mautrix-gmessages/pkg/libgm"
+	gmcrypto "go.mau.fi/mautrix-gmessages/pkg/libgm/crypto"
 	"go.mau.fi/mautrix-gmessages/pkg/libgm/events"
 	"go.mau.fi/mautrix-gmessages/pkg/libgm/gmproto"
 	"go.mau.fi/mautrix-gmessages/pkg/libgm/util"
@@ -543,13 +548,13 @@ func (m *Messenger) DownloadMedia(mediaID string, keyB64 string, ext string) (re
 	if err != nil {
 		return "", fmt.Errorf("bad media key: %w", err)
 	}
-	// Give up after 40s so a stuck download can be retried instead of spinning for minutes.
-	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+	// Give up after 30s so a stuck download can be retried instead of spinning for minutes.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	started := time.Now()
-	rd, err := cli.DownloadMedia(ctx, mediaID, key)
+	rd, err := fetchMedia(ctx, cli, mediaID, key)
 	if err != nil {
-		m.log.Warn().Err(err).Str("ext", ext).Dur("after", time.Since(started)).Msg("Attachment download failed")
+		m.log.Warn().Err(err).Str("ext", ext).Str("media", shortID(mediaID)).Dur("after", time.Since(started)).Msg("Attachment download failed")
 		return "", err
 	}
 	defer rd.Close()
@@ -558,19 +563,107 @@ func (m *Messenger) DownloadMedia(mediaID string, keyB64 string, ext string) (re
 	if err != nil {
 		return "", err
 	}
-	_, err = io.Copy(f, rd)
+	n, err := io.Copy(f, rd)
 	closeErr := f.Close()
 	if err == nil {
 		err = closeErr
 	}
+	if err == nil && n == 0 {
+		err = errors.New("empty attachment")
+	}
 	if err != nil {
 		_ = os.Remove(tmp)
+		m.log.Warn().Err(err).Str("ext", ext).Str("media", shortID(mediaID)).Dur("after", time.Since(started)).Msg("Attachment download failed while reading")
 		return "", err
 	}
+	m.log.Info().Str("ext", ext).Int64("bytes", n).Dur("after", time.Since(started)).Msg("Attachment downloaded")
 	if err = os.Rename(tmp, p); err != nil {
 		return "", err
 	}
 	return p, nil
+}
+
+// mediaHTTP downloads attachments. Headers must arrive quickly; the body can take longer.
+var mediaHTTP = &http.Client{Transport: &http.Transport{
+	Proxy:                 http.ProxyFromEnvironment,
+	ResponseHeaderTimeout: 20 * time.Second,
+	TLSHandshakeTimeout:   10 * time.Second,
+	IdleConnTimeout:       60 * time.Second,
+	MaxIdleConnsPerHost:   6,
+}}
+
+// fetchMedia asks Google for an attachment the same way Messages for web does, but checks the
+// server's answer, so a refusal or a missing upload is reported clearly instead of as garbage.
+func fetchMedia(ctx context.Context, cli *libgm.Client, mediaID string, key []byte) (io.ReadCloser, error) {
+	cryptor, err := gmcrypto.NewAESGCMHelper(key)
+	if err != nil {
+		return nil, fmt.Errorf("bad media key: %w", err)
+	}
+	if cli.AuthData == nil {
+		return nil, errors.New("not signed in")
+	}
+	meta := &gmproto.DownloadAttachmentRequest{
+		Info: &gmproto.AttachmentInfo{AttachmentID: mediaID, Encrypted: true},
+		AuthData: &gmproto.AuthMessage{
+			RequestID:        uuid.NewString(),
+			TachyonAuthToken: cli.AuthData.TachyonAuthToken,
+			Network:          cli.AuthData.AuthNetwork(),
+			ConfigVersion:    util.ConfigMessage,
+		},
+	}
+	raw, err := proto.Marshal(meta)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, util.UploadMediaURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	util.BuildUploadHeaders(req, base64.StdEncoding.EncodeToString(raw))
+	res, err := mediaHTTP.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(res.Body, 300))
+		_ = res.Body.Close()
+		return nil, fmt.Errorf("server answered %d: %s", res.StatusCode, strings.TrimSpace(string(body)))
+	}
+	return cryptor.DecryptStream(res.Body), nil
+}
+
+func shortID(s string) string {
+	if len(s) > 10 {
+		return s[:10]
+	}
+	return s
+}
+
+// RequestFullMedia asks your phone to upload the full-size version of an attachment that only
+// arrived as a small preview. The full one shows up a little later as a message update.
+func (m *Messenger) RequestFullMedia(messageID string, partID string) (err error) {
+	defer m.guard("RequestFullMedia", &err)
+	if messageID == "" || partID == "" {
+		return errors.New("missing message or part")
+	}
+	cli, err := m.ready()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	_, err = cli.GetFullSizeImage(ctx, messageID, partID)
+	if err != nil {
+		m.log.Warn().Err(err).Msg("Asking the phone for the full attachment failed")
+	} else {
+		m.log.Info().Msg("Asked the phone for the full attachment")
+	}
+	return err
+}
+
+// LogNote writes a line from the app into the debug log.
+func (m *Messenger) LogNote(text string) {
+	m.log.Info().Str("from", "app").Msg(text)
 }
 
 // CacheSize returns the bytes used by cached photos and attachments.
@@ -739,25 +832,60 @@ func convJSON(c *gmproto.Conversation) map[string]any {
 	}
 }
 
+// inlineDir is where attachments that arrive inside a message are written, so the app can show them.
+var inlineDir string
+
 func msgJSON(msg *gmproto.Message) map[string]any {
 	texts := []string{}
 	media := []map[string]any{}
 	unknown := 0
-	addMedia := func(mc *gmproto.MediaContent) {
+	addMedia := func(mc *gmproto.MediaContent, part string) {
 		if mc == nil {
 			return
 		}
-		media = append(media, map[string]any{
+		// Some attachments arrive without a type; the format code still says what they are.
+		mime := mc.GetMimeType()
+		mt, known := libgm.FormatToMediaType[mc.GetFormat()]
+		if mime == "" && known {
+			mime = mt.Format
+		}
+		if mime == "" {
+			switch mc.GetFormat() {
+			case gmproto.MediaFormats_IMAGE_UNSPECIFIED:
+				mime = "image/jpeg"
+			case gmproto.MediaFormats_VIDEO_UNSPECIFIED:
+				mime = "video/mp4"
+			case gmproto.MediaFormats_AUDIO_UNSPECIFIED:
+				mime = "audio/mp4"
+			}
+		}
+		item := map[string]any{
 			"id":       mc.GetMediaID(),
 			"key":      base64.StdEncoding.EncodeToString(mc.GetDecryptionKey()),
 			"thumbId":  mc.GetThumbnailMediaID(),
 			"thumbKey": base64.StdEncoding.EncodeToString(mc.GetThumbnailDecryptionKey()),
-			"mime":     mc.GetMimeType(),
+			"mime":     mime,
 			"name":     mc.GetMediaName(),
 			"size":     mc.GetSize(),
 			"w":        mc.GetDimensions().GetWidth(),
 			"h":        mc.GetDimensions().GetHeight(),
-		})
+			"msg":      msg.GetMessageID(),
+			"part":     part,
+		}
+		// Small attachments can come inside the message itself, with nothing to download.
+		if data := mc.GetMediaData(); len(data) > 0 && inlineDir != "" {
+			ext := mt.Extension
+			if ext == "" {
+				ext = "bin"
+			}
+			p := filepath.Join(inlineDir, safeName("inline-"+msg.GetMessageID()+"-"+part)+"."+strings.TrimPrefix(ext, "."))
+			if st, err := os.Stat(p); err == nil && st.Size() > 0 {
+				item["local"] = p
+			} else if err := os.WriteFile(p, data, 0o600); err == nil {
+				item["local"] = p
+			}
+		}
+		media = append(media, item)
 	}
 	for _, info := range msg.GetMessageInfo() {
 		switch d := info.GetData().(type) {
@@ -766,12 +894,12 @@ func msgJSON(msg *gmproto.Message) map[string]any {
 				texts = append(texts, t)
 			}
 		case *gmproto.MessageInfo_MediaContent:
-			addMedia(d.MediaContent)
+			addMedia(d.MediaContent, info.GetActionMessageID())
 		case *gmproto.MessageInfo_LocationContent:
 			if t := d.LocationContent.GetMessageContent().GetContent(); t != "" {
 				texts = append(texts, t)
 			}
-			addMedia(d.LocationContent.GetMediaContent())
+			addMedia(d.LocationContent.GetMediaContent(), info.GetActionMessageID())
 		default:
 			unknown++
 		}
