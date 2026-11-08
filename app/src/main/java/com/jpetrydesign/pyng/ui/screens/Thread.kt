@@ -173,6 +173,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     var menuFor by remember(convId) { mutableStateOf<Msg?>(null) }
     var detailsFor by remember(convId) { mutableStateOf<Msg?>(null) }
     var forward by remember(convId) { mutableStateOf<Msg?>(null) }
+    var selectTextFor by remember(convId) { mutableStateOf<Msg?>(null) }
     val selected = remember(convId) { mutableStateListOf<String>() }
     var searching by remember(convId) { mutableStateOf(startSearch) }
     var query by remember(convId) { mutableStateOf("") }
@@ -498,7 +499,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                 onReact = { m, e -> repo.react(m, e); burst = m.key to e },
                 onReply = { replyTo = it }, onCopy = { copy(ctx, it.text); repo.toast("Copied") },
                 onForward = { forward = it }, onStar = { star(repo, listOf(it)) },
-                onSelect = { selected.add(it.key) }, onDetails = { detailsFor = it },
+                onSelect = { selected.add(it.key) }, onDetails = { detailsFor = it }, onSelectText = { selectTextFor = it },
                 onDelete = {
                     if (it.tmpId.startsWith("sched-")) {
                         val id = it.tmpId.removePrefix("sched-")
@@ -511,6 +512,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                     }
                 })
             DetailsSheet(detailsFor, conv) { detailsFor = null }
+            SelectTextSheet(selectTextFor) { selectTextFor = null }
             ForwardSheet(forward) { target, m ->
                 forward = null
                 if (target != null) {

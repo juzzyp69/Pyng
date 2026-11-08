@@ -3,6 +3,7 @@ package com.jpetrydesign.pyng.ui.screens
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -79,6 +80,7 @@ fun MessageMenu(
     onSelect: (Msg) -> Unit,
     onDetails: (Msg) -> Unit,
     onDelete: (Msg) -> Unit,
+    onSelectText: (Msg) -> Unit = {},
 ) {
     val repo = LocalRepo.current
     val ctx = LocalContext.current
@@ -177,6 +179,7 @@ fun MessageMenu(
                 if (cur.id.isNotEmpty()) item("Reply", Icons.reply) { onReply(cur) }
                 item("Forward", Icons.forward) { onForward(cur) }
                 if (cur.text.isNotEmpty()) item("Copy", Icons.copy) { onCopy(cur) }
+                if (cur.text.length > 1) item("Select text", Icons.select) { onSelectText(cur) }
                 item(if (p.isStarred(cur.key)) "Unstar" else "Star", Icons.star) { onStar(cur) }
                 if (p.on("readAloud") && cur.text.isNotEmpty()) item("Read aloud", Icons.volume) { Speaker.say(ctx, cur.text) }
                 item("Delete", Icons.trash, danger = true) { onDelete(cur) }
@@ -325,3 +328,35 @@ object Speaker {
         }
     }
 }
+
+
+/** Shows a message's words so you can pick just the part you want and copy it. */
+@Composable
+fun SelectTextSheet(m: Msg?, onDismiss: () -> Unit) {
+    val t = com.jpetrydesign.pyng.ui.theme.LocalTok.current
+    val ctx = LocalContext.current
+    var last by remember { mutableStateOf(m) }
+    if (m != null) last = m
+    com.jpetrydesign.pyng.ui.kit.Sheet(m != null, onDismiss) {
+        val cur = last ?: return@Sheet
+        T("Select text", size = 18.sp, weight = FontWeight.Bold, modifier = Modifier.padding(start = 22.dp, end = 22.dp, bottom = 2.dp))
+        T("Hold a word, then drag the handles to choose what you want. Copy shows up above it.", size = 12.5.sp, color = t.soft, lineHeight = 17.sp,
+            modifier = Modifier.padding(horizontal = 22.dp))
+        Spacer(Modifier.height(12.dp))
+        androidx.compose.foundation.layout.Box(
+            Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(22.dp)).background(t.surface)
+                .heightIn(max = 420.dp).scrollY().padding(horizontal = 18.dp, vertical = 16.dp),
+        ) {
+            androidx.compose.foundation.text.selection.SelectionContainer {
+                androidx.compose.material3.Text(
+                    cur.text,
+                    style = androidx.compose.ui.text.TextStyle(fontFamily = com.jpetrydesign.pyng.ui.theme.Geist, fontSize = 17.sp, lineHeight = 25.sp, color = t.ink),
+                )
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        com.jpetrydesign.pyng.ui.kit.PillButton("Copy all", { copy(ctx, cur.text); onDismiss() }, Modifier.padding(horizontal = 16.dp).fillMaxWidth(), primary = false, height = 50.dp)
+    }
+}
+
+private fun Modifier.scrollY(): Modifier = androidx.compose.ui.composed { this.verticalScroll(androidx.compose.foundation.rememberScrollState()) }
