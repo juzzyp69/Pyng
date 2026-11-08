@@ -168,8 +168,9 @@ fun PyngRoot(repo: Repo, nav: Nav) {
             val appHaze = remember { dev.chrisbanes.haze.HazeState() }
             BoxWithConstraints(Modifier.fillMaxSize().background(t.bg)) {
                 val wide = maxWidth >= 600.dp
+                val fullW = maxWidth
                 Box(Modifier.fillMaxSize().hazeSource(appHaze)) {
-                    if (wide) WideLayout(nav, maxWidth) else Pane(nav, Modifier.fillMaxSize(), wide = false)
+                    if (wide) WideLayout(nav, fullW) else Pane(nav, Modifier.fillMaxSize(), wide = false)
                 }
                 ToastHost(toast, onUndo = { toast?.undo?.invoke(); toast = null }, Modifier.align(Alignment.BottomCenter))
                 com.jpetrydesign.pyng.ui.kit.AskDialog(repo.ask) { repo.ask = null }
