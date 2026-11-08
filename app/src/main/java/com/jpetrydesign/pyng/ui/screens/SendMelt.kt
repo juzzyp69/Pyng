@@ -75,8 +75,12 @@ class SendFx {
     fun scaleXFor(m: Msg): Float = if (m.tmpId.isNotEmpty() && m.tmpId == hideTmp) bubbleScaleX else 1f
     fun scaleYFor(m: Msg): Float = if (m.tmpId.isNotEmpty() && m.tmpId == hideTmp) bubbleScaleY else 1f
     fun isTarget(m: Msg) = m.tmpId.isNotEmpty() && m.tmpId == run?.tmpId
+    /** Messages that already arrived by gliding in, so they never play the fade-in on top of it. */
+    val flown = HashSet<String>()
+    fun arrived(m: Msg) = m.tmpId.isNotEmpty() && (m.tmpId in flown || m.tmpId == run?.tmpId)
 
     fun start(r: MeltRun) {
+        flown += r.tmpId
         bubble = null
         bubbleAlpha = 0f
         bubbleScaleX = 1f; bubbleScaleY = 1f

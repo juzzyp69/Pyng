@@ -265,6 +265,12 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     val matches = if (searching && q.isNotEmpty()) msgs.filter { it.text.lowercase().contains(q) }.map { it.key } else emptyList()
     val curMatch = if (matches.isNotEmpty()) matches[(matches.size - 1 - (matchIdx % matches.size)).coerceIn(0, matches.size - 1)] else null
     val reversed = msgs.asReversed()
+    // A message you send keeps the same row when Google confirms it (its id changes, its temporary
+    // id doesn't), so it never disappears and fades back in.
+    val listKeys = remember(reversed) {
+        val k = reversed.map { m -> if (m.fromMe && m.tmpId.isNotEmpty()) "t:" + m.tmpId else "k:" + m.key }
+        if (k.toSet().size == k.size) k else reversed.map { "k:" + it.key }
+    }
     // The newest messages rise in, staggered, the first time a chat opens.
     val introPlayed = remember(convId) { HashSet<String>() }
     val introKeys = remember(convId, loaded) { if (loaded) reversed.take(10).map { it.key }.toSet() else emptySet() }
@@ -368,7 +374,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                             TypingDots(t.soft, 6.dp, 4.dp)
                         }
                     }
-                    itemsIndexed(reversed, key = { _, m -> m.key }) { i, m ->
+                    itemsIndexed(reversed, key = { i, m -> listKeys.getOrElse(i) { m.key } }) { i, m ->
                         // i counts from newest; neighbours in time order are i+1 (older) and i-1 (newer).
                         val older = reversed.getOrNull(i + 1)
                         val newer = reversed.getOrNull(i - 1)
@@ -407,7 +413,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                         senderWho = sender?.let { whoOf(it) }, starred = p.isStarred(m.key), chips = if (m.fromMe) emptyList() else chips,
                                         showPreview = p.on("previews") && spamWhy == null, tsShift = tsShift, timeLabel = clock(m.ts),
                                         enterDelay = if (i < 10 && m.key in introKeys && introPlayed.add(m.key)) (80 + i * 45) else -1,
-                                        isNew = m.ts > openedAt && !sendFx.isTarget(m), burst = burst?.takeIf { it.first == m.key }?.second, myId = myId,
+                                        isNew = m.ts > openedAt && !sendFx.arrived(m), burst = burst?.takeIf { it.first == m.key }?.second, myId = myId,
                                         nameColor = if (conv?.group == true && !m.fromMe) groupNameColor(t, conv.others.indexOfFirst { it.id == m.participantId }) else null,
                                     )
                                 rowCtxs[m.key] = rc
