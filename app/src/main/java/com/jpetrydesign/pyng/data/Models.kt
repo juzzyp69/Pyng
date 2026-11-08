@@ -105,6 +105,8 @@ data class MediaRef(
     /** The message and part this attachment belongs to, used to ask the phone for the full-size file. */
     val msgId: String = "",
     val part: String = "",
+    /** A tiny placeholder that came inside the message, shown until the real file arrives. */
+    val previewPath: String = "",
 ) {
     val isImage get() = mime.startsWith("image/")
     val isGif get() = mime == "image/gif"
@@ -141,6 +143,7 @@ data class MediaRef(
             localPath = o.optString("local"),
             msgId = o.optString("msg"),
             part = o.optString("part"),
+            previewPath = o.optString("preview"),
         )
     }
 }

@@ -219,7 +219,7 @@ private fun ZoomPage(ref: MediaRef, current: Boolean, dismissY: Float, onZoomed:
     val repo = LocalRepo.current
     val t = LocalTok.current
     val full = ref.localPath.ifEmpty { repo.media[ref.id].orEmpty() }
-    val thumb = repo.media[ref.thumbId].orEmpty()
+    val thumb = repo.media[ref.thumbId].orEmpty().ifEmpty { ref.previewPath }
     LaunchedEffect(ref.id) { if (full.isEmpty()) repo.ensureMedia(ref, manual = true) }
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }

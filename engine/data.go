@@ -872,17 +872,30 @@ func msgJSON(msg *gmproto.Message) map[string]any {
 			"msg":      msg.GetMessageID(),
 			"part":     part,
 		}
-		// Small attachments can come inside the message itself, with nothing to download.
+		// Bytes inside the message itself. When there's also something to download, they're only a
+		// tiny blurry placeholder, so they're offered as a preview; the real file still downloads.
+		// Only when there's nothing else (as the Google Messages bridge does) are they the file.
 		if data := mc.GetMediaData(); len(data) > 0 && inlineDir != "" {
-			ext := mt.Extension
-			if ext == "" {
-				ext = "bin"
+			only := mc.GetMediaID() == "" && mc.GetThumbnailMediaID() == ""
+			ext := "jpg"
+			if only && mt.Extension != "" {
+				ext = strings.TrimPrefix(mt.Extension, ".")
 			}
-			p := filepath.Join(inlineDir, safeName("inline-"+msg.GetMessageID()+"-"+part)+"."+strings.TrimPrefix(ext, "."))
+			name := "preview-"
+			if only {
+				name = "inline-"
+			}
+			p := filepath.Join(inlineDir, safeName(name+msg.GetMessageID()+"-"+part)+"."+ext)
+			ok := false
 			if st, err := os.Stat(p); err == nil && st.Size() > 0 {
-				item["local"] = p
+				ok = true
 			} else if err := os.WriteFile(p, data, 0o600); err == nil {
+				ok = true
+			}
+			if ok && only {
 				item["local"] = p
+			} else if ok {
+				item["preview"] = p
 			}
 		}
 		media = append(media, item)

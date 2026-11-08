@@ -405,7 +405,7 @@ private fun MediaView(m: Msg, ref: MediaRef, shape: RoundedCornerShape, me: Bool
     val repo = LocalRepo.current
     val t = LocalTok.current
     val full = ref.localPath.ifEmpty { repo.media[ref.id].orEmpty() }
-    val thumb = repo.media[ref.thumbId].orEmpty()
+    val thumb = repo.media[ref.thumbId].orEmpty().ifEmpty { ref.previewPath }
     val auto = remember { repo.autoDownloadAllowed() }
     LaunchedEffect(ref.id, ref.thumbId, repo.connEpoch.intValue) {
         if (ref.localPath.isEmpty()) {
