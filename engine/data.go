@@ -739,6 +739,7 @@ func convJSON(c *gmproto.Conversation) map[string]any {
 func msgJSON(msg *gmproto.Message) map[string]any {
 	texts := []string{}
 	media := []map[string]any{}
+	unknown := 0
 	addMedia := func(mc *gmproto.MediaContent) {
 		if mc == nil {
 			return
@@ -768,6 +769,8 @@ func msgJSON(msg *gmproto.Message) map[string]any {
 				texts = append(texts, t)
 			}
 			addMedia(d.LocationContent.GetMediaContent())
+		default:
+			unknown++
 		}
 	}
 	st := msg.GetMessageStatus().GetStatus()
@@ -801,6 +804,7 @@ func msgJSON(msg *gmproto.Message) map[string]any {
 		"replyTo":        msg.GetReplyMessage().GetMessageID(),
 		"type":           msg.GetType(),
 		"kind":           kind,
+		"unknown":        unknown,
 	}
 }
 

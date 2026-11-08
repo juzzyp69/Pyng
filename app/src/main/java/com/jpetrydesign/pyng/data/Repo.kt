@@ -43,6 +43,11 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     val typing = mutableStateMapOf<String, Long>()
     val avatars = mutableStateMapOf<String, String>()
     val media = mutableStateMapOf<String, String>()
+    /** Attachments that still failed after a few tries; the bubble offers a retry instead of spinning forever. */
+    val mediaFailed = mutableStateMapOf<String, Boolean>()
+    /** Previews Google left blank (a photo, a voice note…), filled in from the newest message. */
+    val previewFill = mutableStateMapOf<String, String>()
+    private val previewAsked = HashSet<String>()
     val mediaBusy = mutableStateMapOf<String, Boolean>()
     var contacts by mutableStateOf<List<Contact>>(emptyList())
         private set
@@ -154,6 +159,8 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
             "message" -> {
                 val m = Msg.from(e.data)
                 if (m.convId.isEmpty()) return
+                if (m.unsupported) android.util.Log.w("Pyng", "Message " + m.id + " has " + m.unknownParts + " part(s) Pyng can't read yet")
+                if (!m.isSys && m.summary.isNotEmpty() && m.ts >= (convs[m.convId]?.ts ?: 0)) previewFill[m.convId] = m.summary
                 if (msgs.containsKey(m.convId)) upsert(m)
                 if (!m.fromMe) typing.remove(m.convId)
                 val c = convs[m.convId]
@@ -193,6 +200,7 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         val old = convs[c.id]
         if (c.group) rawNames[c.id] = c.name
         convs[c.id] = withLocalName(c)
+        fillPreview(c)
         if (old == null || old.avatarId != c.avatarId) ensureAvatars(c.others.map { it.id })
         if (old != null && old.unread && !c.unread) onRead?.invoke(c.id)
         saveCacheSoon()
@@ -364,17 +372,59 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         scope.launch(Dispatchers.IO) { runCatching { avatarFile.writeText(org.json.JSONObject(snap as Map<*, *>).toString()) } }
     }
 
-    fun ensureMedia(ref: MediaRef, thumb: Boolean = false) {
+    /** What a chat row should say: Google's preview, or a filled-in one when Google's was blank. */
+    fun previewOf(c: Conv): String = c.preview.ifBlank { previewFill[c.id].orEmpty() }
+
+    private fun fillPreview(c: Conv) {
+        if (demo || c.preview.isNotBlank()) return
+        if (!previewAsked.add(c.id + ":" + c.ts)) return
+        msgs[c.id]?.lastOrNull { it.visible && !it.isSys }?.let { previewFill[c.id] = it.summary; return }
+        scope.launch {
+            hub.io { it.fetchMessages(c.id, 3, "", 0) }.onSuccess { j ->
+                Msg.list(j).lastOrNull { it.visible && !it.isSys }?.let { previewFill[c.id] = it.summary }
+            }
+        }
+    }
+
+    /**
+     * Downloads an attachment, retrying a few times on its own. If it still fails, the bubble
+     * shows a retry button; [manual] is a tap on that button.
+     */
+    fun ensureMedia(ref: MediaRef, thumb: Boolean = false, manual: Boolean = false) {
         if (demo) return
         val id = if (thumb && ref.thumbId.isNotEmpty()) ref.thumbId else ref.id
         val key = if (thumb && ref.thumbId.isNotEmpty()) ref.thumbKey else ref.key
         if (id.isEmpty() || media.containsKey(id) || mediaBusy[id] == true) return
+        if (mediaFailed[id] == true && !manual) return
+        mediaFailed.remove(id)
         mediaBusy[id] = true
         scope.launch {
-            hub.io { it.downloadMedia(id, key, if (thumb) "jpg" else ref.ext) }
-                .onSuccess { media[id] = it }
-                .onFailure { toast("Couldn't download: ${it.message}") }
+            var tries = 0
+            while (true) {
+                val r = hub.io { it.downloadMedia(id, key, if (thumb) "jpg" else ref.ext) }
+                if (r.isSuccess) { media[id] = r.getOrThrow(); break }
+                tries++
+                android.util.Log.w("Pyng", "Attachment download failed (try " + tries + "): " + r.exceptionOrNull()?.message)
+                if (tries >= 4) {
+                    mediaFailed[id] = true
+                    if (manual) toast("Couldn't download it. Check your connection and try again.")
+                    break
+                }
+                delay(longArrayOf(800, 2500, 6000)[tries - 1])
+            }
             mediaBusy.remove(id)
+        }
+    }
+
+    /**
+     * While an open chat has a picture still on its way, keep asking Google for the latest copy
+     * (like Google Messages does when you look at it) until it arrives. Runs while the chat is open.
+     */
+    suspend fun watchPending(convId: String) {
+        repeat(40) {
+            delay(3000)
+            if (msgs[convId].orEmpty().none { it.awaitingMedia }) return
+            loadMessages(convId)
         }
     }
 
@@ -661,6 +711,7 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
             msg("c3", false, "Agreed, ship it", 55, ava),
             msg("c3", true, "Pushing the update tonight", 50, reply = "m${n - 1}"),
             msg("c3", false, "Saturday at 9:00 AM works for everyone?", 45, marcus),
+            msg("c3", false, "", 44, nina, status = "INCOMING_AUTO_DOWNLOADING"),
         )
         msgs["c2"] = listOf(
             msg("c2", false, "Did you make it home ok?", 1500),

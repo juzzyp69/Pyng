@@ -338,7 +338,7 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
     val t = chatTok(convId)
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf("c1") }
-    var customizing by remember { mutableStateOf(look.custom.isNotEmpty()) }
+    var customizing by remember { mutableStateOf(look.custom.isNotEmpty() || repo.demoOpen == "custom") }
     var part by remember { mutableStateOf("inBg") }
     val scroll = rememberScrollState()
     BackHandler { nav.back() }
@@ -366,9 +366,11 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
                         Box(Modifier.align(Alignment.End)) { Bubble1("See you there", true, t) }
                     }
                 }
-                // Customize more: every color on its own, right under the preview.
-                AnimatedVisibility(customizing) {
-                    Column(Modifier.padding(horizontal = 16.dp).padding(top = 14.dp)) {
+                // Two modes, never both at once: Theme (pick a theme or one overall color) and
+                // Custom (set each part's color on its own). Switching crossfades.
+                androidx.compose.animation.Crossfade(customizing, label = "themeMode") { custom ->
+                    if (custom) Column(Modifier.padding(horizontal = 16.dp).padding(top = 6.dp)) {
+                        com.jpetrydesign.pyng.ui.kit.SectionLabel("Custom colors")
                         val parts = listOf("bg" to "Background", "inBg" to "Received bubble", "inInk" to "Received text", "outBg" to "Sent bubble", "outInk" to "Sent text", "accent" to "Accent")
                         fun shown(k: String): Color = when (k) { "bg" -> t.bg; "inBg" -> t.inBg; "inInk" -> t.inInk; "outBg" -> t.outFlat; "outInk" -> t.outInk; else -> t.p }
                         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -385,30 +387,41 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
                             }
                         }
                         Spacer(Modifier.height(14.dp))
+                        // Starts from what the chat looks like now, so you're tweaking, not starting over.
                         val cur = look.custom[part] ?: com.jpetrydesign.pyng.ui.theme.toHsl(shown(part))
                         ColorWheel(cur) { h -> set { it.copy(custom = it.custom + (part to h)) } }
                         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
                             if (look.custom.containsKey(part)) T("Use automatic", size = 13.5.sp, weight = FontWeight.SemiBold, color = t.p,
                                 modifier = Modifier.clip(RoundedCornerShape(14.dp)).clickable { set { it.copy(custom = it.custom - part) } }.padding(horizontal = 10.dp, vertical = 6.dp))
                         }
-                    }
-                }
-                com.jpetrydesign.pyng.ui.kit.SectionLabel("Color", Modifier.padding(start = 16.dp))
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Swatch("App theme", swatchOf(Palettes.byKey(p.themeKey, p.c1, p.c2)), look.key.isEmpty()) { set { it.copy(key = "") } }
-                    Swatch("Custom", androidx.compose.ui.graphics.Brush.sweepGradient(listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)), look.key == "chat-custom") { set { it.copy(key = "chat-custom") } }
-                    (Palettes.favorites + Palettes.colors + Palettes.duos).forEach { x -> Swatch(x.name, swatchOf(x), look.key == x.name) { set { it.copy(key = x.name) } } }
-                }
-                if (look.key == "chat-custom") {
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                        Seg(listOf("Mono", "Duotone", "Gradient"), look.mode, { m -> set { it.copy(mode = m) } })
-                        if (look.mode != "Mono") {
-                            Spacer(Modifier.height(10.dp))
-                            Seg(listOf("Main color", "Second color"), if (editing == "c1") "Main color" else "Second color", { editing = if (it == "Main color") "c1" else "c2" })
+                    } else Column {
+                        com.jpetrydesign.pyng.ui.kit.SectionLabel("Color", Modifier.padding(start = 16.dp))
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Swatch("App theme", swatchOf(Palettes.byKey(p.themeKey, p.c1, p.c2)), look.key.isEmpty()) { set { it.copy(key = "") } }
+                            Swatch("Any color", androidx.compose.ui.graphics.Brush.sweepGradient(listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)), look.key == "chat-custom") { set { it.copy(key = "chat-custom") } }
+                            (Palettes.favorites + Palettes.colors + Palettes.duos).forEach { x -> Swatch(x.name, swatchOf(x), look.key == x.name) { set { it.copy(key = x.name) } } }
                         }
-                        Spacer(Modifier.height(12.dp))
-                        val cur = if (editing == "c2" && look.mode != "Mono") look.c2 else look.c1
-                        ColorWheel(cur) { h -> set { if (editing == "c2" && it.mode != "Mono") it.copy(c2 = h) else it.copy(c1 = h) } }
+                        if (look.key == "chat-custom") {
+                            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                                Seg(listOf("Mono", "Duotone", "Gradient"), look.mode, { m -> set { it.copy(mode = m) } })
+                                if (look.mode != "Mono") {
+                                    Spacer(Modifier.height(10.dp))
+                                    Seg(listOf("Main color", "Second color"), if (editing == "c1") "Main color" else "Second color", { editing = if (it == "Main color") "c1" else "c2" })
+                                }
+                                Spacer(Modifier.height(12.dp))
+                                val cur = if (editing == "c2" && look.mode != "Mono") look.c2 else look.c1
+                                ColorWheel(cur) { h -> set { if (editing == "c2" && it.mode != "Mono") it.copy(c2 = h) else it.copy(c1 = h) } }
+                            }
+                        }
+                        // Custom colors are kept when you switch back; say so, with a way to clear them.
+                        if (look.custom.isNotEmpty()) Row(
+                            Modifier.padding(horizontal = 16.dp).padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(t.tone).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            T("Custom colors on", size = 13.5.sp, weight = FontWeight.Medium, color = t.ink, modifier = Modifier.weight(1f))
+                            T("Clear", size = 13.5.sp, weight = FontWeight.SemiBold, color = t.p,
+                                modifier = Modifier.clip(RoundedCornerShape(14.dp)).clickable { set { it.copy(custom = emptyMap()) } }.padding(horizontal = 10.dp, vertical = 6.dp))
+                        }
                     }
                 }
                 com.jpetrydesign.pyng.ui.kit.SectionLabel("Wallpaper", Modifier.padding(start = 16.dp))
@@ -416,13 +429,18 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
                     WallTile("Custom", null, look.wall.startsWith("photo:"), t, add = true) { pickWall.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
                     Palettes.walls.forEach { name -> WallTile(name, name, (look.wall.ifEmpty { p.defWall }) == name && !look.wall.startsWith("photo:"), t) { set { it.copy(wall = name) } } }
                 }
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(14.dp))
+                if (p.looks[convId] != null) T("Reset to app theme", size = 13.5.sp, weight = FontWeight.SemiBold, color = t.soft, align = TextAlign.Center,
+                    modifier = Modifier.align(Alignment.CenterHorizontally).clip(RoundedCornerShape(14.dp))
+                        .clickable { customizing = false; repo.prefs.edit { it.copy(looks = it.looks - convId) } }.padding(horizontal = 14.dp, vertical = 8.dp))
+                Spacer(Modifier.height(8.dp))
+                // Custom switches to setting each color yourself; Theme switches back. Nothing is lost either way.
                 Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PillButton("Reset to app theme", { customizing = false; repo.prefs.edit { it.copy(looks = it.looks - convId) } }, Modifier.weight(1f), primary = false, height = 50.dp)
-                    PillButton(if (customizing) "Done" else "Customize more", {
+                    PillButton(if (customizing) "Theme" else "Custom", {
                         customizing = !customizing
-                        if (customizing) scope.launch { scroll.animateScrollTo(0) }
-                    }, Modifier.weight(1f), height = 50.dp)
+                        scope.launch { scroll.animateScrollTo(0) }
+                    }, Modifier.weight(1f), primary = false, height = 50.dp)
+                    PillButton("Done", { nav.back() }, Modifier.weight(1f), height = 50.dp)
                 }
             }
             com.jpetrydesign.pyng.ui.kit.StatusScrim(Modifier.align(Alignment.TopCenter))

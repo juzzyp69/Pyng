@@ -80,6 +80,15 @@ object Notifier {
     private val lastAlert = mutableMapOf<String, Pair<Long, String>>()
     private val placeholders = mutableMapOf<String, String>()
 
+    private fun notifText(m: Msg): String = when {
+        m.text.isNotEmpty() -> m.text
+        m.summary == "Photo" || m.summary == "GIF" -> "📷 " + m.summary
+        m.summary == "Video" -> "🎬 Video"
+        m.summary == "Voice message" -> "🎤 Voice message"
+        m.summary.isNotEmpty() -> "📎 " + m.summary
+        else -> ""
+    }
+
     fun show(ctx: Context, repo: Repo, conv: Conv, m: Msg) {
         val p = repo.prefs.state
         if (!p.on("notif") || conv.id in p.muted || !canPost(ctx)) return
@@ -92,14 +101,7 @@ object Notifier {
         lastAlert[conv.id] = System.currentTimeMillis() to m.text
         val alerts = p.alerts[conv.id]
         if (alerts?.on == false) return
-        val body = when {
-            m.text.isNotEmpty() -> m.text
-            m.media.any { it.isImage } -> "📷 Photo"
-            m.media.any { it.isVideo } -> "🎬 Video"
-            m.media.any { it.isAudio } -> "🎤 Voice message"
-            m.media.isNotEmpty() -> "📎 " + m.media.first().name.ifBlank { "Attachment" }
-            else -> return
-        }
+        val body = notifText(m).ifEmpty { return }
         val list = history.getOrPut(conv.id) { mutableListOf() }
         val senderName = if (conv.group) m.sender.ifBlank { "Someone" } else conv.title
         list += senderName to m
@@ -113,7 +115,7 @@ object Notifier {
             val pb = NPerson.Builder().setName(who).setKey(msg.participantId.ifEmpty { who })
             if (!conv.group && icon != null) pb.setIcon(IconCompat.createWithBitmap(icon))
             style.addMessage(
-                msg.text.ifEmpty { if (msg.media.any { it.isImage }) "📷 Photo" else "📎 Attachment" },
+                notifText(msg).ifEmpty { "📎 Attachment" },
                 if (msg.ts > 0) msg.ts else System.currentTimeMillis(), pb.build(),
             )
         }

@@ -59,6 +59,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.focusRequester
@@ -109,6 +110,26 @@ import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
+
+/**
+ * A name color for each person in a group, from the chat's theme. One-color themes use shades of
+ * that color (lighter, darker, a touch warmer or cooler); duotone themes blend between the two.
+ * Spread by the golden ratio so neighbours in the list never look alike, and kept readable.
+ */
+fun groupNameColor(t: Tok, index: Int): Color {
+    val f = ((index.coerceAtLeast(0) * 0.618034f) + 0.15f) % 1f
+    val two = t.pal.plus
+    val src = if (two != null) androidx.compose.ui.graphics.lerp(t.p, two, f) else t.p
+    val hsl = FloatArray(3)
+    androidx.core.graphics.ColorUtils.colorToHSL(src.toArgb(), hsl)
+    val (lo, hi) = if (t.dark) 0.62f to 0.80f else 0.30f to 0.46f
+    if (two == null) {
+        hsl[0] = (hsl[0] + (f - 0.5f) * 32f + 360f) % 360f
+        hsl[2] = lo + (hi - lo) * f
+    } else hsl[2] = hsl[2].coerceIn(lo, hi)
+    hsl[1] = hsl[1].coerceIn(0.45f, 0.9f)
+    return Color(androidx.core.graphics.ColorUtils.HSLToColor(hsl))
+}
 
 /** The palette a chat uses: its own look if it has one, otherwise the app's. */
 @Composable
@@ -168,6 +189,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     val bubbleCoords = remember(convId) { HashMap<String, androidx.compose.ui.layout.LayoutCoordinates>() }
     val rowCtxs = remember(convId) { HashMap<String, RowCtx>() }
     val rootCoords = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+    val sendFx = remember(convId) { SendFx() }
     var menuAnchor by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     fun openMenu(m: Msg) {
         menuAnchor = runCatching {
@@ -209,8 +231,8 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     }
 
     // Messages from Google Messages, plus your scheduled ones shown faded at the end.
-    // Empty messages (nothing to show) are skipped, so they don't leave blank gaps.
-    val msgs = repo.msgs[convId].orEmpty().filter { it.isSys || it.text.isNotBlank() || it.media.isNotEmpty() } + p.scheduled.filter { it.convId == convId }.sortedBy { it.at }.map { s ->
+    // Truly empty ones are skipped; a picture still on its way shows as a placeholder instead.
+    val msgs = repo.msgs[convId].orEmpty().filter { it.visible } + p.scheduled.filter { it.convId == convId }.sortedBy { it.at }.map { s ->
         Msg("", "sched-" + s.id, convId, "", "", "", true, "OUTGOING_SCHEDULED", s.label, s.text, emptyList(), s.at, emptyList(), "", 0, "text")
     }
     val loaded = repo.msgs.containsKey(convId)
@@ -226,6 +248,9 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
             if (p.on("effects") && motion) fxKind(last.text)?.let { fx = it }
         }
     }
+    // A picture still on its way: keep checking until it lands.
+    val waitingMedia = msgs.any { it.awaitingMedia }
+    LaunchedEffect(convId, waitingMedia) { if (waitingMedia) repo.watchPending(convId) }
     LaunchedEffect(fx) { if (fx != null) { delay(3800); fx = null } }
     LaunchedEffect(burst) { if (burst != null) { delay(900); burst = null } }
 
@@ -274,14 +299,28 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
             repo.toast("Scheduled for ${sch.second}")
             schedule = null; draft = ""; return
         }
+        // Drip and bounce: note where the box and send button are before the text leaves them.
+        val root = rootCoords[0]
+        val melt = if (motion && attachments.isEmpty() && replyTo == null && text.isNotBlank() && root != null && sendFx.run == null) runCatching {
+            Triple(root.localBoundingBoxOf(sendFx.field!!), root.localBoundingBoxOf(sendFx.text!!), root.localBoundingBoxOf(sendFx.button!!))
+        }.getOrNull() else null
         repo.send(convId, text, replyTo?.id.orEmpty(), attachments.toList())
+        if (melt != null) repo.msgs[convId]?.lastOrNull { it.status == "LOCAL" && it.text == text.trim() }?.tmpId?.let { tmp ->
+            sendFx.start(MeltRun(tmp, text.trim(), melt.first, melt.second, melt.third))
+        }
         if (p.on("effects")) fxKind(text)?.let { fx = it }
         draft = ""; replyTo = null; attachments.clear(); info = null
         scope.launch { list.animateScrollToItem(0) }
     }
+    // Sample mode: type and send a message, to check the send animation end to end.
+    LaunchedEffect(demoOpen) {
+        if (demoOpen != "send") return@LaunchedEffect
+        delay(2500); draft = "On my way!"; delay(1500); send(draft)
+    }
 
     val blur by androidx.compose.animation.core.animateDpAsState(if (menuFor != null) 18.dp else 0.dp, label = "blur")
     Provide(t) {
+        androidx.compose.runtime.CompositionLocalProvider(LocalSendFx provides sendFx) {
         Box(Modifier.fillMaxSize().onGloballyPositioned { rootCoords[0] = it }) {
             Box(Modifier.fillMaxSize().then(if (blur > 0.5.dp) Modifier.blur(blur) else Modifier)) {
             Wallpaper(wall, t)
@@ -355,7 +394,8 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                         senderWho = sender?.let { whoOf(it) }, starred = p.isStarred(m.key), chips = if (m.fromMe) emptyList() else chips,
                                         showPreview = p.on("previews") && spamWhy == null, tsShift = tsShift, timeLabel = clock(m.ts),
                                         enterDelay = if (i < 10 && m.key in introKeys && introPlayed.add(m.key)) (80 + i * 45) else -1,
-                                        isNew = m.ts > openedAt, burst = burst?.takeIf { it.first == m.key }?.second, myId = myId,
+                                        isNew = m.ts > openedAt && !sendFx.isTarget(m), burst = burst?.takeIf { it.first == m.key }?.second, myId = myId,
+                                        nameColor = if (conv?.group == true && !m.fromMe) groupNameColor(t, conv.others.indexOfFirst { it.id == m.participantId }) else null,
                                     )
                                 rowCtxs[m.key] = rc
                                 MessageRow(
@@ -419,8 +459,9 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                     }
                 }
 
-                // Composer and everything above it.
-                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().imePadding().onSizeChanged { bottomH = it.height }) {
+                // Composer and everything above it. Measured with the keyboard included, so when the
+                // keyboard opens the newest messages ride up with it instead of hiding behind it.
+                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { bottomH = it.height }.imePadding()) {
                     Composer(
                         t = t, conv = conv, draft = draft, onDraft = { draft = it; if (it.isNotEmpty()) repo.typingPing(convId) },
                         replyTo = replyTo, onCancelReply = { replyTo = null }, attachments = attachments, schedule = schedule,
@@ -433,6 +474,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
 
             }
             Effects(fx, t)
+            SendMeltLayer(sendFx, t, fontSize, p.on("boldText")) { rootCoords[0] }
             MessageMenu(menuFor, t, conv, menuAnchor, menuFor?.let { rowCtxs[it.key] }, onDismiss = { menuFor = null },
                 onReact = { m, e -> repo.react(m, e); burst = m.key to e },
                 onReply = { replyTo = it }, onCopy = { copy(ctx, it.text); repo.toast("Copied") },
@@ -463,6 +505,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                 }
             }
             CallSheet(callSheet, conv) { callSheet = false }
+        }
         }
     }
     BackHandler(enabled = selecting || searching) { if (selecting) selected.clear() else { searching = false; query = "" } }

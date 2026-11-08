@@ -108,6 +108,16 @@ data class MediaRef(
     val isVideo get() = mime.startsWith("video/")
     val isAudio get() = mime.startsWith("audio/")
     val isContact get() = mime.contains("vcard")
+    /** Google hasn't finished uploading this attachment yet; the real one arrives in a later update. */
+    val waiting get() = id.isEmpty() && thumbId.isEmpty() && localPath.isEmpty()
+    val kindLabel get() = when {
+        isGif -> "GIF"
+        isImage -> "Photo"
+        isVideo -> "Video"
+        isAudio -> "Voice message"
+        isContact -> "Contact"
+        else -> name.ifBlank { "Attachment" }
+    }
     val ext get() = when {
         mime == "image/jpeg" || mime == "image/jpg" -> "jpg"
         mime.contains("/") -> mime.substringAfter('/').substringBefore(';').substringAfterLast('.').take(8).let { if (it == "mpeg") "mp3" else it }
@@ -120,13 +130,30 @@ data class MediaRef(
             key = o.optString("key"),
             thumbId = o.optString("thumbId"),
             thumbKey = o.optString("thumbKey"),
-            mime = o.optString("mime"),
+            mime = o.optString("mime").ifBlank { mimeFromName(o.optString("name")) },
             name = o.optString("name"),
             size = o.optLong("size"),
             w = o.optInt("w"),
             h = o.optInt("h"),
         )
     }
+}
+
+private fun mimeFromName(n: String) = when (n.substringAfterLast('.', "").lowercase()) {
+    "jpg", "jpeg" -> "image/jpeg"
+    "png" -> "image/png"
+    "gif" -> "image/gif"
+    "webp" -> "image/webp"
+    "heic", "heif" -> "image/heic"
+    "mp4", "m4v" -> "video/mp4"
+    "3gp" -> "video/3gpp"
+    "mov" -> "video/quicktime"
+    "m4a", "aac" -> "audio/mp4"
+    "amr" -> "audio/amr"
+    "mp3" -> "audio/mpeg"
+    "ogg", "opus" -> "audio/ogg"
+    "vcf" -> "text/vcard"
+    else -> ""
 }
 
 data class Reaction(val emoji: String, val count: Int, val by: List<String>)
@@ -149,6 +176,7 @@ data class Msg(
     val type: Long,
     val kind: String,
     val error: String = "",
+    val unknownParts: Int = 0,
 ) {
     val key get() = id.ifEmpty { tmpId }
     val failed get() = error.isNotEmpty() || status.contains("FAILED") || status == "OUTGOING_CANCELED"
@@ -158,6 +186,23 @@ data class Msg(
     val isSys get() = kind == "sys"
     val isSms get() = type == 1L
     val isMms get() = type == 2L || type == 3L
+    /** An incoming picture message the phone is still fetching, or one waiting for a manual download. */
+    val fetching get() = !fromMe && status.startsWith("INCOMING_") && status.contains("DOWNLOAD")
+    val needsManual get() = status == "INCOMING_YET_TO_MANUAL_DOWNLOAD"
+    val fetchFailed get() = status.startsWith("INCOMING_DOWNLOAD_FAILED") || status == "INCOMING_DOWNLOAD_CANCELED"
+    /** Something Pyng can't read yet. Shown as a note instead of hiding the message. */
+    val unsupported get() = !isSys && text.isBlank() && media.isEmpty() && !fetching && unknownParts > 0
+    val awaitingMedia get() = media.any { it.waiting } || (fetching && media.isEmpty() && !needsManual && !fetchFailed)
+    /** Never hide a real message just because its text or picture hasn't arrived yet. */
+    val visible get() = isSys || text.isNotBlank() || media.isNotEmpty() || fetching || unsupported
+    /** One short line for previews and notifications. */
+    val summary get() = when {
+        text.isNotBlank() -> text
+        media.isNotEmpty() -> media.firstOrNull { it.isImage || it.isVideo }?.kindLabel ?: media.first().kindLabel
+        fetching -> "Photo"
+        unsupported -> "Message"
+        else -> ""
+    }
 
     companion object {
         fun from(o: JSONObject) = Msg(
@@ -171,7 +216,8 @@ data class Msg(
             status = o.optString("status"),
             statusText = o.optString("statusText"),
             text = o.optString("text"),
-            media = o.optJSONArray("media").objects().map(MediaRef::from).filter { it.id.isNotEmpty() || it.localPath.isNotEmpty() },
+            // Keep attachments that are still uploading: they show as "on its way" and fill in when ready.
+            media = o.optJSONArray("media").objects().map(MediaRef::from),
             ts = o.optLong("ts"),
             reactions = o.optJSONArray("reactions").objects().map {
                 Reaction(it.optString("emoji"), it.optInt("count"), it.optJSONArray("by").strings())
@@ -179,6 +225,7 @@ data class Msg(
             replyTo = o.optString("replyTo"),
             type = o.optLong("type"),
             kind = o.optString("kind", "text"),
+            unknownParts = o.optInt("unknown"),
         )
 
         fun list(json: String): List<Msg> = JSONArray(json).objects().map(::from)

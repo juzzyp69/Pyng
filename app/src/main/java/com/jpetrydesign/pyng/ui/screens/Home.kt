@@ -8,6 +8,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -123,6 +124,10 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
     val p = repo.prefs.state
     val haze = remember { HazeState() }
     var menuFor by remember { mutableStateOf<Conv?>(null) }
+    // Edit pins: the pinned chats wiggle, drag to reorder, tap the minus to unpin, Done to finish.
+    // Outside it, holding a chat only opens its menu, so it's always clear when you're editing.
+    var editPins by remember { mutableStateOf(false) }
+    androidx.activity.compose.BackHandler(enabled = editPins) { editPins = false }
     val now = System.currentTimeMillis()
 
     LaunchedEffect(Unit) { if (repo.convs.isEmpty() || !repo.hub.engine.isConnected) repo.refresh() }
@@ -132,6 +137,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
         if (!repo.demo && p.permsAsked < 1 && missingPerms(ctx).isNotEmpty()) { kotlinx.coroutines.delay(700); askPerms = true }
         when (repo.demoOpen) {
             "rowmenu" -> menuFor = repo.convs["c6"]
+            "editpins" -> editPins = true
             "strip" -> nav.strip = true
             "perms" -> askPerms = true
         }
@@ -172,7 +178,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
         }
     }
     val pins = previewIds.mapNotNull { id -> active.firstOrNull { it.id == id } }.map { c ->
-        Pin(c, whoOf(c, repo, t), countOf(c), typingOf(c), (if (c.fromMe) "You: " else if (c.group && c.sender.isNotBlank()) c.sender.substringBefore(' ') + ": " else "") + c.preview)
+        Pin(c, whoOf(c, repo, t), countOf(c), typingOf(c), (if (c.fromMe) "You: " else if (c.group && c.sender.isNotBlank()) c.sender.substringBefore(' ') + ": " else "") + repo.previewOf(c))
     }
     val rows = (if (layout == "List") pins.map { it.c } else emptyList()) + active.filter { it.id !in pinnedIds }.sortedByDescending { it.ts }
     val archCount = all.count { it.status == "archived" }
@@ -199,7 +205,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
         target = pinnedIds.indexOf(id).coerceAtLeast(0)
         dh.active = true
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-        menuFor = repo.convs[id]
+        menuFor = if (editPins) null else repo.convs[id]
     }
     fun startDrag(id: String) {
         dragMoved = true
@@ -217,7 +223,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
     dh.onMove = move@{ at ->
         val id = dragId ?: return@move
         dragPointer = at
-        if (!dragMoved) { if ((at - dragStart).getDistance() > slop) startDrag(id) else return@move }
+        if (!dragMoved) { if (editPins && (at - dragStart).getDistance() > slop) startDrag(id) else return@move }
         val g = at + grab
         dragScope.launch { ghostPos.snapTo(g) }
         val z = dh.zone
@@ -293,7 +299,18 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
             else if (dh.height > 0 && y > dh.height - edge) listState.scrollBy((y - (dh.height - edge)) / 10f)
         }
     }
-    val pinCtl = PinCtl(dh = dh, dragId = ghostId, open = { id -> nav.openChat(id) }, lift = { id, at, center -> liftAt(id, at, center, 72.dp, false) }, dropActive = dragId != null && dragMoved && inZone, shake = shake.value)
+    LaunchedEffect(pinnedIds.isEmpty()) { if (pinnedIds.isEmpty()) editPins = false }
+    val pinCtl = PinCtl(
+        dh = dh, dragId = ghostId, open = { id -> nav.openChat(id) }, lift = { id, at, center -> liftAt(id, at, center, 72.dp, false) },
+        dropActive = dragId != null && dragMoved && inZone, shake = shake.value, editing = editPins,
+        unpin = { id ->
+            val cur = repo.prefs.state.pinned
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            dh.animUntil = System.currentTimeMillis() + 900
+            repo.prefs.edit { it.copy(pinned = cur.filter { x -> x != id }) }
+            repo.toast("Unpinned") { repo.prefs.edit { it.copy(pinned = cur) } }
+        },
+    )
 
     Box(
         Modifier.fillMaxSize()
@@ -410,14 +427,22 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                         PinItem(pin, i, pinCtl, Modifier.enter(i, pop = true)) {
                             Box(Modifier.size(46.dp)) {
                                 Avatar(pin.who.photo, pin.who.ini, 46.dp, pin.who.bg, pin.who.ink, 15.sp)
-                                if (pin.count > 0) CountBadge(pin.count, h = 18.dp, modifier = Modifier.align(Alignment.TopEnd).offset(3.dp, (-2).dp))
+                                if (pin.count > 0) {
+                                    val d = LocalDensity.current
+                                    val avPx = with(d) { 46.dp.roundToPx() }; val dx = with(d) { 3.dp.roundToPx() }; val dy = with(d) { 2.dp.roundToPx() }
+                                    CountBadge(
+                                        pin.count, h = 18.dp, modifier = Modifier.align(Alignment.TopEnd).offset(3.dp, (-2).dp),
+                                        backdrop = { Avatar(pin.who.photo, pin.who.ini, 46.dp, pin.who.bg, pin.who.ink, 15.sp) }, backdropSize = 46.dp,
+                                        backdropAt = { sz -> IntOffset(-(avPx - sz.width + dx), dy) },
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
 
-            val fabAlpha by androidx.compose.animation.core.animateFloatAsState(if (dragId != null && dragMoved) 0f else 1f, label = "fab")
+            val fabAlpha by androidx.compose.animation.core.animateFloatAsState(if ((dragId != null && dragMoved) || editPins) 0f else 1f, label = "fab")
             Row(
                 Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 20.dp, bottom = 28.dp).graphicsLayer { alpha = fabAlpha },
                 horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically,
@@ -474,8 +499,31 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
             }
         }
 
+        // Editing pins: a frosted bar with what you can do and a Done button.
+        androidx.compose.animation.AnimatedVisibility(
+            editPins && hint == null,
+            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 30.dp),
+            enter = fadeIn(tween(160)) + androidx.compose.animation.slideInVertically(spring(dampingRatio = 0.8f, stiffness = 500f)) { it / 2 },
+            exit = fadeOut(tween(140)),
+        ) {
+            androidx.compose.runtime.CompositionLocalProvider(LocalHaze provides haze) {
+                Row(
+                    Modifier.height(52.dp).glassRim(RoundedCornerShape(26.dp)).frost(RoundedCornerShape(26.dp), t.fab.copy(alpha = if (t.dark) 0.2f else 0.32f), 10.dp)
+                        .padding(start = 18.dp, end = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    T("Drag to reorder · tap − to unpin", size = 13.5.sp, color = t.soft)
+                    Spacer(Modifier.width(12.dp))
+                    Box(
+                        Modifier.height(38.dp).clip(RoundedCornerShape(19.dp)).background(t.fill).clickable { editPins = false }.padding(horizontal = 18.dp),
+                        contentAlignment = Alignment.Center,
+                    ) { T("Done", size = 14.sp, weight = FontWeight.SemiBold, color = t.onFill) }
+                }
+            }
+        }
+
         com.jpetrydesign.pyng.ui.kit.StatusScrim(Modifier.align(Alignment.TopCenter))
-        RowMenu(menuFor, onDismiss = { menuFor = null })
+        RowMenu(menuFor, onDismiss = { menuFor = null }, onEditPins = { editPins = true })
         PermissionSheet(askPerms) { askPerms = false; repo.prefs.edit { it.copy(permsAsked = 1) } }
         if (nav.strip) ColorStrip(onDone = { nav.strip = false })
     }
@@ -542,7 +590,7 @@ fun ConvRow(
     val preview = when {
         typing -> if (c.group) "Someone is typing…" else "typing…"
         draft != null -> draft
-        else -> (if (c.fromMe) "You: " else if (c.group && c.sender.isNotBlank()) c.sender.substringBefore(' ') + ": " else "") + c.preview
+        else -> (if (c.fromMe) "You: " else if (c.group && c.sender.isNotBlank()) c.sender.substringBefore(' ') + ": " else "") + repo.previewOf(c)
     }.replace(Regex("\\s*\\n\\s*"), " ")
     val action = if (dx.value > 0) p.opt("swipeR") else p.opt("swipe")
     val cfg = swipeCfg(action, c, p.isPinned(c.id), p.isMuted(c.id), unread, t)
@@ -696,7 +744,12 @@ private class PinCtl(
     val lift: (String, Offset, Offset) -> Unit,
     val dropActive: Boolean = false,
     val shake: Float = 0f,
+    val editing: Boolean = false,
+    val unpin: (String) -> Unit = {},
 )
+
+/** Set while editing pins: each pinned avatar shows a minus that unpins it. */
+private val LocalPinMinus = androidx.compose.runtime.compositionLocalOf<(() -> Unit)?> { null }
 
 /** Wraps one pinned slot: records where it sits, opens on tap, lifts on long-press, and glides when the order changes. */
 @Composable
@@ -709,6 +762,16 @@ private fun PinItem(pin: Pin, index: Int, ctl: PinCtl, modifier: Modifier = Modi
     val scope = rememberCoroutineScope()
     val open by androidx.compose.runtime.rememberUpdatedState(ctl.open)
     val lift by androidx.compose.runtime.rememberUpdatedState(ctl.lift)
+    val editing by androidx.compose.runtime.rememberUpdatedState(ctl.editing)
+    // A gentle wiggle while editing, each pin slightly out of step with its neighbours.
+    val wiggle = if (ctl.editing && !placeholder) {
+        val tr = androidx.compose.animation.core.rememberInfiniteTransition(label = "wiggle")
+        tr.animateFloat(
+            -1f, 1f,
+            androidx.compose.animation.core.infiniteRepeatable(tween(130 + (index % 3) * 18, easing = androidx.compose.animation.core.LinearEasing), androidx.compose.animation.core.RepeatMode.Reverse),
+            label = "w",
+        ).value
+    } else 0f
     Box(
         modifier
             .onGloballyPositioned { c ->
@@ -731,16 +794,19 @@ private fun PinItem(pin: Pin, index: Int, ctl: PinCtl, modifier: Modifier = Modi
                 }
             }
             .pointerInput(id) {
-                detectTapGestures(onTap = { open(id) }, onLongPress = { at ->
+                detectTapGestures(onTap = { if (!editing) open(id) }, onLongPress = { at ->
                     val h = dh.home; val c = coords[0]
                     if (h != null && c != null) runCatching { lift(id, h.localPositionOf(c, at), h.localBoundingBoxOf(c).center) }
                 })
             }
             .graphicsLayer {
                 translationX = shift.value.x; translationY = shift.value.y
+                rotationZ = wiggle * 2.4f
                 alpha = if (placeholder) 0.28f else 1f
             },
-    ) { content() }
+    ) {
+        androidx.compose.runtime.CompositionLocalProvider(LocalPinMinus provides if (ctl.editing) ({ ctl.unpin(id) }) else null) { content() }
+    }
 }
 
 @Composable
@@ -752,7 +818,22 @@ private fun PinFace(pin: Pin, av: Dp, iniSize: Float, style: String, badgeH: Dp 
             pin.who.photo, pin.who.ini, av, pin.who.bg, pin.who.ink, iniSize.sp,
             halo = if (style == "Rings" && hot) (t.pal.plus ?: t.p) else null,
         )
-        if (pin.count > 0 && style != "Rings") CountBadge(pin.count, h = badgeH, modifier = Modifier.align(Alignment.TopEnd).offset(5.dp, (-3).dp))
+        if (pin.count > 0 && style != "Rings") {
+            val d = LocalDensity.current
+            val avPx = with(d) { av.roundToPx() }; val dx = with(d) { 5.dp.roundToPx() }; val dy = with(d) { 3.dp.roundToPx() }
+            CountBadge(
+                pin.count, h = badgeH, modifier = Modifier.align(Alignment.TopEnd).offset(5.dp, (-3).dp),
+                backdrop = { Avatar(pin.who.photo, pin.who.ini, av, pin.who.bg, pin.who.ink, iniSize.sp) }, backdropSize = av,
+                backdropAt = { sz -> IntOffset(-(avPx - sz.width + dx), dy) },
+            )
+        }
+        LocalPinMinus.current?.let { unpin ->
+            Box(
+                Modifier.align(Alignment.TopStart).offset((-4).dp, (-4).dp).size(26.dp).shadow(3.dp, CircleShape).clip(CircleShape)
+                    .background(if (t.dark) Color(0xFF3A3F4C) else Color.White).clickable(onClick = unpin),
+                contentAlignment = Alignment.Center,
+            ) { Box(Modifier.size(11.dp, 2.5.dp).clip(RoundedCornerShape(2.dp)).background(t.ink)) }
+        }
         if (pin.typing) {
             Box(
                 Modifier.align(Alignment.BottomEnd).offset(8.dp, 1.dp).height(20.dp).clip(RoundedCornerShape(10.dp)).background(t.glassStrong).padding(horizontal = 7.dp),
@@ -913,7 +994,7 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
 // ---------- long-press menu ----------
 
 @Composable
-fun RowMenu(c: Conv?, onDismiss: () -> Unit) {
+fun RowMenu(c: Conv?, onDismiss: () -> Unit, onEditPins: (() -> Unit)? = null) {
     val repo = LocalRepo.current
     val t = LocalTok.current
     var last by remember { mutableStateOf(c) }
@@ -931,6 +1012,7 @@ fun RowMenu(c: Conv?, onDismiss: () -> Unit) {
         val unread = cur.unread || cur.id in p.markedUnread
         SheetGroup {
             val acts = buildList<Triple<String, String, () -> Unit>> {
+                if (onEditPins != null && p.isPinned(cur.id)) add(Triple("Edit pins", Icons.pencil) { onEditPins() })
                 add(Triple(if (p.isPinned(cur.id)) "Unpin" else "Pin to top", Icons.pinned) { val was = p.isPinned(cur.id); if (repo.togglePin(cur.id)) repo.toast(if (was) "Unpinned" else "Pinned to top") })
                 add(Triple(if (cur.status == "archived") "Unarchive" else "Archive", Icons.archive) {
                     val on = cur.status != "archived"

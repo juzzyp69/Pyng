@@ -57,6 +57,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -143,6 +144,7 @@ fun Composer(
     val motion = LocalMotion.current
     val scope = rememberCoroutineScope()
     val kb = LocalSoftwareKeyboardController.current
+    val fx = LocalSendFx.current
     var panel by remember { mutableStateOf(initialPanel) }
     var recording by remember { mutableStateOf(false) }
     var recSec by remember { mutableIntStateOf(0) }
@@ -289,7 +291,7 @@ fun Composer(
             if (!recording) {
                 Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(
-                        Modifier.weight(1f).heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp)).background(t.field).padding(start = 4.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                        Modifier.weight(1f).heightIn(min = 48.dp).onGloballyPositioned { fx?.field = it }.clip(RoundedCornerShape(24.dp)).background(t.field).padding(start = 4.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.Bottom,
                     ) {
                         val rot by animateFloatAsState(if (panel != null && panel != "expr") 45f else 0f, spring(dampingRatio = 0.55f, stiffness = 500f), label = "plus")
@@ -311,7 +313,7 @@ fun Composer(
                                 maxLines = 6,
                                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = if (p.on("enterSend")) ImeAction.Send else ImeAction.Default),
                                 keyboardActions = KeyboardActions(onSend = { if (hasDraft) onSend(draft) }),
-                                modifier = Modifier.fillMaxWidth().animateContentSize(),
+                                modifier = Modifier.fillMaxWidth().animateContentSize().onGloballyPositioned { fx?.text = it },
                             )
                         }
                         if (sms && p.on("counter") && draft.isNotEmpty()) {
@@ -328,6 +330,8 @@ fun Composer(
                             else askPhotos.launch(photoPerms())
                         }, contentAlignment = Alignment.Center) { Ico(Icons.gallery, if (panel == "gallery") t.p else t.ink, 20.dp, 1.9f) }
                     }
+                    // The send button melts into the liquid when you send, then pops back.
+                    Box(Modifier.onGloballyPositioned { fx?.button = it }.graphicsLayer { if (fx != null) { scaleX = fx.btnScale; scaleY = fx.btnScale; alpha = fx.btnAlpha } }) {
                     when {
                         hasDraft -> Box(Modifier.padding(bottom = 2.dp).size(44.dp).clip(CircleShape).background(t.plusBg).press(0.88f) { onSend(draft) }, contentAlignment = Alignment.Center) {
                             Ico(Icons.send, t.plusInk, 21.dp, 2f)
@@ -336,6 +340,7 @@ fun Composer(
                             Ico(Icons.mic, t.plusInk, 21.dp, 2f)
                         }
                         else -> Box(Modifier.padding(bottom = 2.dp).size(44.dp).clip(CircleShape).background(t.neutral), contentAlignment = Alignment.Center) { Ico(Icons.send, t.faint, 21.dp, 2f) }
+                    }
                     }
                 }
             } else {

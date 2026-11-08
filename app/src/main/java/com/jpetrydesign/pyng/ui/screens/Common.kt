@@ -89,16 +89,7 @@ fun whenText(ms: Long): String {
     }
 }
 
-fun msgPreview(m: Msg): String = when {
-    m.text.isNotEmpty() -> m.text
-    m.media.any { it.isGif } -> "GIF"
-    m.media.any { it.isImage } -> "Photo"
-    m.media.any { it.isVideo } -> "Video"
-    m.media.any { it.isAudio } -> "Voice message"
-    m.media.any { it.isContact } -> "Contact"
-    m.media.isNotEmpty() -> m.media.first().name.ifBlank { "Attachment" }
-    else -> ""
-}
+fun msgPreview(m: Msg): String = m.summary
 
 /** Pulls handy things out of a message: a code, a tracking number, an address, a date, a link. */
 data class Detected(val code: String? = null, val track: String? = null, val addr: String? = null, val date: String? = null, val url: String? = null)

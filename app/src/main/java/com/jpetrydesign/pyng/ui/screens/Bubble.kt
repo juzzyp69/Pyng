@@ -53,6 +53,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -106,6 +107,8 @@ data class RowCtx(
     val isNew: Boolean,
     val burst: String?,
     val myId: String,
+    /** This person's name color in a group chat, picked from the chat's theme. */
+    val nameColor: Color? = null,
 )
 
 class RowActs(
@@ -149,7 +152,7 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
 
     Column(Modifier.fillMaxWidth()) {
         if (x.senderName != null) {
-            T(x.senderName, size = 12.sp, weight = FontWeight.SemiBold, color = t.soft, modifier = Modifier.padding(start = if (x.group) 46.dp else 14.dp, top = 14.dp))
+            T(x.senderName, size = 12.sp, weight = FontWeight.SemiBold, color = x.nameColor ?: t.soft, modifier = Modifier.padding(start = if (x.group) 46.dp else 14.dp, top = 14.dp))
         }
         Box(
             // Tight within a run from one person, more room when the sender changes.
@@ -338,9 +341,17 @@ private fun BubbleBody(m: Msg, x: RowCtx, shape: RoundedCornerShape, jumbo: Int,
     val quoteBg = if (me) Color.White.copy(alpha = 0.18f) else t.neutral
     val bold = LocalRepo.current.prefs.state.on("boldText")
     Column(Modifier.graphicsLayer { alpha = if (m.pending && m.media.isNotEmpty()) 0.7f else 1f }, horizontalAlignment = if (me) Alignment.End else Alignment.Start) {
+        // A picture message the phone is still fetching (or something Pyng can't read yet).
+        if (m.media.isEmpty() && (m.fetching || m.unsupported)) when {
+            m.unsupported -> MediaWaiting("Can't show this message yet", "Open it in Google Messages to see it", shape, spinning = false)
+            m.needsManual -> MediaWaiting("Picture message", "Open it in Google Messages to download it", shape, spinning = false)
+            m.fetchFailed -> MediaWaiting("Couldn't download", "Open it in Google Messages to try again", shape, spinning = false)
+            else -> MediaWaiting("Photo on its way", null, shape, spinning = true)
+        }
         m.media.forEachIndexed { i, ref ->
             if (i > 0) Spacer(Modifier.height(4.dp))
-            MediaView(m, ref, shape, me, fg, sub, bg, a)
+            if (ref.waiting) MediaWaiting(ref.kindLabel + " on its way", null, shape, spinning = true)
+            else MediaView(m, ref, shape, me, fg, sub, bg, a)
         }
         val url = if (x.showPreview && jumbo == 0) detect(m.text).url else null
         // A message that's only a link shows just the card.
@@ -349,7 +360,13 @@ private fun BubbleBody(m: Msg, x: RowCtx, shape: RoundedCornerShape, jumbo: Int,
             T(text, size = listOf(58f, 58f, 48f, 40f)[jumbo].sp, lineHeight = (listOf(58f, 58f, 48f, 40f)[jumbo] * 1.15f).sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
         } else if (text.isNotEmpty() || x.quote != null) {
             if (m.media.isNotEmpty()) Spacer(Modifier.height(4.dp))
-            Column(Modifier.clip(shape).background(bg).padding(horizontal = 16.dp, vertical = 11.dp).widthIn(min = 24.dp)) {
+            val fx = LocalSendFx.current
+            Column(
+                Modifier
+                    .then(if (fx != null && fx.isTarget(m)) Modifier.onGloballyPositioned { fx.bubble = it } else Modifier)
+                    .then(if (fx != null) Modifier.graphicsLayer { alpha = fx.alphaFor(m) } else Modifier)
+                    .clip(shape).background(bg).padding(horizontal = 16.dp, vertical = 11.dp).widthIn(min = 24.dp),
+            ) {
                 if (x.quote != null) {
                     Column(Modifier.padding(top = 1.dp, bottom = 7.dp).clip(RoundedCornerShape(12.dp)).background(quoteBg).padding(horizontal = 10.dp, vertical = 6.dp)) {
                         T(x.quote.first, size = 12.5.sp, weight = FontWeight.Bold, color = fg)
@@ -368,6 +385,21 @@ private fun BubbleBody(m: Msg, x: RowCtx, shape: RoundedCornerShape, jumbo: Int,
 
 // ---------- media ----------
 
+/** Stands in for an attachment that hasn't arrived yet, so the message is never invisible. */
+@Composable
+private fun MediaWaiting(label: String, note: String?, shape: RoundedCornerShape, spinning: Boolean) {
+    val t = LocalTok.current
+    Box(Modifier.size(232.dp, 150.dp).clip(shape).background(t.tone), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 18.dp)) {
+            if (spinning) CircularProgressIndicator(Modifier.size(24.dp), color = t.p, strokeWidth = 2.dp)
+            else Ico(Icons.download, t.soft, 24.dp, 2f)
+            Spacer(Modifier.height(10.dp))
+            T(label, size = 14.sp, weight = FontWeight.Medium, color = t.ink, align = TextAlign.Center)
+            if (note != null) T(note, size = 12.sp, color = t.soft, align = TextAlign.Center, modifier = Modifier.padding(top = 2.dp))
+        }
+    }
+}
+
 @Composable
 private fun MediaView(m: Msg, ref: MediaRef, shape: RoundedCornerShape, me: Boolean, fg: Color, sub: Color, bg: Brush, a: RowActs) {
     val repo = LocalRepo.current
@@ -382,6 +414,7 @@ private fun MediaView(m: Msg, ref: MediaRef, shape: RoundedCornerShape, me: Bool
         }
     }
     val busy = repo.mediaBusy[ref.id] == true
+    val failed = repo.mediaFailed[ref.id] == true && !busy
     when {
         ref.isImage || ref.isVideo -> {
             val ratio = if (ref.w > 0 && ref.h > 0) ref.h.toFloat() / ref.w else 1f
@@ -402,8 +435,11 @@ private fun MediaView(m: Msg, ref: MediaRef, shape: RoundedCornerShape, me: Bool
                         if (busy) CircularProgressIndicator(Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp) else Ico(Icons.play, Color.White, 24.dp, 1f, fill = Color.White)
                     }
                 } else if (full.isEmpty()) {
-                    if (busy || auto) CircularProgressIndicator(Modifier.size(26.dp), color = t.p, strokeWidth = 2.dp)
-                    else Box(Modifier.size(48.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f)).clickable { repo.ensureMedia(ref) }, contentAlignment = Alignment.Center) {
+                    if (failed) Box(Modifier.size(48.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f)).clickable { repo.ensureMedia(ref, manual = true) }, contentAlignment = Alignment.Center) {
+                        Ico(Icons.refresh, Color.White, 22.dp, 2f)
+                    }
+                    else if (busy || auto) CircularProgressIndicator(Modifier.size(26.dp), color = t.p, strokeWidth = 2.dp)
+                    else Box(Modifier.size(48.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f)).clickable { repo.ensureMedia(ref, manual = true) }, contentAlignment = Alignment.Center) {
                         Ico(Icons.download, Color.White, 22.dp, 2f)
                     }
                 }

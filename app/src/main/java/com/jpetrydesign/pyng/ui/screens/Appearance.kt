@@ -322,7 +322,9 @@ private fun PinMini(n: String, AV: Color, LN: Color) {
 object AppIcons {
     class Ic(val name: String, val alias: String, val bg: Brush, val fg: Color, val dot: Color?)
     val all = listOf(
-        Ic("Classic", ".IconClassic", Brush.linearGradient(listOf(hex("#1E5FD1"), hex("#1E5FD1"))), Color.White, null),
+        // "Frost" lives on the original default slot, so updating never moves the icon on your home screen.
+        Ic("Frost", ".IconClassic", Brush.linearGradient(listOf(hex("#FFFFFF"), hex("#EEF3FF"))), hex("#2A5AE8"), null),
+        Ic("Frost dark", ".IconFrostDark", Brush.linearGradient(listOf(hex("#1A2756"), hex("#0A1230"))), Color.White, null),
         Ic("Duotone", ".IconDuotone", Brush.linearGradient(listOf(hex("#1E5FD1"), hex("#1E5FD1"))), hex("#F2B33D"), null),
         Ic("Soft", ".IconSoft", Brush.linearGradient(listOf(hex("#E3ECFB"), hex("#E3ECFB"))), hex("#1E5FD1"), null),
         Ic("Mono", ".IconMono", Brush.linearGradient(listOf(hex("#15171D"), hex("#15171D"))), Color.White, null),
@@ -347,8 +349,8 @@ object AppIcons {
 private fun AppIconPreview(ic: AppIcons.Ic) {
     // The real launcher artwork, drawn the way a round icon mask shows it.
     val key = ic.alias.removePrefix(".Icon").lowercase()
-    val bgRes = when (key) { "duotone" -> com.jpetrydesign.pyng.R.drawable.icon_duotone_bg; "soft" -> com.jpetrydesign.pyng.R.drawable.icon_soft_bg; "mono" -> com.jpetrydesign.pyng.R.drawable.icon_mono_bg; "glass" -> com.jpetrydesign.pyng.R.drawable.icon_glass_bg; else -> com.jpetrydesign.pyng.R.drawable.icon_classic_bg }
-    val fgRes = when (key) { "duotone" -> com.jpetrydesign.pyng.R.drawable.icon_duotone_fg; "soft" -> com.jpetrydesign.pyng.R.drawable.icon_soft_fg; "mono" -> com.jpetrydesign.pyng.R.drawable.icon_mono_fg; "glass" -> com.jpetrydesign.pyng.R.drawable.icon_glass_fg; else -> com.jpetrydesign.pyng.R.drawable.icon_classic_fg }
+    val bgRes = when (key) { "frostdark" -> com.jpetrydesign.pyng.R.drawable.icon_frost_dark_bg; "classic" -> com.jpetrydesign.pyng.R.drawable.icon_frost_bg; "duotone" -> com.jpetrydesign.pyng.R.drawable.icon_duotone_bg; "soft" -> com.jpetrydesign.pyng.R.drawable.icon_soft_bg; "mono" -> com.jpetrydesign.pyng.R.drawable.icon_mono_bg; "glass" -> com.jpetrydesign.pyng.R.drawable.icon_glass_bg; else -> com.jpetrydesign.pyng.R.drawable.icon_classic_bg }
+    val fgRes = when (key) { "frostdark" -> com.jpetrydesign.pyng.R.mipmap.icon_frost_dark_fg; "classic" -> com.jpetrydesign.pyng.R.mipmap.icon_frost_fg; "duotone" -> com.jpetrydesign.pyng.R.drawable.icon_duotone_fg; "soft" -> com.jpetrydesign.pyng.R.drawable.icon_soft_fg; "mono" -> com.jpetrydesign.pyng.R.drawable.icon_mono_fg; "glass" -> com.jpetrydesign.pyng.R.drawable.icon_glass_fg; else -> com.jpetrydesign.pyng.R.drawable.icon_classic_fg }
     Box(Modifier.size(58.dp).shadow(6.dp, CircleShape).clip(CircleShape), contentAlignment = Alignment.Center) {
         androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(bgRes), null, modifier = Modifier.requiredSize(58.dp * 1.5f))
         androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(fgRes), null, modifier = Modifier.requiredSize(58.dp * 1.5f))

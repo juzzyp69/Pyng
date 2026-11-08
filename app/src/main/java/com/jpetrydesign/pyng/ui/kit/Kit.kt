@@ -37,6 +37,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.blur
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -268,21 +272,43 @@ fun initialsOf(name: String): String {
     return (a.toString() + (b?.toString() ?: "")).uppercase()
 }
 
+/**
+ * Unread count, frosted. Over a photo, pass [backdrop] (the same photo, drawn at [backdropSize]) and
+ * [backdropAt] (where that photo's corner sits relative to the badge): the badge then shows that
+ * patch of the photo softly blurred behind the number, like real frosted glass. No outline.
+ */
 @Composable
-fun CountBadge(n: Int, bg: Color = LocalTok.current.badgeBg, ink: Color = LocalTok.current.badgeInk, h: Dp = 21.dp, modifier: Modifier = Modifier) {
-    // Frosted: a lighter, see-through tint with a bright rim, so what's behind shows softly through.
+fun CountBadge(
+    n: Int, bg: Color = LocalTok.current.badgeBg, ink: Color = LocalTok.current.badgeInk, h: Dp = 21.dp, modifier: Modifier = Modifier,
+    backdrop: (@Composable () -> Unit)? = null, backdropSize: Dp = 0.dp, backdropAt: (androidx.compose.ui.unit.IntSize) -> androidx.compose.ui.unit.IntOffset = { androidx.compose.ui.unit.IntOffset.Zero },
+) {
     val t = LocalTok.current
     val shape = RoundedCornerShape(h / 2)
-    val glass = androidx.compose.ui.graphics.lerp(bg, Color.White, if (t.dark) 0.06f else 0.14f).copy(alpha = if (t.solid) 1f else 0.8f)
+    val canBlur = backdrop != null && android.os.Build.VERSION.SDK_INT >= 31
+    var size by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    val glass = androidx.compose.ui.graphics.lerp(bg, Color.White, if (t.dark) 0.08f else 0.16f)
     Box(
         modifier.heightIn(min = h).widthIn(min = h)
-            .shadow(3.dp, shape, clip = false, ambientColor = bg.copy(alpha = 0.35f), spotColor = bg.copy(alpha = 0.35f))
+            .onSizeChanged { size = it }
+            .shadow(2.dp, shape, clip = false, ambientColor = bg.copy(alpha = 0.3f), spotColor = bg.copy(alpha = 0.3f))
             .clip(shape)
-            .background(Brush.verticalGradient(listOf(glass, glass.copy(alpha = glass.alpha * 0.86f))))
-            .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.5f), Color.White.copy(alpha = 0.1f))), shape)
-            .padding(horizontal = 6.dp),
+            .background(if (canBlur) glass.copy(alpha = 0.3f) else glass.copy(alpha = if (t.solid) 1f else 0.72f)),
         contentAlignment = Alignment.Center,
-    ) { T(if (n > 99) "99+" else n.toString(), size = (h.value * 0.52f).sp, weight = FontWeight.Bold, color = ink) }
+    ) {
+        if (canBlur && backdrop != null) {
+            // The photo underneath, blurred, then a light tint of the badge color over it.
+            Box(Modifier.matchParentSize()) {
+                Box(
+                    Modifier.wrapContentSize(Alignment.TopStart, unbounded = true)
+                        .offset { backdropAt(size) }
+                        .requiredSize(backdropSize)
+                        .blur(7.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Unbounded),
+                ) { backdrop() }
+            }
+            Box(Modifier.matchParentSize().background(glass.copy(alpha = 0.55f)))
+        }
+        T(if (n > 99) "99+" else n.toString(), size = (h.value * 0.52f).sp, weight = FontWeight.Bold, color = ink, modifier = Modifier.padding(horizontal = 6.dp))
+    }
 }
 
 @Composable
