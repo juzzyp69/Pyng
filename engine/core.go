@@ -19,6 +19,7 @@ import (
 	"go.mau.fi/util/exhttp"
 
 	"go.mau.fi/mautrix-gmessages/pkg/libgm"
+	"go.mau.fi/mautrix-gmessages/pkg/libgm/events"
 	"go.mau.fi/mautrix-gmessages/pkg/libgm/gmproto"
 )
 
@@ -218,21 +219,36 @@ func (m *Messenger) StartGooglePairing(cookiesJSON string) (emoji string, err er
 	m.log.Info().Int("cookies", len(cookies)).Msg("Starting Google account pairing")
 	ad := libgm.NewAuthData()
 	ad.SetCookies(cookies)
-	cli := m.newClient(ad)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if err = cli.FetchConfig(ctx); err != nil {
-		m.log.Err(err).Msg("FetchConfig failed")
-		return "", fmt.Errorf("could not reach Google Messages: %w", err)
-	}
-	bgCtx, bgCancel := context.WithCancel(context.Background())
-	emoji, sess, err := cli.StartGaiaPairing(ctx, bgCtx)
-	if err != nil {
-		m.log.Err(err).Msg("StartGaiaPairing failed")
+	var (
+		cli      *libgm.Client
+		sess     *libgm.PairingSession
+		bgCtx    context.Context
+		bgCancel context.CancelFunc
+	)
+	// An account that has used Google Messages on more than one phone lists all of them. If the
+	// newest one doesn't answer, try the next, the way the Google Messages bridge lets you retry.
+	for attempt := 0; attempt < 3; attempt++ {
+		cli = m.newClient(ad)
+		cli.GaiaHackyDeviceSwitcher = attempt
+		ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
+		if err = cli.FetchConfig(ctx); err != nil {
+			cancel()
+			m.log.Err(err).Msg("FetchConfig failed")
+			return "", fmt.Errorf("could not reach Google Messages: %w", err)
+		}
+		bgCtx, bgCancel = context.WithCancel(context.Background())
+		emoji, sess, err = cli.StartGaiaPairing(ctx, bgCtx)
+		cancel()
+		if err == nil {
+			break
+		}
+		m.log.Err(err).Int("attempt", attempt).Msg("StartGaiaPairing failed")
 		bgCancel()
 		cli.Disconnect()
-		return "", friendlyPairError(err)
+		if !errors.Is(err, libgm.ErrHadMultipleDevices) || attempt == 2 {
+			return "", friendlyPairError(err)
+		}
+		m.log.Info().Msg("Trying the next phone listed on this Google account")
 	}
 	m.mu.Lock()
 	m.pairing = bgCancel
@@ -319,11 +335,15 @@ func (m *Messenger) adopt(cli *libgm.Client, ad *libgm.AuthData, phoneID string)
 func friendlyPairError(err error) error {
 	switch {
 	case errors.Is(err, libgm.ErrNoDevicesFound):
-		return errors.New("no phone with Google Messages was found on this Google account")
-	case errors.Is(err, libgm.ErrPhoneNotFound), errors.Is(err, libgm.ErrPhoneInactive):
-		return errors.New("Google Messages on your phone hasn't been active recently; open it once and try again")
+		return errors.New("Google Messages on your phone isn't signed in to this Google account. In Google Messages, tap your profile picture › Device pairing, sign in with the same account, then try again")
+	case errors.Is(err, libgm.ErrPhoneInactive):
+		return errors.New("Google Messages on your phone hasn't connected to this Google account recently. In Google Messages, tap your profile picture › Device pairing and check it's the same account, then try again")
+	case errors.Is(err, libgm.ErrPhoneNotFound):
+		return errors.New("your phone isn't ready yet. Open Google Messages once, then try again")
 	case errors.Is(err, libgm.ErrPairingInitTimeout):
-		return errors.New("Google Messages didn't respond; open it and try again")
+		return errors.New("your phone didn't answer. Open Google Messages, tap your profile picture › Device pairing and make sure it's signed in with this same Google account. Then keep Google Messages open and try again")
+	case errors.Is(err, events.ErrCallerNoPermission):
+		return errors.New("this Google account can't use Google Messages for web")
 	case errors.Is(err, libgm.ErrIncorrectEmoji):
 		return errors.New("the wrong emoji was tapped")
 	case errors.Is(err, libgm.ErrPairingCancelled):

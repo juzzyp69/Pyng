@@ -104,7 +104,7 @@ fun SetupScreen(startStep: Int, onDone: () -> Unit, onLog: () -> Unit) {
         repo.hub.events.collect { e ->
             when (e.kind) {
                 "paired" -> { link = "done"; error = null }
-                "pair_error" -> { link = "idle"; error = e.data.optString("error") }
+                "pair_error" -> { link = "idle"; error = e.data.optString("error").replaceFirstChar { it.uppercase() } }
             }
         }
     }
@@ -115,7 +115,7 @@ fun SetupScreen(startStep: Int, onDone: () -> Unit, onLog: () -> Unit) {
             scope.launch {
                 repo.hub.io { it.startGooglePairing(cookies) }
                     .onSuccess { emoji = it; link = "emoji" }
-                    .onFailure { error = it.message; link = "idle" }
+                    .onFailure { error = it.message?.replaceFirstChar { c -> c.uppercase() }; link = "idle" }
             }
         }; return }
         "waiting" -> { Waiting("Contacting Google Messages…"); return }
