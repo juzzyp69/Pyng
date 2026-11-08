@@ -543,10 +543,13 @@ func (m *Messenger) DownloadMedia(mediaID string, keyB64 string, ext string) (re
 	if err != nil {
 		return "", fmt.Errorf("bad media key: %w", err)
 	}
-	ctx, cancel := ctx120()
+	// Give up after 40s so a stuck download can be retried instead of spinning for minutes.
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 	defer cancel()
+	started := time.Now()
 	rd, err := cli.DownloadMedia(ctx, mediaID, key)
 	if err != nil {
+		m.log.Warn().Err(err).Str("ext", ext).Dur("after", time.Since(started)).Msg("Attachment download failed")
 		return "", err
 	}
 	defer rd.Close()

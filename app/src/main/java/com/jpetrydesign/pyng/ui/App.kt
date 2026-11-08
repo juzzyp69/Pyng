@@ -1,5 +1,6 @@
 package com.jpetrydesign.pyng.ui
 
+import dev.chrisbanes.haze.hazeSource
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
@@ -86,6 +87,9 @@ sealed interface Route {
     data object Log : Route
 }
 
+/** The app's navigation, for the few deep places that need to open a chat (a shared contact's Message button). */
+val LocalNav = androidx.compose.runtime.staticCompositionLocalOf<Nav?> { null }
+
 /** A simple back stack with direction, so transitions slide the right way. */
 class Nav(start: Route) {
     val stack = mutableStateListOf(start)
@@ -159,15 +163,21 @@ fun PyngRoot(repo: Repo, nav: Nav) {
         val baseDensity = androidx.compose.ui.platform.LocalDensity.current
         val textScale = com.jpetrydesign.pyng.ui.kit.textScaleOf(repo.prefs.state.textSize)
         val scaled = androidx.compose.ui.unit.Density(baseDensity.density, baseDensity.fontScale * textScale)
-        CompositionLocalProvider(LocalTok provides t, LocalRepo provides repo, LocalMotion provides motion, androidx.compose.ui.platform.LocalDensity provides scaled) {
+        CompositionLocalProvider(LocalTok provides t, LocalRepo provides repo, LocalMotion provides motion, androidx.compose.ui.platform.LocalDensity provides scaled, LocalNav provides nav) {
+            // Everything on screen feeds the in-app banner's frosted glass.
+            val appHaze = remember { dev.chrisbanes.haze.HazeState() }
             BoxWithConstraints(Modifier.fillMaxSize().background(t.bg)) {
                 val wide = maxWidth >= 600.dp
-                if (wide) WideLayout(nav, maxWidth) else Pane(nav, Modifier.fillMaxSize(), wide = false)
+                Box(Modifier.fillMaxSize().hazeSource(appHaze)) {
+                    if (wide) WideLayout(nav, maxWidth) else Pane(nav, Modifier.fillMaxSize(), wide = false)
+                }
                 ToastHost(toast, onUndo = { toast?.undo?.invoke(); toast = null }, Modifier.align(Alignment.BottomCenter))
                 com.jpetrydesign.pyng.ui.kit.AskDialog(repo.ask) { repo.ask = null }
                 com.jpetrydesign.pyng.ui.screens.PhotoCropper(repo.crop) { repo.crop = null }
                 Box(Modifier.align(Alignment.TopCenter)) {
+                    CompositionLocalProvider(com.jpetrydesign.pyng.ui.kit.LocalHaze provides appHaze) {
                     com.jpetrydesign.pyng.ui.screens.InAppBanner(banner, onOpen = { id -> banner = null; nav.openChat(id) }, onClose = { banner = null })
+                    }
                 }
             }
         }

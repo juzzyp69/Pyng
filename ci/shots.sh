@@ -79,6 +79,9 @@ shot 62-home-editpins --es open editpins
 shot 63-theme --es route theme:c1
 shot 64-theme-custom --es route theme:c1 --es open custom
 WAIT=16 shot 65-thread-sent --es route thread:c1 --es open send
+shot 66-thread-media --es route thread:c9
+WAIT=10 shot 67-thread-viewer --es route thread:c9 --es open viewer
+shot 68-section-chats-top --es route section:chats
 
 # Fold inner screen
 adb shell wm size 1812x2176

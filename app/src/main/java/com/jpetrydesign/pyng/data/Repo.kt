@@ -45,6 +45,8 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     val media = mutableStateMapOf<String, String>()
     /** Attachments that still failed after a few tries; the bubble offers a retry instead of spinning forever. */
     val mediaFailed = mutableStateMapOf<String, Boolean>()
+    /** Goes up each time the connection comes back, so waiting attachments try again. */
+    val connEpoch = androidx.compose.runtime.mutableIntStateOf(0)
     /** Previews Google left blank (a photo, a voice note…), filled in from the newest message. */
     val previewFill = mutableStateMapOf<String, String>()
     private val previewAsked = HashSet<String>()
@@ -190,7 +192,11 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
                 convs.clear(); msgs.clear(); avatars.clear()
                 cacheFile.delete(); avatarFile.delete()
             }
-            "connection" -> if (e.data.optString("state") == "ready" && convs.isEmpty()) refresh()
+            "connection" -> if (e.data.optString("state") == "ready") {
+                if (convs.isEmpty()) refresh()
+                // Back online: anything that failed gets another go.
+                mediaFailed.clear(); connEpoch.intValue++
+            }
         }
     }
 
@@ -386,9 +392,13 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         }
     }
 
+    /** Up to 3 downloads at once; the newest messages ask first, so they load first. */
+    private val dlGate = kotlinx.coroutines.sync.Semaphore(3)
+
     /**
-     * Downloads an attachment, retrying a few times on its own. If it still fails, the bubble
-     * shows a retry button; [manual] is a tap on that button.
+     * Downloads an attachment. Waits for the connection to be ready first, gives each try a time
+     * limit, and retries twice. If it still fails, the bubble shows a retry button instead of
+     * spinning forever; [manual] is a tap on that button.
      */
     fun ensureMedia(ref: MediaRef, thumb: Boolean = false, manual: Boolean = false) {
         if (demo) return
@@ -399,20 +409,27 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         mediaFailed.remove(id)
         mediaBusy[id] = true
         scope.launch {
-            var tries = 0
-            while (true) {
-                val r = hub.io { it.downloadMedia(id, key, if (thumb) "jpg" else ref.ext) }
-                if (r.isSuccess) { media[id] = r.getOrThrow(); break }
-                tries++
-                android.util.Log.w("Pyng", "Attachment download failed (try " + tries + "): " + r.exceptionOrNull()?.message)
-                if (tries >= 4) {
-                    mediaFailed[id] = true
-                    if (manual) toast("Couldn't download it. Check your connection and try again.")
-                    break
+            dlGate.acquire()
+            try {
+                kotlinx.coroutines.withTimeoutOrNull(20_000) { while (!hub.engine.isConnected) delay(300) }
+                var tries = 0
+                while (true) {
+                    val r = kotlinx.coroutines.withTimeoutOrNull(45_000) { hub.io { it.downloadMedia(id, key, if (thumb) "jpg" else ref.ext) } }
+                        ?: Result.failure(Exception("timed out"))
+                    if (r.isSuccess && r.getOrNull().orEmpty().isNotEmpty()) { media[id] = r.getOrThrow(); break }
+                    tries++
+                    android.util.Log.w("Pyng", "Attachment download failed (try " + tries + "): " + r.exceptionOrNull()?.message)
+                    if (tries >= 3) {
+                        mediaFailed[id] = true
+                        if (manual) toast("Couldn't download it. Check your connection and try again.")
+                        break
+                    }
+                    delay(if (tries == 1) 1200 else 3000)
                 }
-                delay(longArrayOf(800, 2500, 6000)[tries - 1])
+            } finally {
+                dlGate.release()
+                mediaBusy.remove(id)
             }
-            mediaBusy.remove(id)
         }
     }
 
@@ -720,6 +737,29 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
             msg("c2", false, "Dinner Sunday at 5:00 PM? Bring the good salad", 20),
         )
         msgs["c8"] = listOf(msg("c8", false, convs["c8"]!!.preview, 700))
+        // A sample photo and a shared contact, so the photo viewer and contact card can be checked.
+        runCatching {
+            val dir = File(app.cacheDir, "demo").apply { mkdirs() }
+            val pic = File(dir, "couch.jpg")
+            if (!pic.exists()) {
+                val bmp = android.graphics.Bitmap.createBitmap(900, 1200, android.graphics.Bitmap.Config.ARGB_8888)
+                val cv = android.graphics.Canvas(bmp)
+                val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+                paint.shader = android.graphics.LinearGradient(0f, 0f, 900f, 1200f, 0xFF8EC5FC.toInt(), 0xFFE0C3FC.toInt(), android.graphics.Shader.TileMode.CLAMP)
+                cv.drawRect(0f, 0f, 900f, 1200f, paint)
+                paint.shader = null; paint.color = 0x55FFFFFF
+                cv.drawCircle(450f, 520f, 260f, paint)
+                pic.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, it) }
+            }
+            val card = File(dir, "Sam Rivera.vcf")
+            card.writeText("BEGIN:VCARD\nVERSION:3.0\nFN:Sam Rivera\nN:Rivera;Sam;;;\nORG:Northside Studio\nTEL;TYPE=CELL:(720) 555-0128\nEMAIL:sam@example.com\nEND:VCARD\n")
+            val photo = MediaRef("demo-photo", "", "", "", "image/jpeg", "couch.jpg", pic.length(), 900, 1200, pic.path)
+            val vcf = MediaRef("demo-card", "", "", "", "text/x-vcard", "Sam Rivera.vcf", card.length(), 0, 0, card.path)
+            msgs["c9"] = listOf(
+                msg("c9", false, "Look who claimed my spot on the couch", 1500).copy(media = listOf(photo)),
+                msg("c9", false, "Here's Sam's number for the shoot", 1499).copy(media = listOf(vcf)),
+            )
+        }
         typing["c4"] = now + 600_000
         contacts = listOf(jordan, ava, marcus, nina, mom).map { Contact(it.id, it.contactId, it.name, it.number, it.formatted, "") }
         prefs.edit { it.copy(pinned = listOf("c2", "c4", "c3", "c7", "c9", "c6"), pinsSeeded = true, setupDone = true, profileName = "Justin Petry") }

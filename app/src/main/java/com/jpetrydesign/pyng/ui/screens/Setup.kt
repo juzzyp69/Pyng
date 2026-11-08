@@ -374,6 +374,13 @@ private fun Waiting(text: String) {
 private fun SignInWeb(onBack: () -> Unit, onCookies: (String) -> Unit) {
     var sent by remember { mutableStateOf(false) }
     BackHandler(onBack = onBack)
+    // Google sometimes asks to use the camera to confirm it's you. Ask Android for it, then pass it to the page.
+    val appCtx = androidx.compose.ui.platform.LocalContext.current
+    val pendingCam = remember { arrayOfNulls<android.webkit.PermissionRequest>(1) }
+    val askCam = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        pendingCam[0]?.let { r -> if (ok) r.grant(arrayOf(android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE)) else r.deny() }
+        pendingCam[0] = null
+    }
     Column(Modifier.fillMaxSize().background(LocalTok.current.bg)) {
         PageTop("Sign in with Google", onBack, sub = "Use the account Google Messages uses")
         AndroidView(
@@ -392,6 +399,14 @@ private fun SignInWeb(onBack: () -> Unit, onCookies: (String) -> Unit) {
                     }
                     cm.setAcceptCookie(true)
                     cm.setAcceptThirdPartyCookies(this, true)
+                    webChromeClient = object : android.webkit.WebChromeClient() {
+                        override fun onPermissionRequest(request: android.webkit.PermissionRequest) {
+                            val cam = android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE
+                            if (cam !in request.resources) { request.deny(); return }
+                            if (androidx.core.content.ContextCompat.checkSelfPermission(appCtx, Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) request.grant(arrayOf(cam))
+                            else { pendingCam[0] = request; askCam.launch(Manifest.permission.CAMERA) }
+                        }
+                    }
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) = check(url)
                         override fun onPageFinished(view: WebView?, url: String?) = check(url)

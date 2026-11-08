@@ -110,6 +110,7 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 import java.io.File
 import kotlin.math.roundToInt
 
@@ -191,6 +192,14 @@ fun Modifier.press(scaleTo: Float = 0.95f, onClick: (() -> Unit)? = null): Modif
     var m = this.scale(k)
     if (onClick != null) m = m.clickable(interactionSource = src, indication = null, onClick = onClick)
     m
+}
+
+private val enteredOnce = HashSet<String>()
+
+/** Like [enter], but plays only the first time [key] appears after the app opens, not every time you come back to the screen. */
+fun Modifier.enterOnce(key: String, index: Int, pop: Boolean = false): Modifier = composed {
+    val first = remember { enteredOnce.add(key) }
+    if (first) Modifier.enter(index, pop) else Modifier
 }
 
 /** Stagger-in for list items: fade and rise, like the prototype's fadeUp/popUp. */
@@ -277,36 +286,24 @@ fun initialsOf(name: String): String {
  * [backdropAt] (where that photo's corner sits relative to the badge): the badge then shows that
  * patch of the photo softly blurred behind the number, like real frosted glass. No outline.
  */
+/**
+ * The unread count. Give it a [haze] (the picture right under it) and it becomes frosted glass:
+ * that picture blurred, with a soft tint of the badge color, and no outline.
+ */
 @Composable
-fun CountBadge(
-    n: Int, bg: Color = LocalTok.current.badgeBg, ink: Color = LocalTok.current.badgeInk, h: Dp = 21.dp, modifier: Modifier = Modifier,
-    backdrop: (@Composable () -> Unit)? = null, backdropSize: Dp = 0.dp, backdropAt: (androidx.compose.ui.unit.IntSize) -> androidx.compose.ui.unit.IntOffset = { androidx.compose.ui.unit.IntOffset.Zero },
-) {
+fun CountBadge(n: Int, bg: Color = LocalTok.current.badgeBg, ink: Color = LocalTok.current.badgeInk, h: Dp = 21.dp, modifier: Modifier = Modifier, haze: HazeState? = null) {
     val t = LocalTok.current
     val shape = RoundedCornerShape(h / 2)
-    val canBlur = backdrop != null && android.os.Build.VERSION.SDK_INT >= 31
-    var size by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
-    val glass = androidx.compose.ui.graphics.lerp(bg, Color.White, if (t.dark) 0.08f else 0.16f)
+    val glass = androidx.compose.ui.graphics.lerp(bg, Color.White, if (t.dark) 0.06f else 0.12f)
+    val frosted = haze != null && !t.solid
     Box(
-        modifier.heightIn(min = h).widthIn(min = h)
-            .onSizeChanged { size = it }
-            .shadow(2.dp, shape, clip = false, ambientColor = bg.copy(alpha = 0.3f), spotColor = bg.copy(alpha = 0.3f))
-            .clip(shape)
-            .background(if (canBlur) glass.copy(alpha = 0.3f) else glass.copy(alpha = if (t.solid) 1f else 0.72f)),
+        modifier.heightIn(min = h).widthIn(min = h).clip(shape)
+            .then(
+                if (frosted) Modifier.hazeEffect(state = haze, style = HazeStyle(backgroundColor = t.bg, tint = HazeTint(glass.copy(alpha = if (t.dark) 0.56f else 0.62f)), blurRadius = 9.dp, noiseFactor = 0f))
+                else Modifier.background(glass.copy(alpha = if (t.solid) 1f else 0.92f)),
+            ),
         contentAlignment = Alignment.Center,
     ) {
-        if (canBlur && backdrop != null) {
-            // The photo underneath, blurred, then a light tint of the badge color over it.
-            Box(Modifier.matchParentSize()) {
-                Box(
-                    Modifier.wrapContentSize(Alignment.TopStart, unbounded = true)
-                        .offset { backdropAt(size) }
-                        .requiredSize(backdropSize)
-                        .blur(7.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Unbounded),
-                ) { backdrop() }
-            }
-            Box(Modifier.matchParentSize().background(glass.copy(alpha = 0.55f)))
-        }
         T(if (n > 99) "99+" else n.toString(), size = (h.value * 0.52f).sp, weight = FontWeight.Bold, color = ink, modifier = Modifier.padding(horizontal = 6.dp))
     }
 }
@@ -460,47 +457,80 @@ fun Modifier.swipeDir(key: Any?, sign: Int, onDrag: (Float) -> Unit, onEnd: () -
 
 // ---------- page chrome ----------
 
-/** Title bar for full pages: back chevron and a large bold title. */
+/**
+ * The glass for title bars pinned to the top: the chat header's frost with a touch of the theme
+ * color, so it reads as a soft tint instead of black or white.
+ */
+val Tok.barBg: Color get() = if (solid) hdrBg else androidx.compose.ui.graphics.lerp(hdrBg, p.copy(alpha = hdrBg.alpha), if (dark) 0.16f else 0.08f)
+
+/**
+ * A slim bar pinned to the top of a screen. It covers the status bar, so whatever scrolls slides
+ * under the frost instead of under the clock and icons. Pass the screen's [haze] to blur what's behind.
+ */
 @Composable
-fun PageTop(title: String, onBack: () -> Unit, sub: String? = null, trailing: (@Composable () -> Unit)? = null) {
-    Row(
-        Modifier.fillMaxWidth().statusBarsPadding().padding(start = 6.dp, end = 12.dp, top = 14.dp, bottom = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CircleButton(Icons.back, "Back", onBack)
-        Spacer(Modifier.width(6.dp))
-        Column(Modifier.weight(1f)) {
-            T(title, size = 26.sp, weight = FontWeight.Bold, letterSpacing = (-0.6).sp, maxLines = 1)
-            if (sub != null) T(sub, size = 12.5.sp, color = LocalTok.current.soft, maxLines = 1)
+fun TopBar(haze: HazeState?, modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+    val t = LocalTok.current
+    val shape = RoundedCornerShape(bottomStart = 26.dp, bottomEnd = 26.dp)
+    CompositionLocalProvider(LocalHaze provides haze) {
+        Row(
+            modifier.fillMaxWidth()
+                .shadow(8.dp, shape, clip = false, ambientColor = t.shadow.copy(alpha = 0.10f), spotColor = t.shadow.copy(alpha = 0.14f))
+                .frost(shape, if (haze == null && !t.solid) androidx.compose.ui.graphics.lerp(t.bg, t.barBg.copy(alpha = 1f), 0.5f).copy(alpha = 0.94f) else t.barBg, 30.dp)
+                .statusBarsPadding(),
+            verticalAlignment = Alignment.CenterVertically,
+            content = content,
+        )
+    }
+}
+
+/** Title bar for full pages: back chevron and a bold title, pinned at the top. */
+@Composable
+fun PageTop(title: String, onBack: () -> Unit, sub: String? = null, trailing: (@Composable () -> Unit)? = null, haze: HazeState? = null, modifier: Modifier = Modifier) {
+    TopBar(haze, modifier) {
+        Row(Modifier.weight(1f).padding(start = 6.dp, end = 12.dp, top = 2.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            CircleButton(Icons.back, "Back", onBack)
+            Spacer(Modifier.width(6.dp))
+            Column(Modifier.weight(1f)) {
+                T(title, size = if (sub != null) 20.sp else 22.sp, weight = FontWeight.Bold, letterSpacing = (-0.5).sp, maxLines = 1)
+                if (sub != null) T(sub, size = 12.5.sp, color = LocalTok.current.soft, maxLines = 1)
+            }
+            trailing?.invoke()
         }
-        trailing?.invoke()
     }
 }
 
 /** How much the Text size setting scales text app-wide. */
 fun textScaleOf(size: String): Float = when (size) { "S" -> 0.95f; "L" -> 1.1f; "XL" -> 1.22f; else -> 1f }
 
-/** Keeps scrolled content from showing through under the status bar. */
+/** Keeps scrolled content from showing through under the status bar: a light tinted glass, not a dark fade. */
 @Composable
 fun StatusScrim(modifier: Modifier = Modifier) {
     val t = LocalTok.current
+    val c = if (t.solid) t.hdrBg else androidx.compose.ui.graphics.lerp(t.bg, t.barBg.copy(alpha = 1f), 0.5f)
     Column(modifier.fillMaxWidth()) {
-        Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(t.bg.copy(alpha = 0.94f)))
-        Box(Modifier.fillMaxWidth().height(14.dp).background(Brush.verticalGradient(listOf(t.bg.copy(alpha = 0.94f), t.bg.copy(alpha = 0f)))))
+        Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(c.copy(alpha = 0.9f)))
+        Box(Modifier.fillMaxWidth().height(6.dp).background(Brush.verticalGradient(listOf(c.copy(alpha = 0.9f), c.copy(alpha = 0f)))))
     }
 }
 
-/** A scrolling page with the glow background and a title bar. */
+/** A scrolling page with the glow background and a title bar that stays put while the page slides under it. */
 @Composable
 fun Page(title: String, onBack: () -> Unit, sub: String? = null, trailing: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     BackHandler(onBack = onBack)
+    val haze = remember { HazeState() }
+    var barH by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val density = LocalDensity.current
+    val guess = with(density) { WindowInsets.statusBars.getTop(this).toDp() } + 56.dp
     Box(Modifier.fillMaxSize()) {
-        Glow()
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            PageTop(title, onBack, sub, trailing)
-            Column(Modifier.padding(horizontal = 16.dp).navigationBarsPadding().padding(bottom = 32.dp), content = content)
+        Box(Modifier.fillMaxSize().hazeSource(haze)) {
+            Glow()
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                Spacer(Modifier.height(if (barH > 0) with(density) { barH.toDp() } else guess))
+                Spacer(Modifier.height(10.dp))
+                Column(Modifier.padding(horizontal = 16.dp).navigationBarsPadding().padding(bottom = 32.dp), content = content)
+            }
         }
-        StatusScrim(Modifier.align(Alignment.TopCenter))
+        PageTop(title, onBack, sub, trailing, haze = haze, modifier = Modifier.align(Alignment.TopCenter).onSizeChanged { barH = it.height })
     }
 }
 

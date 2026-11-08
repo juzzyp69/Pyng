@@ -35,6 +35,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -90,6 +93,7 @@ import com.jpetrydesign.pyng.ui.Nav
 import com.jpetrydesign.pyng.ui.Route
 import com.jpetrydesign.pyng.ui.kit.Avatar
 import com.jpetrydesign.pyng.ui.kit.CountBadge
+import com.jpetrydesign.pyng.ui.kit.enterOnce
 import com.jpetrydesign.pyng.ui.kit.Glow
 import com.jpetrydesign.pyng.ui.kit.Ico
 import com.jpetrydesign.pyng.ui.kit.Icons
@@ -159,6 +163,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
 
     // Dragging: a pinned chat (to reorder or drag out) or a list row (to drag up into pins).
     val listState = rememberLazyListState()
+    var barH by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val dh = remember { DragHolder() }
     var dragId by remember { mutableStateOf<String?>(null) }
     var dragFromRow by remember { mutableStateOf(false) }
@@ -332,35 +337,8 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
             LazyColumn(
                 Modifier.fillMaxSize().hazeSource(haze),
                 state = listState,
-                contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 150.dp),
+                contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = with(density) { if (barH > 0) barH.toDp() else WindowInsets.statusBars.getTop(this).toDp() + 66.dp } + 14.dp, bottom = 150.dp),
             ) {
-                item("head") {
-                    Row(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 24.dp, bottom = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            T("Messages", size = 36.sp, weight = FontWeight.Bold, letterSpacing = (-1.3).sp, lineHeight = 40.sp)
-                            Spacer(Modifier.height(6.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(7.dp).clip(CircleShape).background(t.dot))
-                                Spacer(Modifier.width(8.dp))
-                                val status by repo.hub.connection.collectAsState()
-                                T(
-                                    when {
-                                        repo.loading && all.isEmpty() -> "Loading your chats…"
-                                        status == "phone_not_responding" -> "Your phone isn't responding"
-                                        status == "reconnecting" || status == "connecting" -> "Connecting…"
-                                        newCount > 0 -> "$newCount New Conversation" + if (newCount > 1) "s" else ""
-                                        else -> "You’re All Caught Up"
-                                    },
-                                    size = 13.5.sp, weight = FontWeight.Medium, color = t.soft,
-                                )
-                            }
-                        }
-                        val photo = p.profilePhoto.ifEmpty { null }
-                        Box(Modifier.size(56.dp).edge(CircleShape).clip(CircleShape).press(0.92f) { nav.go(Route.Settings) }) {
-                            Avatar(photo, com.jpetrydesign.pyng.ui.kit.initialsOf(p.profileName.ifBlank { "Me" }), 56.dp, t.tone, t.p)
-                        }
-                    }
-                }
                 if (pins.isNotEmpty() && layout != "List" && layout != "Dock") {
                     item("pins") { PinnedArea(layout, pins, pinCtl, p.pinStyle) }
                 } else if (pins.isEmpty() && rows.isNotEmpty()) {
@@ -415,6 +393,35 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                 }
             }
 
+            // The title bar stays pinned at the top; the chats slide under its frost.
+            com.jpetrydesign.pyng.ui.kit.TopBar(haze, Modifier.align(Alignment.TopCenter).onSizeChanged { barH = it.height }) {
+                Row(Modifier.weight(1f).padding(start = 22.dp, end = 16.dp, top = 4.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        T("Messages", size = 28.sp, weight = FontWeight.Bold, letterSpacing = (-0.9).sp, lineHeight = 32.sp)
+                        Spacer(Modifier.height(3.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(7.dp).clip(CircleShape).background(t.dot))
+                            Spacer(Modifier.width(8.dp))
+                            val status by repo.hub.connection.collectAsState()
+                            T(
+                                when {
+                                    repo.loading && all.isEmpty() -> "Loading your chats…"
+                                    status == "phone_not_responding" -> "Your phone isn't responding"
+                                    status == "reconnecting" || status == "connecting" -> "Connecting…"
+                                    newCount > 0 -> "$newCount New Conversation" + if (newCount > 1) "s" else ""
+                                    else -> "You’re All Caught Up"
+                                },
+                                size = 13.sp, weight = FontWeight.Medium, color = t.soft,
+                            )
+                        }
+                    }
+                    val photo = p.profilePhoto.ifEmpty { null }
+                    Box(Modifier.size(44.dp).edge(CircleShape, elevation = 8.dp).clip(CircleShape).press(0.92f) { nav.go(Route.Settings) }) {
+                        Avatar(photo, com.jpetrydesign.pyng.ui.kit.initialsOf(p.profileName.ifBlank { "Me" }), 44.dp, t.tone, t.p)
+                    }
+                }
+            }
+
             if (layout == "Dock" && pins.isNotEmpty()) {
                 Row(
                     Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(start = 18.dp, bottom = 28.dp, end = 168.dp)
@@ -424,17 +431,12 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     pins.forEachIndexed { i, pin ->
-                        PinItem(pin, i, pinCtl, Modifier.enter(i, pop = true)) {
+                        PinItem(pin, i, pinCtl, Modifier.enterOnce("pin:$layout:" + pin.c.id, i, pop = true)) {
+                            val badgeHaze = remember { dev.chrisbanes.haze.HazeState() }
                             Box(Modifier.size(46.dp)) {
-                                Avatar(pin.who.photo, pin.who.ini, 46.dp, pin.who.bg, pin.who.ink, 15.sp)
+                                Box(Modifier.hazeSource(badgeHaze)) { Avatar(pin.who.photo, pin.who.ini, 46.dp, pin.who.bg, pin.who.ink, 15.sp) }
                                 if (pin.count > 0) {
-                                    val d = LocalDensity.current
-                                    val avPx = with(d) { 46.dp.roundToPx() }; val dx = with(d) { 3.dp.roundToPx() }; val dy = with(d) { 2.dp.roundToPx() }
-                                    CountBadge(
-                                        pin.count, h = 18.dp, modifier = Modifier.align(Alignment.TopEnd).offset(3.dp, (-2).dp),
-                                        backdrop = { Avatar(pin.who.photo, pin.who.ini, 46.dp, pin.who.bg, pin.who.ink, 15.sp) }, backdropSize = 46.dp,
-                                        backdropAt = { sz -> IntOffset(-(avPx - sz.width + dx), dy) },
-                                    )
+                                    CountBadge(pin.count, h = 20.dp, modifier = Modifier.align(Alignment.TopEnd).offset(4.dp, (-3).dp), haze = badgeHaze)
                                 }
                             }
                         }
@@ -522,7 +524,6 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
             }
         }
 
-        com.jpetrydesign.pyng.ui.kit.StatusScrim(Modifier.align(Alignment.TopCenter))
         RowMenu(menuFor, onDismiss = { menuFor = null }, onEditPins = { editPins = true })
         PermissionSheet(askPerms) { askPerms = false; repo.prefs.edit { it.copy(permsAsked = 1) } }
         if (nav.strip) ColorStrip(onDone = { nav.strip = false })
@@ -813,19 +814,18 @@ private fun PinItem(pin: Pin, index: Int, ctl: PinCtl, modifier: Modifier = Modi
 private fun PinFace(pin: Pin, av: Dp, iniSize: Float, style: String, badgeH: Dp = 21.dp) {
     val t = LocalTok.current
     val hot = pin.count > 0 || pin.typing
+    // The photo is what the badge's frosted glass blurs.
+    val badgeHaze = remember { dev.chrisbanes.haze.HazeState() }
     Box(Modifier.size(av)) {
-        Avatar(
-            pin.who.photo, pin.who.ini, av, pin.who.bg, pin.who.ink, iniSize.sp,
-            halo = if (style == "Rings" && hot) (t.pal.plus ?: t.p) else null,
-        )
-        if (pin.count > 0 && style != "Rings") {
-            val d = LocalDensity.current
-            val avPx = with(d) { av.roundToPx() }; val dx = with(d) { 5.dp.roundToPx() }; val dy = with(d) { 3.dp.roundToPx() }
-            CountBadge(
-                pin.count, h = badgeH, modifier = Modifier.align(Alignment.TopEnd).offset(5.dp, (-3).dp),
-                backdrop = { Avatar(pin.who.photo, pin.who.ini, av, pin.who.bg, pin.who.ink, iniSize.sp) }, backdropSize = av,
-                backdropAt = { sz -> IntOffset(-(avPx - sz.width + dx), dy) },
+        Box(Modifier.hazeSource(badgeHaze)) {
+            Avatar(
+                pin.who.photo, pin.who.ini, av, pin.who.bg, pin.who.ink, iniSize.sp,
+                halo = if (style == "Rings" && hot) (t.pal.plus ?: t.p) else null,
             )
+        }
+        if (pin.count > 0 && style != "Rings") {
+            val bh = badgeH + 2.dp
+            CountBadge(pin.count, h = bh, modifier = Modifier.align(Alignment.TopEnd).offset(6.dp, (-4).dp), haze = badgeHaze)
         }
         LocalPinMinus.current?.let { unpin ->
             Box(
@@ -876,7 +876,7 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
                     Row(Modifier.fillMaxWidth()) {
                         row.forEachIndexed { i, pin ->
                             Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
-                                PinItem(pin, r * cols + i, ctl, Modifier.enter(r * cols + i, pop = true)) {
+                                PinItem(pin, r * cols + i, ctl, Modifier.enterOnce("pin:$layout:" + pin.c.id, r * cols + i, pop = true)) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         PinFace(pin, av, if (layout == "Large") 26f else 22f, style)
                                         Spacer(Modifier.height(8.dp))
@@ -898,7 +898,7 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
                     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
                         pages[pg].forEachIndexed { i, pin ->
                             Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
-                                PinItem(pin, pg * 4 + i, ctl, Modifier.enter(i, pop = true)) {
+                                PinItem(pin, pg * 4 + i, ctl, Modifier.enterOnce("pin:$layout:" + pin.c.id, i, pop = true)) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         PinFace(pin, 72.dp, 22f, style); Spacer(Modifier.height(8.dp)); PinName(pin, 13f, 82.dp)
                                     }
@@ -922,7 +922,7 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
             val mod = if (compact) Modifier.fillMaxWidth().padding(bottom = 20.dp) else cardMod.padding(vertical = 18.dp)
             Row(mod.horizontalScroll(rememberScrollState()).padding(horizontal = if (compact) 2.dp else 10.dp), horizontalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 4.dp)) {
                 pins.forEachIndexed { i, pin ->
-                    PinItem(pin, i, ctl, Modifier.width(if (compact) 56.dp else 80.dp).enter(i, pop = true)) {
+                    PinItem(pin, i, ctl, Modifier.width(if (compact) 56.dp else 80.dp).enterOnce("pin:$layout:" + pin.c.id, i, pop = true)) {
                         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                             PinFace(pin, if (compact) 52.dp else 64.dp, if (compact) 17f else 20f, style)
                             Spacer(Modifier.height(8.dp))
@@ -935,7 +935,7 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
         "Chips" -> {
             FlowRow(Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 pins.forEachIndexed { i, pin ->
-                    PinItem(pin, i, ctl, Modifier.enter(i, pop = true)) {
+                    PinItem(pin, i, ctl, Modifier.enterOnce("pin:$layout:" + pin.c.id, i, pop = true)) {
                         Row(
                             Modifier.clip(RoundedCornerShape(999.dp)).background(t.card).cardEdge(RoundedCornerShape(999.dp)).padding(start = 5.dp, end = 16.dp, top = 5.dp, bottom = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -953,7 +953,7 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
             Column(Modifier.fillMaxWidth().padding(bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 val first = if (spot) pins.firstOrNull() else null
                 if (first != null) {
-                    PinItem(first, 0, ctl, Modifier.fillMaxWidth().enter(0, pop = true)) {
+                    PinItem(first, 0, ctl, Modifier.fillMaxWidth().enterOnce("pin:$layout:" + first.c.id, 0, pop = true)) {
                         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(t.card).cardEdge(RoundedCornerShape(24.dp)).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                             PinFace(first, 62.dp, 18f, style, 20.dp)
                             Spacer(Modifier.width(12.dp))
@@ -969,7 +969,7 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
                 rest.chunked(cols).forEachIndexed { r, row ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         row.forEachIndexed { i, pin ->
-                            PinItem(pin, (if (spot) 1 else 0) + r * cols + i, ctl, Modifier.weight(1f).enter(1 + r * cols + i, pop = true)) {
+                            PinItem(pin, (if (spot) 1 else 0) + r * cols + i, ctl, Modifier.weight(1f).enterOnce("pin:$layout:" + pin.c.id, 1 + r * cols + i, pop = true)) {
                                 Column(
                                     Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(t.card).cardEdge(RoundedCornerShape(24.dp))
                                         .padding(if (spot) PaddingValues(horizontal = 6.dp, vertical = 14.dp) else PaddingValues(14.dp)),

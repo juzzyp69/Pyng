@@ -407,7 +407,7 @@ private fun MediaView(m: Msg, ref: MediaRef, shape: RoundedCornerShape, me: Bool
     val full = ref.localPath.ifEmpty { repo.media[ref.id].orEmpty() }
     val thumb = repo.media[ref.thumbId].orEmpty()
     val auto = remember { repo.autoDownloadAllowed() }
-    LaunchedEffect(ref.id) {
+    LaunchedEffect(ref.id, repo.connEpoch.intValue) {
         if (ref.localPath.isEmpty()) {
             if ((ref.isImage || ref.isAudio) && auto) repo.ensureMedia(ref)
             if ((ref.isVideo || ref.isImage) && ref.thumbId.isNotEmpty()) repo.ensureMedia(ref, thumb = true)
@@ -445,7 +445,8 @@ private fun MediaView(m: Msg, ref: MediaRef, shape: RoundedCornerShape, me: Bool
                 }
             }
         }
-        ref.isAudio -> VoiceBubble(ref, full, busy, shape, bg, fg, sub, me)
+        ref.isAudio -> VoicePlayer(m, ref, full, busy, shape, bg, fg, sub, me)
+        ref.isContact -> ContactCard(ref, full, busy, me)
         else -> {
             Row(
                 Modifier.clip(shape).background(bg).clickable { a.onOpenMedia(ref) }.padding(10.dp).widthIn(min = 180.dp, max = 260.dp),
@@ -472,62 +473,6 @@ fun sizeText(b: Long): String = when {
     else -> "%.1f MB".format(b / 1048576f)
 }
 
-@Composable
-private fun VoiceBubble(ref: MediaRef, path: String, busy: Boolean, shape: RoundedCornerShape, bg: Brush, fg: Color, sub: Color, me: Boolean) {
-    val repo = LocalRepo.current
-    var playing by remember { mutableStateOf(false) }
-    var progress by remember { mutableFloatStateOf(0f) }
-    var durMs by remember { mutableStateOf(0) }
-    val player = remember { mutableStateMapOf<String, MediaPlayer>() }
-    LaunchedEffect(path) {
-        if (path.isNotEmpty()) durMs = withContext(Dispatchers.IO) {
-            runCatching { MediaMetadataRetriever().run { setDataSource(path); val d = extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toInt() ?: 0; release(); d } }.getOrDefault(0)
-        }
-    }
-    LaunchedEffect(playing) {
-        while (playing) {
-            val mp = player["p"] ?: break
-            progress = if (mp.duration > 0) mp.currentPosition.toFloat() / mp.duration else 0f
-            delay(80)
-        }
-    }
-    DisposableEffect(Unit) { onDispose { player["p"]?.release(); player.clear() } }
-    val bars = remember(ref.id) { List(26) { i -> (0.3f + ((ref.id.hashCode() shr (i % 16)) and 7) / 10f).coerceIn(0.25f, 1f) } }
-    Row(
-        Modifier.clip(shape).background(bg).padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier.size(36.dp).clip(CircleShape).background(if (me) Color.White.copy(alpha = 0.22f) else LocalTok.current.tone).clickable {
-                if (path.isEmpty()) { repo.ensureMedia(ref); return@clickable }
-                val mp = player["p"]
-                if (mp != null && playing) { mp.pause(); playing = false }
-                else if (mp != null) { mp.start(); playing = true }
-                else runCatching {
-                    MediaPlayer().apply {
-                        setDataSource(path); prepare(); start()
-                        setOnCompletionListener { playing = false; progress = 0f; release(); player.clear() }
-                    }.also { player["p"] = it; playing = true }
-                }
-            },
-            contentAlignment = Alignment.Center,
-        ) {
-            if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = fg, strokeWidth = 2.dp)
-            else Ico(if (playing) Icons.pause else Icons.play, fg, 16.dp, 1f, fill = fg)
-        }
-        Spacer(Modifier.width(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(2.5.dp), verticalAlignment = Alignment.CenterVertically) {
-            bars.forEachIndexed { i, h ->
-                val on = i / bars.size.toFloat() < progress
-                Box(Modifier.width(3.dp).height((22 * h).dp).clip(RoundedCornerShape(2.dp)).background(if (on || !playing && progress == 0f) fg else fg.copy(alpha = 0.4f)))
-            }
-        }
-        Spacer(Modifier.width(10.dp))
-        val secs = durMs / 1000
-        T(if (durMs > 0) "%d:%02d".format(secs / 60, secs % 60) else "Voice", size = 13.sp, weight = FontWeight.SemiBold, color = fg)
-    }
-}
-
 // ---------- link previews ----------
 
 data class LinkMeta(val title: String, val host: String, val image: String?, val desc: String = "", val icon: String? = null)
@@ -536,54 +481,97 @@ object Links {
     val cache = mutableStateMapOf<String, LinkMeta?>()
     private val busy = mutableSetOf<String>()
     const val UA = "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Mobile Safari/537.36"
+    // Social sites hide their preview details from browsers that aren't signed in, but share them
+    // with the link-preview crawlers chat apps use. Asking the way those crawlers do gets the card.
+    private const val CRAWLER = "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)"
+    private val social = Regex("(^|\\.)(instagram\\.com|instagr\\.am|threads\\.net|threads\\.com|facebook\\.com|fb\\.watch|fb\\.com|x\\.com|twitter\\.com|tiktok\\.com|pinterest\\.com|pin\\.it|snapchat\\.com|linkedin\\.com)$", RegexOption.IGNORE_CASE)
+    private var dir: File? = null
+
+    fun init(ctx: android.content.Context) { if (dir == null) dir = File(ctx.cacheDir, "links").apply { mkdirs() } }
+
+    private fun diskFile(url: String) = dir?.let { File(it, Integer.toHexString(url.hashCode()) + "-" + url.length + ".json") }
+
+    private fun readDisk(url: String): LinkMeta? = runCatching {
+        val f = diskFile(url) ?: return null
+        if (!f.exists() || System.currentTimeMillis() - f.lastModified() > 14L * 24 * 3600_000) return null
+        val o = org.json.JSONObject(f.readText())
+        if (o.optString("url") != url) return null
+        LinkMeta(o.optString("title"), o.optString("host"), o.optString("image").ifBlank { null }, o.optString("desc"), o.optString("icon").ifBlank { null })
+    }.getOrNull()
+
+    private fun writeDisk(url: String, m: LinkMeta) {
+        runCatching {
+            val o = org.json.JSONObject().put("url", url).put("title", m.title).put("host", m.host).put("image", m.image ?: "").put("desc", m.desc).put("icon", m.icon ?: "")
+            diskFile(url)?.writeText(o.toString())
+        }
+    }
 
     suspend fun load(url: String) {
         if (cache.containsKey(url) || !busy.add(url)) return
         val meta = withContext(Dispatchers.IO) {
-            runCatching {
-                val c = URL(url).openConnection() as HttpURLConnection
-                c.connectTimeout = 7000; c.readTimeout = 7000; c.instanceFollowRedirects = true
-                c.setRequestProperty("User-Agent", UA)
-                c.setRequestProperty("Accept", "text/html,application/xhtml+xml")
-                c.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
-                // Short links (advmd.co, bit.ly…) hop between hosts; follow those hops by hand.
-                var conn = c
-                var hops = 0
-                while (conn.responseCode in 300..399 && hops < 6) {
-                    val next = conn.getHeaderField("Location") ?: break
-                    val u = URL(conn.url, next)
-                    conn.disconnect()
-                    conn = (u.openConnection() as HttpURLConnection).apply {
-                        connectTimeout = 7000; readTimeout = 7000; instanceFollowRedirects = true
-                        setRequestProperty("User-Agent", UA); setRequestProperty("Accept", "text/html,application/xhtml+xml")
-                    }
-                    hops++
+            readDisk(url)?.let { return@withContext it }
+            val host = runCatching { URL(url).host }.getOrDefault("")
+            val first = if (social.containsMatchIn(host)) CRAWLER else UA
+            val a = fetch(url, first)
+            // A page with no picture or title gets a second try the other way.
+            val got = if (a == null || a.image == null || a.title.isBlank()) {
+                val b = fetch(url, if (first == UA) CRAWLER else UA)
+                when {
+                    b == null -> a
+                    a == null -> b
+                    (b.image != null) && (a.image == null) -> b
+                    a.title.isBlank() && b.title.isNotBlank() -> b
+                    else -> a
                 }
-                val base = conn.url
-                val html = conn.inputStream.bufferedReader().use { r -> val buf = CharArray(200_000); var n = 0; while (n < buf.size) { val k = r.read(buf, n, buf.size - n); if (k <= 0) break; n += k; if (String(buf, 0, n).contains("</head>", true)) break }; String(buf, 0, n) }
-                fun clean(v: String) = android.text.Html.fromHtml(v, 0).toString().trim()
-                fun og(vararg names: String): String? {
-                    for (p in names) {
-                        val e = Regex.escape(p)
-                        val v = Regex("<meta[^>]+(?:property|name|itemprop)\\s*=\\s*[\"']$e[\"'][^>]*content\\s*=\\s*[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE).find(html)?.groupValues?.get(1)
-                            ?: Regex("<meta[^>]+content\\s*=\\s*[\"']([^\"']+)[\"'][^>]*(?:property|name|itemprop)\\s*=\\s*[\"']$e[\"']", RegexOption.IGNORE_CASE).find(html)?.groupValues?.get(1)
-                        if (!v.isNullOrBlank()) return clean(v)
-                    }
-                    return null
-                }
-                fun abs(v: String?): String? = v?.let { runCatching { URL(base, if (it.startsWith("//")) base.protocol + ":" + it else it).toString() }.getOrNull() }
-                val title = og("og:title", "twitter:title") ?: Regex("<title[^>]*>([^<]+)</title>", RegexOption.IGNORE_CASE).find(html)?.groupValues?.get(1)?.let(::clean) ?: ""
-                val desc = og("og:description", "twitter:description", "description").orEmpty()
-                val img = abs(og("og:image:secure_url", "og:image", "og:image:url", "twitter:image", "twitter:image:src", "image")
-                    ?: Regex("<link[^>]+rel=[\"']image_src[\"'][^>]*href=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE).find(html)?.groupValues?.get(1)?.let(::clean))
-                val icon = abs(Regex("<link[^>]+rel=[\"'](?:apple-touch-icon|icon|shortcut icon)[\"'][^>]*href=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE).find(html)?.groupValues?.get(1)?.let(::clean))
-                    ?: "https://${base.host}/favicon.ico"
-                conn.disconnect()
-                LinkMeta(title, base.host.removePrefix("www."), img, desc, icon)
-            }.getOrNull()
+            } else a
+            got?.also { writeDisk(url, it) }
         }
         cache[url] = meta
+        busy.remove(url)
     }
+
+    private fun fetch(url: String, ua: String): LinkMeta? = runCatching {
+        fun open(u: URL) = (u.openConnection() as HttpURLConnection).apply {
+            connectTimeout = 7000; readTimeout = 8000; instanceFollowRedirects = true
+            setRequestProperty("User-Agent", ua)
+            setRequestProperty("Accept", "text/html,application/xhtml+xml")
+            setRequestProperty("Accept-Language", "en-US,en;q=0.9")
+        }
+        // Short links (bit.ly, advmd.co…) hop between hosts; follow those hops by hand.
+        var conn = open(URL(url))
+        var hops = 0
+        while (conn.responseCode in 300..399 && hops < 6) {
+            val next = conn.getHeaderField("Location") ?: break
+            val u = URL(conn.url, next)
+            conn.disconnect()
+            conn = open(u)
+            hops++
+        }
+        if (conn.responseCode >= 400) { conn.disconnect(); return null }
+        val base = conn.url
+        val html = conn.inputStream.bufferedReader().use { r -> val buf = CharArray(400_000); var n = 0; while (n < buf.size) { val k = r.read(buf, n, buf.size - n); if (k <= 0) break; n += k; if (String(buf, 0, n).contains("</head>", true)) break }; String(buf, 0, n) }
+        fun clean(v: String) = android.text.Html.fromHtml(v, 0).toString().trim()
+        fun og(vararg names: String): String? {
+            for (p in names) {
+                val e = Regex.escape(p)
+                val v = Regex("<meta[^>]+(?:property|name|itemprop)\\s*=\\s*[\"']$e[\"'][^>]*content\\s*=\\s*[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE).find(html)?.groupValues?.get(1)
+                    ?: Regex("<meta[^>]+content\\s*=\\s*[\"']([^\"']+)[\"'][^>]*(?:property|name|itemprop)\\s*=\\s*[\"']$e[\"']", RegexOption.IGNORE_CASE).find(html)?.groupValues?.get(1)
+                if (!v.isNullOrBlank()) return clean(v)
+            }
+            return null
+        }
+        fun abs(v: String?): String? = v?.let { runCatching { URL(base, if (it.startsWith("//")) base.protocol + ":" + it else it).toString() }.getOrNull() }
+        val title = og("og:title", "twitter:title") ?: Regex("<title[^>]*>([^<]+)</title>", RegexOption.IGNORE_CASE).find(html)?.groupValues?.get(1)?.let(::clean) ?: ""
+        val desc = og("og:description", "twitter:description", "description").orEmpty()
+        val img = abs(og("og:image:secure_url", "og:image", "og:image:url", "twitter:image", "twitter:image:src", "image")
+            ?: Regex("<link[^>]+rel=[\"']image_src[\"'][^>]*href=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE).find(html)?.groupValues?.get(1)?.let(::clean))
+        val icon = abs(Regex("<link[^>]+rel=[\"'](?:apple-touch-icon|icon|shortcut icon)[\"'][^>]*href=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE).find(html)?.groupValues?.get(1)?.let(::clean))
+            ?: "https://${base.host}/favicon.ico"
+        conn.disconnect()
+        // A login wall isn't a preview.
+        if (title.equals("Instagram", true) && img == null || title.contains("Log in", true) && img == null) return null
+        LinkMeta(title, base.host.removePrefix("www."), img, desc, icon)
+    }.getOrNull()
 }
 
 /** A link preview card: picture, title, a line of description and the site with its icon. */
@@ -591,7 +579,7 @@ object Links {
 fun LinkCard(url: String, me: Boolean, modifier: Modifier = Modifier) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val t = LocalTok.current
-    LaunchedEffect(url) { Links.load(url) }
+    LaunchedEffect(url) { Links.init(ctx); Links.load(url) }
     val meta = Links.cache[url]
     val host = runCatching { URL(url).host.removePrefix("www.") }.getOrDefault(url)
     var imgFailed by remember(meta?.image) { mutableStateOf(false) }

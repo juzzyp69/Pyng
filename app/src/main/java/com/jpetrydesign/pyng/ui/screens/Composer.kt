@@ -21,6 +21,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -299,12 +300,13 @@ fun Composer(
                             Box(Modifier.size(22.dp).border(1.7.dp, t.ink, CircleShape).graphicsLayer { rotationZ = rot }, contentAlignment = Alignment.Center) { Ico(Icons.plus, t.ink, 13.dp, 3f) }
                         }
                         Box(Modifier.weight(1f).heightIn(min = 40.dp).padding(horizontal = 4.dp, vertical = 10.dp), contentAlignment = Alignment.CenterStart) {
+                            val phA by animateFloatAsState(if (fx?.quiet == true) 0f else 1f, if (fx?.quiet == true) snap() else tween(160), label = "ph")
                             if (draft.isEmpty()) T(
                                 when {
                                     schedule != null -> "Scheduled message"
                                     conv?.rcs == true -> "RCS Message"
                                     else -> "SMS Message"
-                                }, size = fontSize.sp, color = t.ink.copy(alpha = 0.5f), maxLines = 1,
+                                }, size = fontSize.sp, color = t.ink.copy(alpha = 0.5f), maxLines = 1, modifier = Modifier.graphicsLayer { alpha = phA },
                             )
                             BasicTextField(
                                 draft, onDraft,
@@ -330,8 +332,7 @@ fun Composer(
                             else askPhotos.launch(photoPerms())
                         }, contentAlignment = Alignment.Center) { Ico(Icons.gallery, if (panel == "gallery") t.p else t.ink, 20.dp, 1.9f) }
                     }
-                    // The send button melts into the liquid when you send, then pops back.
-                    Box(Modifier.onGloballyPositioned { fx?.button = it }.graphicsLayer { if (fx != null) { scaleX = fx.btnScale; scaleY = fx.btnScale; alpha = fx.btnAlpha } }) {
+                                        Box(Modifier.onGloballyPositioned { fx?.button = it }.graphicsLayer { if (fx != null) { scaleX = fx.btnScale; scaleY = fx.btnScale; alpha = fx.btnAlpha } }) {
                     when {
                         hasDraft -> Box(Modifier.padding(bottom = 2.dp).size(44.dp).clip(CircleShape).background(t.plusBg).press(0.88f) { onSend(draft) }, contentAlignment = Alignment.Center) {
                             Ico(Icons.send, t.plusInk, 21.dp, 2f)

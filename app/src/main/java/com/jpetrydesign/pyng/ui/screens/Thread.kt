@@ -191,6 +191,11 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     val rootCoords = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
     val sendFx = remember(convId) { SendFx() }
     var menuAnchor by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    // The photo open in the viewer, as (message key, attachment id).
+    var viewing by remember(convId) { mutableStateOf<Pair<String, String>?>(null) }
+    fun view(m: Msg, ref: com.jpetrydesign.pyng.data.MediaRef) {
+        if (ref.isImage && !ref.waiting) { viewing = m.key to ref.id; info = null } else openMedia(ctx, repo, nav, ref)
+    }
     fun openMenu(m: Msg) {
         menuAnchor = runCatching {
             val r = rootCoords[0]; val b = bubbleCoords[m.key]
@@ -209,6 +214,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
             "ts" -> tsShift = -with(density) { 76.dp.toPx() }
             "reply" -> replyTo = list.lastOrNull { !it.fromMe }
             "details" -> detailsFor = list.lastOrNull()
+            "viewer" -> list.firstOrNull { m -> m.media.any { it.isImage } }?.let { m -> delay(700); viewing = m.key to m.media.first { it.isImage }.id }
         }
     }
 
@@ -223,6 +229,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     androidx.compose.runtime.DisposableEffect(convId) {
         onDispose {
             if (repo.activeChat == convId) repo.activeChat = null
+            Voice.stop()
         }
     }
     // Save the draft when leaving.
@@ -274,6 +281,10 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
         if (!opened) { list.scrollToItem(0); opened = true }
         else if (stick) list.animateScrollToItem(0)
     }
+    // When the suggested replies (or anything else above the box) appear, keep the newest message in view above them.
+    LaunchedEffect(bottomH) {
+        if (opened && stick && sendFx.run == null && list.firstVisibleItemIndex <= 1) list.animateScrollToItem(0)
+    }
     LaunchedEffect(curMatch, hl) {
         val k = curMatch ?: hl ?: return@LaunchedEffect
         val i = reversed.indexOfFirst { it.key == k || it.id == k }
@@ -299,7 +310,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
             repo.toast("Scheduled for ${sch.second}")
             schedule = null; draft = ""; return
         }
-        // Drip and bounce: note where the box and send button are before the text leaves them.
+        // The send glide: note where the box and send button are before the text leaves them.
         val root = rootCoords[0]
         val melt = if (motion && attachments.isEmpty() && replyTo == null && text.isNotBlank() && root != null && sendFx.run == null) runCatching {
             Triple(root.localBoundingBoxOf(sendFx.field!!), root.localBoundingBoxOf(sendFx.text!!), root.localBoundingBoxOf(sendFx.button!!))
@@ -318,7 +329,8 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
         delay(2500); draft = "On my way!"; delay(1500); send(draft)
     }
 
-    val blur by androidx.compose.animation.core.animateDpAsState(if (menuFor != null) 18.dp else 0.dp, label = "blur")
+    val blur by androidx.compose.animation.core.animateDpAsState(if (menuFor != null) 18.dp else if (viewing != null) 22.dp else 0.dp, label = "blur")
+    val photos = remember(msgs) { msgs.flatMap { m -> m.media.filter { it.isImage && !it.waiting }.map { m to it } } }
     Provide(t) {
         androidx.compose.runtime.CompositionLocalProvider(LocalSendFx provides sendFx) {
         Box(Modifier.fillMaxSize().onGloballyPositioned { rootCoords[0] = it }) {
@@ -349,7 +361,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                             onDrag = { d -> tsShift = (tsShift + d * 0.7f).coerceIn(-with(density) { 76.dp.toPx() }, 0f) },
                             onEnd = { scope.launch { val a = Animatable(tsShift); a.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 420f)) { tsShift = value } } },
                         ),
-                    contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = topPad, bottom = with(density) { bottomH.toDp() } + 8.dp),
+                    contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = topPad, bottom = with(density) { bottomH.toDp() } + 12.dp),
                 ) {
                     if (typing) item("typing") {
                         Box(Modifier.padding(top = 10.dp).height(36.dp).clip(RoundedCornerShape(18.dp)).background(t.inBg).padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
@@ -365,7 +377,8 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                         val prevSame = !gap && same(older, m)
                         val newerGap = newer != null && (newer.ts - m.ts > 60 * 60_000L || dayOf(newer.ts) != dayOf(m.ts))
                         val nextSame = !newerGap && same(newer, m)
-                        Column {
+                        // Older messages glide up to make room instead of jumping.
+                        Column(if (motion) Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = spring(dampingRatio = 0.9f, stiffness = 380f)) else Modifier) {
                             if (gap && m.ts > 0) T(stamp(m.ts), size = 12.sp, weight = FontWeight.Medium, color = t.soft, modifier = Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 8.dp), align = androidx.compose.ui.text.style.TextAlign.Center)
                             if (m.isSys) {
                                 Box(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 4.dp), contentAlignment = Alignment.Center) {
@@ -404,12 +417,12 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                         onSide = { if (selecting) toggle(selected, m.key) else info = if (info == m.key) null else m.key },
                                         onTap = {
                                             if (selecting) toggle(selected, m.key)
-                                            else m.media.firstOrNull()?.let { openMedia(ctx, repo, nav, it) }
+                                            else m.media.firstOrNull()?.let { view(m, it) }
                                         },
                                         onDouble = { if (m.id.isNotEmpty()) { repo.react(m, "❤️"); burst = m.key to "❤️" } },
                                         onLong = { if (!selecting) { openMenu(m); info = null } },
                                         onReply = { replyTo = m },
-                                        onOpenMedia = { ref -> if (selecting) toggle(selected, m.key) else openMedia(ctx, repo, nav, ref) },
+                                        onOpenMedia = { ref -> if (selecting) toggle(selected, m.key) else view(m, ref) },
                                         onRetry = { repo.retry(m) },
                                         onPlaced = { bubbleCoords[m.key] = it },
                                     ),
@@ -474,7 +487,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
 
             }
             Effects(fx, t)
-            SendMeltLayer(sendFx, t, fontSize, p.on("boldText")) { rootCoords[0] }
+            SendMeltLayer(sendFx, t, fontSize, p.on("boldText"), corner = shape.first.value) { rootCoords[0] }
             MessageMenu(menuFor, t, conv, menuAnchor, menuFor?.let { rowCtxs[it.key] }, onDismiss = { menuFor = null },
                 onReact = { m, e -> repo.react(m, e); burst = m.key to e },
                 onReply = { replyTo = it }, onCopy = { copy(ctx, it.text); repo.toast("Copied") },
@@ -505,6 +518,15 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                 }
             }
             CallSheet(callSheet, conv) { callSheet = false }
+            ContactSheet()
+            PhotoViewer(viewing, photos, conv, myId,
+                onClose = { viewing = null },
+                onReply = { viewing = null; replyTo = it },
+                onReact = { m, e -> repo.react(m, e); burst = m.key to e },
+                onDelete = { m ->
+                    repo.confirm("Delete message?", "It'll be deleted from Google Messages on your phone too. The other person still has their copy.") { viewing = null; repo.deleteMessages(listOf(m)); repo.toast("Message deleted") }
+                },
+                onForward = { viewing = null; forward = it })
         }
         }
     }

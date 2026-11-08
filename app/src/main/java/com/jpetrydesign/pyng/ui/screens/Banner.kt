@@ -40,6 +40,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.border
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
@@ -87,7 +89,9 @@ fun InAppBanner(item: Pair<Conv, Msg>?, onOpen: (String) -> Unit, onClose: () ->
         val shape = RoundedCornerShape(26.dp)
         Column(
             Modifier.statusBarsPadding().padding(horizontal = 10.dp, vertical = 6.dp).widthIn(max = 560.dp).fillMaxWidth()
-                .edge(shape, elevation = 16.dp).frost(shape, t.glassStrong, 30.dp)
+                .shadow(18.dp, shape, clip = false, ambientColor = t.shadow.copy(alpha = 0.22f), spotColor = t.shadow.copy(alpha = 0.3f))
+                .frost(shape, if (t.solid) t.glassStrong else if (t.dark) androidx.compose.ui.graphics.Color(0xD0232633) else androidx.compose.ui.graphics.Color(0xD6FFFFFF), 36.dp)
+                .border(1.dp, androidx.compose.ui.graphics.Color.White.copy(alpha = if (t.dark) 0.08f else 0.5f), shape)
                 .clickable { onOpen(c.id) }.padding(14.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -95,7 +99,7 @@ fun InAppBanner(item: Pair<Conv, Msg>?, onOpen: (String) -> Unit, onClose: () ->
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     T(if (c.group) c.title else c.title, size = 15.sp, weight = FontWeight.SemiBold, maxLines = 1)
-                    T((if (c.group && m.sender.isNotBlank()) m.sender.substringBefore(' ') + ": " else "") + msgPreview(m), size = 13.5.sp, color = t.soft, maxLines = 2)
+                    T((if (c.group && m.sender.isNotBlank()) m.sender.substringBefore(' ') + ": " else "") + msgPreview(m), size = 13.5.sp, color = t.ink.copy(alpha = 0.8f), maxLines = 2)
                 }
                 if (!replying) Box(
                     Modifier.height(34.dp).clip(RoundedCornerShape(17.dp)).background(t.tone).clickable { replying = true }.padding(horizontal = 14.dp),

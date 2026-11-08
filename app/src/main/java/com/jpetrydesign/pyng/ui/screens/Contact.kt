@@ -27,6 +27,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import dev.chrisbanes.haze.hazeSource
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -353,10 +356,14 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
     }
     val wall = look.wall.ifEmpty { p.defWall }
     Provide(t) {
+        val themeHaze = remember { dev.chrisbanes.haze.HazeState() }
+        var barH by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+        val dens = androidx.compose.ui.platform.LocalDensity.current
         Box(Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxSize().hazeSource(themeHaze)) {
             Glow(t)
             Column(Modifier.fillMaxSize().verticalScroll(scroll).navigationBarsPadding().padding(bottom = 30.dp)) {
-                com.jpetrydesign.pyng.ui.kit.PageTop("Chat theme", { nav.back() }, sub = "Only for ${c?.title ?: "this chat"}")
+                Spacer(Modifier.height(with(dens) { if (barH > 0) barH.toDp() else androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(this).toDp() + 62.dp } + 10.dp))
                 Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(230.dp).clip(RoundedCornerShape(28.dp))) {
                     Wallpaper(wall, t)
                     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -443,7 +450,9 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
                     PillButton("Done", { nav.back() }, Modifier.weight(1f), height = 50.dp)
                 }
             }
-            com.jpetrydesign.pyng.ui.kit.StatusScrim(Modifier.align(Alignment.TopCenter))
+            }
+            com.jpetrydesign.pyng.ui.kit.PageTop("Chat theme", { nav.back() }, sub = "Only for ${c?.title ?: "this chat"}", haze = themeHaze,
+                modifier = Modifier.align(Alignment.TopCenter).onSizeChanged { barH = it.height })
         }
     }
 }
