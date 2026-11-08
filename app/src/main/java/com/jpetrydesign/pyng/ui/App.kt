@@ -164,12 +164,15 @@ fun PyngRoot(repo: Repo, nav: Nav) {
         val textScale = com.jpetrydesign.pyng.ui.kit.textScaleOf(repo.prefs.state.textSize)
         val scaled = androidx.compose.ui.unit.Density(baseDensity.density, baseDensity.fontScale * textScale)
         CompositionLocalProvider(LocalTok provides t, LocalRepo provides repo, LocalMotion provides motion, androidx.compose.ui.platform.LocalDensity provides scaled, LocalNav provides nav) {
-            // Everything on screen feeds the in-app banner's frosted glass.
+            // Everything on screen feeds the in-app banner's frosted glass, but only while a banner
+            // is up (and a moment after, while it slides away), so normal scrolling costs nothing extra.
             val appHaze = remember { dev.chrisbanes.haze.HazeState() }
+            var hazeOn by remember { mutableStateOf(false) }
+            LaunchedEffect(banner != null) { if (banner != null) hazeOn = true else { delay(450); hazeOn = false } }
             BoxWithConstraints(Modifier.fillMaxSize().background(t.bg)) {
                 val wide = maxWidth >= 600.dp
                 val fullW = maxWidth
-                Box(Modifier.fillMaxSize().hazeSource(appHaze)) {
+                Box(Modifier.fillMaxSize().then(if (hazeOn) Modifier.hazeSource(appHaze) else Modifier)) {
                     if (wide) WideLayout(nav, fullW) else Pane(nav, Modifier.fillMaxSize(), wide = false)
                 }
                 ToastHost(toast, onUndo = { toast?.undo?.invoke(); toast = null }, Modifier.align(Alignment.BottomCenter))

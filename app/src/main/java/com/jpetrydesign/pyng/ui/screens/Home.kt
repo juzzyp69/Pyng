@@ -434,7 +434,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                         PinItem(pin, i, pinCtl, Modifier.enterOnce("pin:$layout:" + pin.c.id, i, pop = true)) {
                             val badgeHaze = remember { dev.chrisbanes.haze.HazeState() }
                             Box(Modifier.size(46.dp)) {
-                                Box(Modifier.hazeSource(badgeHaze)) { Avatar(pin.who.photo, pin.who.ini, 46.dp, pin.who.bg, pin.who.ink, 15.sp) }
+                                Box(if (pin.count > 0) Modifier.hazeSource(badgeHaze) else Modifier) { Avatar(pin.who.photo, pin.who.ini, 46.dp, pin.who.bg, pin.who.ink, 15.sp) }
                                 if (pin.count > 0) {
                                     CountBadge(pin.count, h = 20.dp, modifier = Modifier.align(Alignment.TopEnd).offset(4.dp, (-3).dp), haze = badgeHaze)
                                 }
@@ -817,7 +817,7 @@ private fun PinFace(pin: Pin, av: Dp, iniSize: Float, style: String, badgeH: Dp 
     // The photo is what the badge's frosted glass blurs.
     val badgeHaze = remember { dev.chrisbanes.haze.HazeState() }
     Box(Modifier.size(av)) {
-        Box(Modifier.hazeSource(badgeHaze)) {
+        Box(if (pin.count > 0 && style != "Rings") Modifier.hazeSource(badgeHaze) else Modifier) {
             Avatar(
                 pin.who.photo, pin.who.ini, av, pin.who.bg, pin.who.ink, iniSize.sp,
                 halo = if (style == "Rings" && hot) (t.pal.plus ?: t.p) else null,
