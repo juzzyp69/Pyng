@@ -17,6 +17,8 @@ adb shell chmod -R 755 /data/local/tmp/promo
 # Copy into the app's own storage (debug build), where it can always read them.
 adb shell run-as $PKG sh -c "'mkdir -p files/promo && cp /data/local/tmp/promo/* files/promo/ && ls files/promo | head -3'"
 
+# Skip Android's "Viewing full screen" tip, since promo shots hide the navigation bar.
+adb shell settings put secure immersive_mode_confirmations confirmed
 # A clean status bar: 9:41, full battery and signal, no notification icons.
 adb shell settings put global sysui_demo_allowed 1
 sb() { adb shell am broadcast -a com.android.systemui.demo -e command "$@" > /dev/null; }
