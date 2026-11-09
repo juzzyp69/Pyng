@@ -1,5 +1,10 @@
 package com.jpetrydesign.pyng.ui.screens
 
+import androidx.compose.ui.draw.blur
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.heightIn
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -140,7 +145,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
     LaunchedEffect(Unit) {
         if (!repo.demo && p.permsAsked < 1 && missingPerms(ctx).isNotEmpty()) { kotlinx.coroutines.delay(700); askPerms = true }
         when (repo.demoOpen) {
-            "rowmenu" -> menuFor = repo.convs["c6"]
+            "rowmenu" -> menuFor = repo.convs["c6"] ?: repo.convs["g1"]
             "editpins" -> editPins = true
             "strip" -> nav.strip = true
             "perms" -> askPerms = true
@@ -332,6 +337,8 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                 }
             },
     ) {
+        val peekBlur by androidx.compose.animation.core.animateDpAsState(if (menuFor != null) 16.dp else 0.dp, label = "peekBlur")
+        Box(Modifier.fillMaxSize().then(if (peekBlur > 0.5.dp) Modifier.blur(peekBlur) else Modifier)) {
         Glow()
         androidx.compose.runtime.CompositionLocalProvider(LocalHaze provides haze) {
             LazyColumn(
@@ -524,6 +531,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
             }
         }
 
+        }
         RowMenu(menuFor, onDismiss = { menuFor = null }, onEditPins = { editPins = true })
         PermissionSheet(askPerms) { askPerms = false; repo.prefs.edit { it.copy(permsAsked = 1) } }
         if (nav.strip) ColorStrip(onDone = { nav.strip = false })
@@ -993,41 +1001,142 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
 
 // ---------- long-press menu ----------
 
+/**
+ * Hold a chat to peek: the last few messages, a reply box, and its actions (pin, read, mute,
+ * archive, open, edit pins, block, delete) together over the blurred Home screen.
+ */
 @Composable
 fun RowMenu(c: Conv?, onDismiss: () -> Unit, onEditPins: (() -> Unit)? = null) {
     val repo = LocalRepo.current
     val t = LocalTok.current
+    val nav = com.jpetrydesign.pyng.ui.LocalNav.current
+    val motion = com.jpetrydesign.pyng.ui.kit.LocalMotion.current
     var last by remember { mutableStateOf(c) }
     if (c != null) last = c
-    val cur = last
-    Sheet(visible = c != null, onDismiss = onDismiss) {
-        if (cur == null) return@Sheet
-        val p = repo.prefs.state
-        val who = whoOf(cur)
-        Row(Modifier.padding(horizontal = 22.dp, vertical = 6.dp).padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Avatar(who.photo, who.ini, 44.dp, who.bg, who.ink)
-            Spacer(Modifier.width(12.dp))
-            T(cur.title, size = 17.sp, weight = FontWeight.SemiBold, maxLines = 1)
+    androidx.activity.compose.BackHandler(enabled = c != null, onBack = onDismiss)
+    Box(Modifier.fillMaxSize().zIndex(25f)) {
+        androidx.compose.animation.AnimatedVisibility(c != null, enter = fadeIn(tween(180)), exit = androidx.compose.animation.fadeOut(tween(160))) {
+            Box(
+                Modifier.fillMaxSize().background((if (t.dark) Color.Black else Color.White).copy(alpha = if (t.dark) 0.32f else 0.38f))
+                    .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onDismiss),
+            )
         }
-        val unread = cur.unread || cur.id in p.markedUnread
-        SheetGroup {
-            val acts = buildList<Triple<String, String, () -> Unit>> {
-                if (onEditPins != null && p.isPinned(cur.id)) add(Triple("Edit pins", Icons.pencil) { onEditPins() })
-                add(Triple(if (p.isPinned(cur.id)) "Unpin" else "Pin to top", Icons.pinned) { val was = p.isPinned(cur.id); if (repo.togglePin(cur.id)) repo.toast(if (was) "Unpinned" else "Pinned to top") })
-                add(Triple(if (cur.status == "archived") "Unarchive" else "Archive", Icons.archive) {
-                    val on = cur.status != "archived"
-                    repo.setArchived(cur.id, on)
-                    repo.toast(if (on) "Chat archived" else "Moved back to your inbox", if (on) ({ repo.setArchived(cur.id, false) }) else null)
-                })
-                add(Triple(if (p.isMuted(cur.id)) "Unmute" else "Mute", if (p.isMuted(cur.id)) Icons.bell else Icons.bellOff) { val on = !p.isMuted(cur.id); repo.setMuted(cur.id, on); repo.toast(if (on) "Muted" else "Notifications on") })
-                add(Triple(if (unread) "Mark as read" else "Mark as unread", if (unread) Icons.read else Icons.unread) { repo.toggleUnread(cur.id) })
-                if (!cur.group) add(Triple("Block", Icons.block) { repo.setBlocked(cur.id, true); repo.toast("Blocked ${cur.shortTitle}") { repo.setBlocked(cur.id, false) } })
-            }
-            acts.forEachIndexed { i, (label, icon, go) -> SheetAction(label, icon, { go(); onDismiss() }, first = i == 0, index = i) }
-            SheetAction("Delete", Icons.trash, { onDismiss(); repo.confirm("Delete this conversation?", "All of ${cur.shortTitle}'s messages will be deleted from Google Messages on your phone too.") { repo.deleteConversation(cur.id); repo.toast("Conversation deleted") } }, danger = true, index = acts.size)
+        androidx.compose.animation.AnimatedVisibility(
+            c != null,
+            enter = fadeIn(tween(160)) + androidx.compose.animation.scaleIn(if (motion) spring(dampingRatio = 0.8f, stiffness = 520f) else tween(0), initialScale = 0.92f),
+            exit = androidx.compose.animation.fadeOut(tween(140)) + androidx.compose.animation.scaleOut(tween(140), targetScale = 0.96f),
+        ) {
+            val cur = last ?: return@AnimatedVisibility
+            PeekBody(cur, repo, t, onDismiss, onEditPins, open = { onDismiss(); nav?.openChat(cur.id) })
         }
     }
 }
+
+@Composable
+private fun PeekBody(cur: Conv, repo: com.jpetrydesign.pyng.data.Repo, t: com.jpetrydesign.pyng.ui.theme.Tok, onDismiss: () -> Unit, onEditPins: (() -> Unit)?, open: () -> Unit) {
+    val p = repo.prefs.state
+    val who = whoOf(cur)
+    LaunchedEffect(cur.id) { if (repo.msgs[cur.id] == null) repo.loadMessages(cur.id) }
+    val recent = repo.msgs[cur.id].orEmpty().filter { it.visible && !it.isSys }.takeLast(4)
+    val unread = cur.unread || cur.id in p.markedUnread
+    val newCount = if (unread) repo.msgs[cur.id].orEmpty().takeLastWhile { !it.fromMe }.size.coerceAtLeast(1) else 0
+    var reply by remember(cur.id) { mutableStateOf("") }
+    val card = if (t.dark) Color(0xFF1B1E26).copy(alpha = 0.96f) else Color.White.copy(alpha = 0.96f)
+    val cardShape = RoundedCornerShape(26.dp)
+    Column(
+        Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePaddingCompat()
+            .verticalScrollCompat().padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+    ) {
+        // Who, and how recent.
+        Row(Modifier.padding(horizontal = 6.dp).clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = open), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.shadow(14.dp, CircleShape, clip = false)) { Avatar(who.photo, who.ini, 58.dp, who.bg, who.ink) }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                T(cur.title, size = 19.sp, weight = FontWeight.Bold, maxLines = 1)
+                T(
+                    (if (newCount > 0) "$newCount new · " else "") + "last message " + clock(cur.ts).ifEmpty { "earlier" },
+                    size = 12.5.sp, color = t.soft, maxLines = 1,
+                )
+            }
+        }
+        // The last few messages, and a reply box.
+        Column(Modifier.fillMaxWidth().shadow(22.dp, cardShape, clip = false, ambientColor = t.shadow.copy(alpha = 0.18f), spotColor = t.shadow.copy(alpha = 0.22f)).clip(cardShape).background(card).padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            if (recent.isEmpty()) T(if (repo.msgs[cur.id] == null) "Loading…" else "No messages yet", size = 13.5.sp, color = t.soft, modifier = Modifier.padding(6.dp))
+            recent.forEach { m ->
+                val me = m.fromMe
+                val text = m.text.ifBlank { m.media.firstOrNull()?.kindLabel ?: m.summary }
+                Box(Modifier.fillMaxWidth(), contentAlignment = if (me) Alignment.CenterEnd else Alignment.CenterStart) {
+                    Box(
+                        Modifier.widthIn(max = 280.dp).clip(RoundedCornerShape(20.dp)).background(if (me) t.outFlat else t.inBg)
+                            .clickable(onClick = open).padding(horizontal = 14.dp, vertical = 9.dp),
+                    ) { T(text, size = 14.5.sp, color = if (me) t.outInk else t.ink, maxLines = 4, lineHeight = 20.sp) }
+                }
+            }
+            if (recent.isNotEmpty()) T(clock(recent.last().ts), size = 11.sp, color = t.soft, modifier = Modifier.padding(start = 6.dp, top = 1.dp))
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f).heightIn(min = 44.dp).clip(RoundedCornerShape(22.dp)).background(t.field).padding(horizontal = 16.dp, vertical = 11.dp), contentAlignment = Alignment.CenterStart) {
+                    if (reply.isEmpty()) T("Reply to " + cur.shortTitle, size = 14.5.sp, color = t.soft, maxLines = 1)
+                    androidx.compose.foundation.text.BasicTextField(
+                        reply, { reply = it },
+                        textStyle = androidx.compose.ui.text.TextStyle(fontFamily = com.jpetrydesign.pyng.ui.theme.Geist, fontSize = 14.5.sp, color = t.ink),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(t.p), maxLines = 4, modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                Box(
+                    Modifier.size(44.dp).clip(CircleShape).background(if (reply.isBlank()) t.tone else t.fill).clickable(enabled = reply.isNotBlank()) {
+                        repo.send(cur.id, reply); reply = ""; repo.toast("Sent to " + cur.shortTitle); onDismiss()
+                    },
+                    contentAlignment = Alignment.Center,
+                ) { Ico(Icons.send, if (reply.isBlank()) t.p else t.onFill, 20.dp, 2f) }
+            }
+        }
+        // Actions.
+        Column(Modifier.fillMaxWidth().shadow(22.dp, cardShape, clip = false, ambientColor = t.shadow.copy(alpha = 0.16f), spotColor = t.shadow.copy(alpha = 0.2f)).clip(cardShape).background(card).padding(vertical = 8.dp)) {
+            val pinned = p.isPinned(cur.id)
+            val muted = p.isMuted(cur.id)
+            val archived = cur.status == "archived"
+            Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp)) {
+                @Composable fun big(label: String, icon: String, go: () -> Unit) {
+                    Column(
+                        Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).clickable { go(); onDismiss() }.padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Box(Modifier.size(44.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(icon, t.p, 20.dp) }
+                        T(label, size = 12.sp, weight = FontWeight.Medium, maxLines = 1)
+                    }
+                }
+                big(if (pinned) "Unpin" else "Pin", Icons.pinned) { if (repo.togglePin(cur.id)) repo.toast(if (pinned) "Unpinned" else "Pinned to top") }
+                big(if (unread) "Mark read" else "Unread", if (unread) Icons.read else Icons.unread) { repo.toggleUnread(cur.id) }
+                big(if (muted) "Unmute" else "Mute", if (muted) Icons.bell else Icons.bellOff) { repo.setMuted(cur.id, !muted); repo.toast(if (!muted) "Muted" else "Notifications on") }
+                big(if (archived) "Unarchive" else "Archive", Icons.archive) {
+                    repo.setArchived(cur.id, !archived)
+                    repo.toast(if (!archived) "Chat archived" else "Moved back to your inbox", if (!archived) ({ repo.setArchived(cur.id, false) }) else null)
+                }
+            }
+            Box(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp).height(1.dp).background(t.hair))
+            @Composable fun row(label: String, icon: String, danger: Boolean = false, go: () -> Unit) {
+                Row(Modifier.fillMaxWidth().clickable(onClick = go).padding(horizontal = 20.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Ico(icon, if (danger) t.danger else t.ink, 20.dp)
+                    Spacer(Modifier.width(16.dp))
+                    T(label, size = 15.sp, weight = FontWeight.Medium, color = if (danger) t.danger else t.ink)
+                }
+            }
+            row("Open chat", Icons.message, go = open)
+            if (onEditPins != null && pinned) row("Edit pins", Icons.pencil) { onDismiss(); onEditPins() }
+            if (!cur.group) row("Block", Icons.block) { onDismiss(); repo.setBlocked(cur.id, true); repo.toast("Blocked ${cur.shortTitle}") { repo.setBlocked(cur.id, false) } }
+            row("Delete conversation", Icons.trash, danger = true) {
+                onDismiss()
+                repo.confirm("Delete this conversation?", "All of ${cur.shortTitle}'s messages will be deleted from Google Messages on your phone too.") { repo.deleteConversation(cur.id); repo.toast("Conversation deleted") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Modifier.verticalScrollCompat(): Modifier = this.verticalScroll(rememberScrollState())
+
+private fun Modifier.imePaddingCompat(): Modifier = this.imePadding()
 
 @Suppress("unused")
 private fun Modifier.ring(on: Boolean, color: Color) = if (on) this.border(2.dp, color, CircleShape) else this
