@@ -19,6 +19,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -365,7 +366,7 @@ private fun VideoPage(ref: MediaRef, current: Boolean, dismissY: Float, onTap: (
     Column(
         Modifier.fillMaxSize()
             .pointerInput(ref.id) {
-                androidx.compose.foundation.gestures.detectVerticalDragGestures(onDragEnd = { onDragEnd() }, onDragCancel = { onDragEnd() }) { ch, dy -> onDrag(dy); ch.consume() }
+                detectVerticalDragGestures(onDragEnd = { onDragEnd() }, onDragCancel = { onDragEnd() }) { ch, dy -> onDrag(dy); ch.consume() }
             }
             .graphicsLayer {
                 translationY = dismissY
@@ -405,7 +406,7 @@ private fun VideoPage(ref: MediaRef, current: Boolean, dismissY: Float, onTap: (
                 if (p.isPlaying) p.pause() else p.play()
             }, size = 40.dp, iconSize = 18.dp)
             val shown = scrubbing?.let { (it * dur).toLong() } ?: pos
-            T(clock(shown) + " / " + clock(dur), size = 12.5.sp, weight = FontWeight.Medium, color = t.soft, modifier = Modifier.padding(horizontal = 6.dp))
+            T(playClock(shown) + " / " + playClock(dur), size = 12.5.sp, weight = FontWeight.Medium, color = t.soft, modifier = Modifier.padding(horizontal = 6.dp))
             androidx.compose.material3.Slider(
                 value = scrubbing ?: if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f,
                 onValueChange = { scrubbing = it },
@@ -419,4 +420,4 @@ private fun VideoPage(ref: MediaRef, current: Boolean, dismissY: Float, onTap: (
     }
 }
 
-private fun clock(ms: Long): String { val s = (ms / 1000).coerceAtLeast(0); return "%d:%02d".format(s / 60, s % 60) }
+private fun playClock(ms: Long): String { val s = (ms / 1000).coerceAtLeast(0); return "%d:%02d".format(s / 60, s % 60) }
