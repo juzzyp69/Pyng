@@ -17,6 +17,9 @@ adb shell chmod -R 755 /data/local/tmp/promo
 # Copy into the app's own storage (debug build), where it can always read them.
 adb shell run-as $PKG sh -c "'mkdir -p files/promo && cp /data/local/tmp/promo/* files/promo/ && ls files/promo | head -3'"
 
+# Keep the emulator's own launcher (and its "isn't responding" dialogs) out of the way.
+adb shell settings put global hide_error_dialogs 1
+adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher > /dev/null 2>&1 || true
 # Skip Android's "Viewing full screen" tip, since promo shots hide the navigation bar.
 adb shell settings put secure immersive_mode_confirmations confirmed
 # A clean status bar: 9:41, full battery and signal, no notification icons.
@@ -35,6 +38,8 @@ shot() {
   # Start from Ocean in light mode each time (settings stick between launches); later extras win.
   adb shell am start -W -n $PKG/.IconClassic --ez demo true --ez promo true --es theme Ocean --es mode Light "$@" > /dev/null
   sleep "${WAIT:-7}"
+  adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS > /dev/null 2>&1
+  sleep 1
   adb exec-out screencap -p > "$OUT/$name.png"
   echo "shot $name"
 }
