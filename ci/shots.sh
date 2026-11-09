@@ -32,7 +32,7 @@ shot 01-home
 shot 02-home-dark --es mode Dark
 for L in Large Pages Carousel Compact Chips Cards Spotlight List Dock; do shot "03-layout-$L" --es mode Light --es layout "$L"; done
 shot 04-home-rings --es layout Grid --es pinstyle Rings
-shot 05-home-rowmenu --es open rowmenu --es pinstyle Badges
+WAIT=10 shot 05-home-rowmenu --es open rowmenu --es pinstyle Badges
 shot 06-home-strip --es open strip
 shot 07-home-perms --es open perms
 shot 08-home-duo --es theme "'Grape Soda'"
@@ -85,6 +85,17 @@ adb shell am start -W -n $PKG/.IconClassic --ez demo true --es route thread:c1 -
 adb shell screenrecord --time-limit 9 --bit-rate 8000000 /sdcard/send.mp4 || true
 adb pull /sdcard/send.mp4 ci-logs/send.mp4 > /dev/null 2>&1 || true
 echo "recorded send"
+# Record a real long-press on Jordan Lee's row, with the app already open, to check the springy entrance.
+adb shell am force-stop $PKG
+adb shell am start -W -n $PKG/.IconClassic --ez demo true > /dev/null
+sleep 12
+(adb shell screenrecord --time-limit 7 --bit-rate 8000000 /sdcard/peek.mp4 || true) &
+sleep 1
+adb shell input swipe 300 1180 300 1180 900
+wait
+adb pull /sdcard/peek.mp4 ci-logs/peek.mp4 > /dev/null 2>&1 || true
+adb exec-out screencap -p > "$OUT/05b-home-peek-held.png" 2>/dev/null || true
+echo "recorded peek"
 shot 66-thread-media --es route thread:c9
 WAIT=10 shot 67-thread-viewer --es route thread:c9 --es open viewer
 WAIT=10 shot 67b-thread-viewer-video --es route thread:c9 --es open viewer-video
