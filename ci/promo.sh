@@ -11,9 +11,11 @@ done
 # Start once so the app's files folder exists, then hand it the photos.
 adb shell am start -W -n $PKG/.IconClassic --ez demo true > /dev/null
 sleep 4
-adb shell mkdir -p /sdcard/Android/data/$PKG/files/promo
-adb push ci/promo-faces/. /sdcard/Android/data/$PKG/files/promo/ > /dev/null
-adb shell ls /sdcard/Android/data/$PKG/files/promo | head -3
+adb shell mkdir -p /data/local/tmp/promo
+adb push ci/promo-faces/. /data/local/tmp/promo/ > /dev/null
+adb shell chmod -R 755 /data/local/tmp/promo
+# Copy into the app's own storage (debug build), where it can always read them.
+adb shell run-as $PKG sh -c "'mkdir -p files/promo && cp /data/local/tmp/promo/* files/promo/ && ls files/promo | head -3'"
 
 # A clean status bar: 9:41, full battery and signal, no notification icons.
 adb shell settings put global sysui_demo_allowed 1
@@ -28,7 +30,8 @@ sb notifications -e visible false
 shot() {
   local name="$1"; shift
   adb shell am force-stop $PKG
-  adb shell am start -W -n $PKG/.IconClassic --ez demo true --ez promo true "$@" > /dev/null
+  # Start from Ocean in light mode each time (settings stick between launches); later extras win.
+  adb shell am start -W -n $PKG/.IconClassic --ez demo true --ez promo true --es theme Ocean --es mode Light "$@" > /dev/null
   sleep "${WAIT:-7}"
   adb exec-out screencap -p > "$OUT/$name.png"
   echo "shot $name"
@@ -50,6 +53,23 @@ for dev in "s26-ultra 1440x3120 560" "fold8-cover 1080x2520 420" "fold8-open 196
   shot "$1-settings" --es route settings
   shot "$1-appearance" --es route appearance
   shot "$1-chat-theme" --es route theme:g1
+  WAIT=8 shot "$1-peek" --es open rowmenu
+  # Core palette: green, red, blue.
+  shot "$1-home-forest" --es theme Forest
+  shot "$1-home-burgundy" --es theme Burgundy
+  shot "$1-home-cobalt" --es theme Cobalt
+  shot "$1-chat-forest" --es route thread:g1 --es theme Forest
+  shot "$1-chat-burgundy-dark" --es route thread:g1 --es theme Burgundy --es mode Dark
+  shot "$1-chat-cobalt" --es route thread:g3 --es theme Cobalt
+  # Warm alternates: rose gold, plum, pink, brown.
+  shot "$1-home-terracotta" --es theme Terracotta
+  shot "$1-home-plum" --es theme Plum
+  shot "$1-home-rose" --es theme Rose
+  shot "$1-home-mocha" --es theme Mocha
+  shot "$1-chat-terracotta" --es route thread:g1 --es theme Terracotta
+  shot "$1-chat-plum-dark" --es route thread:g3 --es theme Plum --es mode Dark
+  shot "$1-chat-rose" --es route thread:g1 --es theme Rose
+  shot "$1-chat-mocha-dark" --es route thread:g1 --es theme Mocha --es mode Dark
 done
 adb shell wm size reset
 adb shell wm density reset
