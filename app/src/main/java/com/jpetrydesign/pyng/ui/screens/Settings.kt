@@ -537,13 +537,15 @@ fun ViewerScreen(nav: Nav, path: String, mime: String) {
 internal fun saveToGallery(ctx: Context, path: String, mime: String) {
     runCatching {
         val values = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, "Messages-" + System.currentTimeMillis() + "." + (mime.substringAfter('/').ifBlank { "jpg" }))
+            val video = mime.startsWith("video/")
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "Messages-" + System.currentTimeMillis() + "." + (mime.substringAfter('/').substringBefore(';').ifBlank { if (video) "mp4" else "jpg" }))
             put(MediaStore.MediaColumns.MIME_TYPE, mime)
-            if (Build.VERSION.SDK_INT >= 29) put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/Messages")
+            if (Build.VERSION.SDK_INT >= 29) put(MediaStore.MediaColumns.RELATIVE_PATH, if (video) "Movies/Messages" else "Pictures/Messages")
         }
-        val uri = ctx.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)!!
+        val video = mime.startsWith("video/")
+        val uri = ctx.contentResolver.insert(if (video) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)!!
         ctx.contentResolver.openOutputStream(uri)!!.use { out -> File(path).inputStream().use { it.copyTo(out) } }
-        Toast.makeText(ctx, "Saved to Pictures", Toast.LENGTH_SHORT).show()
+        Toast.makeText(ctx, if (video) "Saved to Movies" else "Saved to Pictures", Toast.LENGTH_SHORT).show()
     }.onFailure { Toast.makeText(ctx, "Couldn't save", Toast.LENGTH_SHORT).show() }
 }
 

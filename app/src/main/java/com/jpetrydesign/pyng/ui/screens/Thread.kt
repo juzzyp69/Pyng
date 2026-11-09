@@ -195,7 +195,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     // The photo open in the viewer, as (message key, attachment id).
     var viewing by remember(convId) { mutableStateOf<Pair<String, String>?>(null) }
     fun view(m: Msg, ref: com.jpetrydesign.pyng.data.MediaRef) {
-        if (ref.isImage && !ref.waiting) { viewing = m.key to ref.id; info = null } else openMedia(ctx, repo, nav, ref)
+        if ((ref.isImage || ref.isVideo) && !ref.waiting) { viewing = m.key to ref.id; info = null } else openMedia(ctx, repo, nav, ref)
     }
     fun openMenu(m: Msg) {
         menuAnchor = runCatching {
@@ -337,7 +337,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     }
 
     val blur by androidx.compose.animation.core.animateDpAsState(if (menuFor != null) 18.dp else if (viewing != null) 22.dp else 0.dp, label = "blur")
-    val photos = remember(msgs) { msgs.flatMap { m -> m.media.filter { it.isImage && !it.waiting }.map { m to it } } }
+    val photos = remember(msgs) { msgs.flatMap { m -> m.media.filter { (it.isImage || it.isVideo) && !it.waiting }.map { m to it } } }
     Provide(t) {
         androidx.compose.runtime.CompositionLocalProvider(LocalSendFx provides sendFx) {
         Box(Modifier.fillMaxSize().onGloballyPositioned { rootCoords[0] = it }) {

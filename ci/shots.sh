@@ -79,6 +79,12 @@ shot 62-home-editpins --es open editpins
 shot 63-theme --es route theme:c1
 shot 64-theme-custom --es route theme:c1 --es open custom
 WAIT=16 shot 65-thread-sent --es route thread:c1 --es open send
+# Record a real send so the animation can be checked frame by frame.
+adb shell am force-stop $PKG
+adb shell am start -W -n $PKG/.IconClassic --ez demo true --es route thread:c1 --es open send > /dev/null
+adb shell screenrecord --time-limit 9 --bit-rate 8000000 /sdcard/send.mp4 || true
+adb pull /sdcard/send.mp4 ci-logs/send.mp4 > /dev/null 2>&1 || true
+echo "recorded send"
 shot 66-thread-media --es route thread:c9
 WAIT=10 shot 67-thread-viewer --es route thread:c9 --es open viewer
 shot 68-section-chats-top --es route section:chats

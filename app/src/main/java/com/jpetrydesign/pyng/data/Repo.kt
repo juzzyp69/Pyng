@@ -549,9 +549,13 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
 
     private fun deliver(local: Msg) {
         if (demo) {
+            // Plays out what Google does: a temporary id of its own first, then the confirmed message.
             scope.launch {
-                delay(650)
-                msgs[local.convId] = msgs[local.convId].orEmpty().map { if (it.tmpId == local.tmpId) it.copy(status = "OUTGOING_DELIVERED", id = "d" + it.tmpId) else it }
+                delay(250)
+                val eng = "eng-" + local.tmpId.takeLast(8)
+                tmpAlias[eng] = local.tmpId
+                delay(400)
+                upsert(local.copy(tmpId = eng, id = "d" + local.tmpId, status = "OUTGOING_DELIVERED"))
             }
             return
         }

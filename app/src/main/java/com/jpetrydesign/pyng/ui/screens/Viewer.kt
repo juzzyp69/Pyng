@@ -52,6 +52,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -122,87 +124,96 @@ fun PhotoViewer(
         val fade = (1f - abs(dismiss.value) / (closeAt * 3f)).coerceIn(0f, 1f)
         val cur = items.getOrNull(pager.currentPage) ?: items.first()
         val (m, ref) = cur
+        val showChrome = chrome && abs(dismiss.value) < closeAt * 0.4f
+        val path = ref.localPath.ifEmpty { repo.media[ref.id].orEmpty() }
         Box(Modifier.fillMaxSize()) {
-            // See-through, so the blurred chat shows behind the photo.
-            Box(Modifier.fillMaxSize().background((if (t.dark) Color(0xFF07080C) else Color(0xFFF2F4F8)).copy(alpha = 0.74f * fade)))
-            HorizontalPager(
-                pager, Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 18.dp), pageSpacing = 12.dp,
-                userScrollEnabled = !zoomed && abs(dismiss.value) < 1f,
-                key = { i -> items[i].first.key + "|" + items[i].second.id },
-            ) { page ->
-                val (pm, pr) = items[page]
-                ZoomPage(
-                    pr, current = page == pager.currentPage,
-                    dismissY = if (page == pager.currentPage) dismiss.value else 0f,
-                    onZoomed = { z -> if (page == pager.currentPage) zoomed = z },
-                    onTap = { chrome = !chrome },
-                    onDrag = { dy -> scope.launch { dismiss.snapTo(dismiss.value + dy) } },
-                    onDragEnd = {
-                        if (abs(dismiss.value) > closeAt) onClose()
-                        else scope.launch { dismiss.animateTo(0f, spring(dampingRatio = 0.75f, stiffness = 500f)) }
-                    },
-                )
-                @Suppress("UNUSED_VARIABLE") val unused = pm
-            }
-            val showChrome = chrome && abs(dismiss.value) < closeAt * 0.4f
-            // Top: who sent it and when, plus save, share, delete and more.
-            AnimatedVisibility(showChrome, Modifier.align(Alignment.TopCenter), enter = fadeIn() + slideInVertically { -it / 3 }, exit = fadeOut() + slideOutVertically { -it / 3 }) {
-                var more by remember { mutableStateOf(false) }
-                Row(Modifier.fillMaxWidth().statusBarsPadding().padding(start = 6.dp, end = 6.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    CircleButton(Icons.back, "Close", onClose)
-                    Column(Modifier.weight(1f).padding(start = 4.dp)) {
-                        T(if (m.fromMe) "You" else m.sender.ifBlank { conv?.title ?: "" }, size = 16.sp, weight = FontWeight.SemiBold, maxLines = 1)
-                        T(viewerDate(m.ts), size = 12.5.sp, color = t.soft, maxLines = 1)
-                    }
-                    val path = ref.localPath.ifEmpty { repo.media[ref.id].orEmpty() }
-                    CircleButton(Icons.download, "Save", { if (path.isNotEmpty()) saveToGallery(ctx, path, ref.mime) else repo.toast("Still downloading") }, iconSize = 20.dp)
-                    CircleButton(Icons.share, "Share", {
-                        if (path.isEmpty()) { repo.toast("Still downloading"); return@CircleButton }
-                        runCatching {
-                            val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", File(path))
-                            ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType(ref.mime).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Share"))
-                        }
-                    }, iconSize = 20.dp)
-                    if (m.id.isNotEmpty()) CircleButton(Icons.trash, "Delete", { onDelete(m) }, iconSize = 20.dp)
-                    Box {
-                        CircleButton(Icons.details, "More", { more = true }, iconSize = 20.dp)
-                        DropdownMenu(more, { more = false }, containerColor = t.sheet, shape = RoundedCornerShape(18.dp)) {
-                            DropdownMenuItem({ T("Forward", size = 15.sp) }, { more = false; onForward(m) }, leadingIcon = { Ico(Icons.forward, t.ink, 18.dp) })
-                            DropdownMenuItem({ T("Open in another app", size = 15.sp) }, {
-                                more = false
-                                if (path.isNotEmpty()) openFile(ctx, path, ref.mime) else repo.toast("Still downloading")
-                            }, leadingIcon = { Ico(Icons.share, t.ink, 18.dp) })
-                            DropdownMenuItem({ T("Show in chat", size = 15.sp) }, { more = false; onClose() }, leadingIcon = { Ico(Icons.message, t.ink, 18.dp) })
+            // A soft backdrop over the blurred chat, so the photo stands on its own.
+            Box(Modifier.fillMaxSize().background((if (t.dark) Color(0xFF0A0C11) else Color(0xFFF1F3F8)).copy(alpha = 0.9f * fade)))
+            Column(Modifier.fillMaxSize()) {
+                // Top: who sent it and when, plus save, share, delete and more. Its space is kept even when hidden.
+                Box(Modifier.fillMaxWidth().statusBarsPadding().height(60.dp)) {
+                    androidx.compose.animation.AnimatedVisibility(showChrome, enter = fadeIn() + slideInVertically { -it / 3 }, exit = fadeOut() + slideOutVertically { -it / 3 }) {
+                        var more by remember { mutableStateOf(false) }
+                        Row(Modifier.fillMaxSize().padding(start = 6.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            CircleButton(Icons.back, "Close", onClose)
+                            Column(Modifier.weight(1f).padding(start = 4.dp)) {
+                                T(if (m.fromMe) "You" else m.sender.ifBlank { conv?.title ?: "" }, size = 16.sp, weight = FontWeight.SemiBold, maxLines = 1)
+                                T(viewerDate(m.ts), size = 12.5.sp, color = t.soft, maxLines = 1)
+                            }
+                            CircleButton(Icons.download, "Save", { if (path.isNotEmpty()) saveToGallery(ctx, path, ref.mime) else repo.toast("Still downloading") }, iconSize = 20.dp)
+                            CircleButton(Icons.share, "Share", {
+                                if (path.isEmpty()) { repo.toast("Still downloading"); return@CircleButton }
+                                runCatching {
+                                    val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", File(path))
+                                    ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType(ref.mime).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Share"))
+                                }
+                            }, iconSize = 20.dp)
+                            if (m.id.isNotEmpty()) CircleButton(Icons.trash, "Delete", { onDelete(m) }, iconSize = 20.dp)
+                            Box {
+                                CircleButton(Icons.details, "More", { more = true }, iconSize = 20.dp)
+                                DropdownMenu(more, { more = false }, containerColor = t.sheet, shape = RoundedCornerShape(18.dp)) {
+                                    DropdownMenuItem({ T("Forward", size = 15.sp) }, { more = false; onForward(m) }, leadingIcon = { Ico(Icons.forward, t.ink, 18.dp) })
+                                    DropdownMenuItem({ T("Open in another app", size = 15.sp) }, {
+                                        more = false
+                                        if (path.isNotEmpty()) openFile(ctx, path, ref.mime) else repo.toast("Still downloading")
+                                    }, leadingIcon = { Ico(Icons.share, t.ink, 18.dp) })
+                                    DropdownMenuItem({ T("Show in chat", size = 15.sp) }, { more = false; onClose() }, leadingIcon = { Ico(Icons.message, t.ink, 18.dp) })
+                                }
+                            }
                         }
                     }
                 }
-            }
-            // Bottom: quick reactions and Reply.
-            AnimatedVisibility(showChrome && m.id.isNotEmpty(), Modifier.align(Alignment.BottomCenter), enter = fadeIn() + slideInVertically { it / 3 }, exit = fadeOut() + slideOutVertically { it / 3 }) {
-                Row(
-                    Modifier.navigationBarsPadding().padding(start = 14.dp, end = 14.dp, bottom = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    val mine = m.reactions.firstOrNull { myId.isNotEmpty() && myId in it.by }?.emoji
-                    Row(
-                        Modifier.height(50.dp).clip(RoundedCornerShape(25.dp)).frost(RoundedCornerShape(25.dp), t.glassStrong, 20.dp).padding(horizontal = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        repo.prefs.state.quickReacts.forEach { e ->
-                            Box(
-                                Modifier.size(40.dp).clip(CircleShape).background(if (e == mine) t.tone else Color.Transparent).press(0.85f) { onReact(m, e) },
-                                contentAlignment = Alignment.Center,
-                            ) { T(e, size = 21.sp) }
-                        }
+                // The photo or video sits between the bars, never under them.
+                HorizontalPager(
+                    pager, Modifier.weight(1f).fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 16.dp), pageSpacing = 14.dp,
+                    userScrollEnabled = !zoomed && abs(dismiss.value) < 1f,
+                    key = { i -> items[i].first.key + "|" + items[i].second.id },
+                ) { page ->
+                    val pr = items[page].second
+                    val isCur = page == pager.currentPage
+                    val drag: (Float) -> Unit = { dy -> scope.launch { dismiss.snapTo(dismiss.value + dy) } }
+                    val dragEnd: () -> Unit = {
+                        if (abs(dismiss.value) > closeAt) onClose()
+                        else scope.launch { dismiss.animateTo(0f, spring(dampingRatio = 0.75f, stiffness = 500f)) }
                     }
-                    Row(
-                        Modifier.height(50.dp).clip(RoundedCornerShape(25.dp)).frost(RoundedCornerShape(25.dp), t.glassStrong, 20.dp).press(0.92f) { onReply(m) }.padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Ico(Icons.reply, t.ink, 18.dp)
-                        Spacer(Modifier.width(7.dp))
-                        T("Reply", size = 14.5.sp, weight = FontWeight.SemiBold)
+                    if (pr.isVideo) VideoPage(pr, current = isCur, dismissY = if (isCur) dismiss.value else 0f, onTap = { chrome = !chrome }, onDrag = drag, onDragEnd = dragEnd)
+                    else ZoomPage(
+                        pr, current = isCur,
+                        dismissY = if (isCur) dismiss.value else 0f,
+                        onZoomed = { z -> if (isCur) zoomed = z },
+                        onTap = { chrome = !chrome },
+                        onDrag = drag, onDragEnd = dragEnd,
+                    )
+                }
+                // Bottom: quick reactions and Reply. Its space is kept too.
+                Box(Modifier.fillMaxWidth().navigationBarsPadding().height(76.dp), contentAlignment = Alignment.Center) {
+                    androidx.compose.animation.AnimatedVisibility(showChrome && m.id.isNotEmpty(), enter = fadeIn() + slideInVertically { it / 3 }, exit = fadeOut() + slideOutVertically { it / 3 }) {
+                        Row(
+                            Modifier.padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            val mine = m.reactions.firstOrNull { myId.isNotEmpty() && myId in it.by }?.emoji
+                            Row(
+                                Modifier.height(50.dp).clip(RoundedCornerShape(25.dp)).background(if (t.dark) Color(0xFF1C1F27) else Color.White).padding(horizontal = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                repo.prefs.state.quickReacts.forEach { e ->
+                                    Box(
+                                        Modifier.size(39.dp).clip(CircleShape).background(if (e == mine) t.tone else Color.Transparent).press(0.85f) { onReact(m, e) },
+                                        contentAlignment = Alignment.Center,
+                                    ) { T(e, size = 20.sp) }
+                                }
+                            }
+                            Row(
+                                Modifier.height(50.dp).clip(RoundedCornerShape(25.dp)).background(if (t.dark) Color(0xFF1C1F27) else Color.White).press(0.92f) { onReply(m) }.padding(horizontal = 15.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Ico(Icons.reply, t.ink, 18.dp)
+                                Spacer(Modifier.width(6.dp))
+                                T("Reply", size = 14.5.sp, weight = FontWeight.SemiBold)
+                            }
+                        }
                     }
                 }
             }
@@ -286,16 +297,126 @@ private fun ZoomPage(ref: MediaRef, current: Boolean, dismissY: Float, onZoomed:
         contentAlignment = Alignment.Center,
     ) {
         val show = full.ifEmpty { thumb }
-        val ratio = if (ref.w > 0 && ref.h > 0) ref.w.toFloat() / ref.h else 0f
-        val imgMod = (if (ratio > 0f) Modifier.aspectRatio(ratio) else Modifier.fillMaxSize())
+        // The picture's real shape (from Google, or from the file once it loads), so it fits between the bars.
+        var loaded by remember(show) { mutableFloatStateOf(0f) }
+        val ratio = if (loaded > 0f) loaded else if (ref.w > 0 && ref.h > 0) ref.w.toFloat() / ref.h else 0f
+        val shape = RoundedCornerShape(if (scale > 1.01f) 0.dp else 20.dp)
+        val imgMod = (if (ratio > 0f) Modifier.padding(vertical = 6.dp).aspectRatio(ratio) else Modifier.fillMaxSize())
             .graphicsLayer { scaleX = scale; scaleY = scale; translationX = offset.x; translationY = offset.y }
-            .clip(RoundedCornerShape(if (scale > 1.01f) 0.dp else 18.dp))
-        if (show.isNotEmpty()) AsyncImage(File(show), "Photo", contentScale = if (ratio > 0f) ContentScale.Crop else ContentScale.Fit, modifier = imgMod)
+            .then(if (ratio > 0f && scale <= 1.01f) Modifier.shadow(18.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.18f), spotColor = Color.Black.copy(alpha = 0.22f)) else Modifier)
+            .clip(shape)
+        if (show.isNotEmpty()) AsyncImage(
+            File(show), "Photo", contentScale = if (ratio > 0f) ContentScale.Crop else ContentScale.Fit, modifier = imgMod,
+            onSuccess = { st -> val dw = st.result.drawable; if (dw.intrinsicWidth > 0 && dw.intrinsicHeight > 0) loaded = dw.intrinsicWidth.toFloat() / dw.intrinsicHeight },
+        )
         else Box(Modifier.size(220.dp).clip(RoundedCornerShape(18.dp)).background(t.tone))
         if (full.isEmpty() && repo.mediaBusy[ref.id] == true) CircularProgressIndicator(Modifier.size(28.dp), color = t.p, strokeWidth = 2.dp)
         else if (full.isEmpty() && show.isEmpty()) T("Asking your phone for this photo…", size = 13.sp, color = t.soft)
     }
 }
 
-@Suppress("unused")
-private fun Modifier.noRipple(onClick: () -> Unit) = this.clickable(onClick = onClick)
+/** A video between the bars: plays right here with play/pause, a scrubber, time and sound. Drag down to close. */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@Composable
+private fun VideoPage(ref: MediaRef, current: Boolean, dismissY: Float, onTap: () -> Unit, onDrag: (Float) -> Unit, onDragEnd: () -> Unit) {
+    val repo = LocalRepo.current
+    val t = LocalTok.current
+    val ctx = LocalContext.current
+    val full = ref.localPath.ifEmpty { repo.media[ref.id].orEmpty() }
+    val thumb = repo.media[ref.thumbId].orEmpty().ifEmpty { ref.previewPath }
+    LaunchedEffect(ref.id) { if (full.isEmpty()) repo.ensureMedia(ref, manual = true) }
+    var ratio by remember { mutableFloatStateOf(if (ref.w > 0 && ref.h > 0) ref.w.toFloat() / ref.h else 16f / 9f) }
+    val shape = RoundedCornerShape(20.dp)
+    val player = remember(full, current) {
+        if (full.isEmpty() || !current) null
+        else androidx.media3.exoplayer.ExoPlayer.Builder(ctx).build().apply {
+            setMediaItem(androidx.media3.common.MediaItem.fromUri(android.net.Uri.fromFile(File(full))))
+            repeatMode = androidx.media3.common.Player.REPEAT_MODE_OFF
+            prepare()
+            playWhenReady = true
+        }
+    }
+    var playing by remember(player) { mutableStateOf(false) }
+    var pos by remember(player) { mutableStateOf(0L) }
+    var dur by remember(player) { mutableStateOf(0L) }
+    var muted by remember { mutableStateOf(false) }
+    var scrubbing by remember { mutableStateOf<Float?>(null) }
+    DisposableEffect(player) {
+        val l = object : androidx.media3.common.Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
+            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                if (videoSize.width > 0 && videoSize.height > 0) ratio = videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height
+            }
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == androidx.media3.common.Player.STATE_ENDED) { player?.pause(); player?.seekTo(0) }
+            }
+        }
+        player?.addListener(l)
+        onDispose { player?.removeListener(l); player?.release() }
+    }
+    LaunchedEffect(player) {
+        while (player != null) {
+            if (scrubbing == null) pos = player.currentPosition
+            dur = player.duration.coerceAtLeast(0L)
+            kotlinx.coroutines.delay(200)
+        }
+    }
+    LaunchedEffect(muted, player) { player?.volume = if (muted) 0f else 1f }
+    Column(
+        Modifier.fillMaxSize()
+            .pointerInput(ref.id) {
+                androidx.compose.foundation.gestures.detectVerticalDragGestures(onDragEnd = { onDragEnd() }, onDragCancel = { onDragEnd() }) { ch, dy -> onDrag(dy); ch.consume() }
+            }
+            .graphicsLayer {
+                translationY = dismissY
+                val s = 1f - min(0.14f, abs(dismissY) / 2600f)
+                scaleX = s; scaleY = s
+            },
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+    ) {
+        Box(
+            Modifier.weight(1f, fill = false).padding(vertical = 6.dp).aspectRatio(ratio)
+                .shadow(18.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.18f), spotColor = Color.Black.copy(alpha = 0.22f))
+                .clip(shape).background(Color.Black)
+                .pointerInput(player) { detectTapGestures(onTap = { if (player == null) onTap() else if (player.isPlaying) player.pause() else player.play() }) },
+            contentAlignment = Alignment.Center,
+        ) {
+            if (player != null) androidx.compose.ui.viewinterop.AndroidView(
+                factory = { c -> android.view.TextureView(c).also { tv -> player.setVideoTextureView(tv) } },
+                modifier = Modifier.fillMaxSize(),
+            )
+            else {
+                val still = full.ifEmpty { thumb }
+                if (still.isNotEmpty()) AsyncImage(File(still), "Video", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            }
+            if (player == null || !playing) Box(Modifier.size(60.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
+                if (full.isEmpty()) CircularProgressIndicator(Modifier.size(26.dp), color = Color.White, strokeWidth = 2.dp)
+                else Ico(Icons.play, Color.White, 26.dp, 1f, fill = Color.White)
+            }
+        }
+        // Controls under the video, on the backdrop, so they never cover the picture.
+        Row(
+            Modifier.fillMaxWidth().padding(top = 10.dp, start = 2.dp, end = 2.dp).height(48.dp).clip(RoundedCornerShape(24.dp))
+                .background(if (t.dark) Color(0xFF1C1F27) else Color.White).padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CircleButton(if (playing) Icons.pause else Icons.play, if (playing) "Pause" else "Play", {
+                val p = player ?: return@CircleButton
+                if (p.isPlaying) p.pause() else p.play()
+            }, size = 40.dp, iconSize = 18.dp)
+            val shown = scrubbing?.let { (it * dur).toLong() } ?: pos
+            T(clock(shown) + " / " + clock(dur), size = 12.5.sp, weight = FontWeight.Medium, color = t.soft, modifier = Modifier.padding(horizontal = 6.dp))
+            androidx.compose.material3.Slider(
+                value = scrubbing ?: if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f,
+                onValueChange = { scrubbing = it },
+                onValueChangeFinished = { scrubbing?.let { f -> player?.seekTo((f * dur).toLong()); pos = (f * dur).toLong() }; scrubbing = null },
+                enabled = player != null && dur > 0,
+                colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = t.p, activeTrackColor = t.p, inactiveTrackColor = t.p.copy(alpha = 0.2f)),
+                modifier = Modifier.weight(1f).height(36.dp),
+            )
+            CircleButton(Icons.volume, if (muted) "Sound on" else "Mute", { muted = !muted }, size = 40.dp, iconSize = 18.dp, tint = if (muted) t.soft else t.ink)
+        }
+    }
+}
+
+private fun clock(ms: Long): String { val s = (ms / 1000).coerceAtLeast(0); return "%d:%02d".format(s / 60, s % 60) }
