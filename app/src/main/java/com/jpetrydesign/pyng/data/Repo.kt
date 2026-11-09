@@ -759,6 +759,103 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
 
     // ---------- sample data ----------
 
+    /**
+     * Sample chats with real-looking people, for promo screenshots (adb only). Photos come from
+     * the app's own external files folder (`promo/f00.jpg`…), pushed there by the screenshot script.
+     */
+    fun loadPromo(dir: File) {
+        loadDemo()
+        convs.clear(); msgs.clear(); typing.clear(); avatars.clear()
+        val now = System.currentTimeMillis()
+        val min = 60_000L
+        fun face(i: Int) = File(dir, "f%02d.jpg".format(i)).takeIf { it.exists() }?.path.orEmpty()
+        fun person(id: String, name: String, num: String, faceIx: Int = -1): Person {
+            if (faceIx >= 0) face(faceIx).takeIf { it.isNotEmpty() }?.let { avatars[id] = it }
+            return Person(id, num, num, name, name.substringBefore(' '), "", false, "c$id")
+        }
+        val me = Person("me", "", "", "You", "You", "", true, "")
+        fun conv(id: String, name: String, people: List<Person>, preview: String, agoMin: Long, unread: Boolean = false, fromMe: Boolean = false, group: Boolean = false, rcs: Boolean = true, read: Boolean = false) =
+            Conv(id, name, preview, fromMe, if (group) people.first().name else "", if (read) "OUTGOING_DISPLAYED" else "OUTGOING_DELIVERED",
+                now - agoMin * min, unread, group, rcs, "", false, false, "active", people + me, "")
+        var n = 0
+        fun msg(c: String, fromMe: Boolean, text: String, agoMin: Long, who: Person? = null, reactions: List<Reaction> = emptyList(), media: List<MediaRef> = emptyList(), reply: String = "") =
+            Msg("pm${++n}", "", c, who?.id ?: if (fromMe) "me" else "", who?.name ?: "", who?.first ?: "", fromMe,
+                if (fromMe) "OUTGOING_DISPLAYED" else "INCOMING_COMPLETE", "", text, media, now - agoMin * min, reactions, reply, 4, "text")
+        fun photo(name: String, w: Int, h: Int): List<MediaRef> =
+            File(dir, name).takeIf { it.exists() }?.let { listOf(MediaRef("promo-$name", "", "", "", "image/jpeg", name, it.length(), w, h, it.path)) } ?: emptyList()
+
+        val maya = person("q1", "Maya Chen", "(720) 555-0131", 5)
+        val jordan = person("q2", "Jordan Brooks", "(720) 555-0148", 4)
+        val ava = person("q3", "Ava Morales", "(303) 555-0177", 1)
+        val marcus = person("q4", "Marcus Reed", "(303) 555-0119", 13)
+        val grace = person("q5", "Grace Okafor", "(720) 555-0162", 7)
+        val leo = person("q6", "Leo Carter", "(303) 555-0154", 15)
+        val sofia = person("q7", "Sofia Rossi", "(720) 555-0186", 26)
+        val mom = person("q8", "Mom", "(720) 555-0142", 3)
+        val ethan = person("q9", "Ethan Wright", "(303) 555-0125", 27)
+        val chloe = person("q10", "Chloe Bennett", "(720) 555-0109", 18)
+        val daniel = person("q11", "Daniel Price", "(303) 555-0193", 11)
+        val zara = person("q12", "Zara Ali", "(720) 555-0170", 32)
+        val dad = person("q13", "Dad", "(720) 555-0143", 6)
+        val noah = person("q14", "Noah Fischer", "(303) 555-0137", 21)
+        val isla = person("q15", "Isla Grant", "(720) 555-0158", 9)
+        val andre = person("q16", "Andre Thompson", "(303) 555-0111", 0)
+        val amara = person("q17", "Amara Johnson", "(720) 555-0174", 16)
+        val tasha = person("q18", "Tasha Green", "(303) 555-0166", 22)
+        val kenji = person("q19", "Ruby Nakamura", "(720) 555-0115", 24)
+
+        val list = listOf(
+            conv("g1", "Maya Chen", listOf(maya), "Look who's coming Saturday 😄", 2, unread = true),
+            conv("g2", "Jordan Brooks", listOf(jordan), "Down for tacos tonight?", 9, unread = true),
+            conv("g3", "Weekend crew", listOf(tasha, ethan, kenji, andre), "Ruby: I'll bring the speaker 🔊", 14, group = true, unread = true),
+            conv("g4", "Ava Morales", listOf(ava), "You're the best, thank you!!", 26, fromMe = false),
+            conv("g5", "Mom", listOf(mom), "Call me when you land ❤️", 41),
+            conv("g6", "Marcus Reed", listOf(marcus), "Game night Friday at 7?", 55, fromMe = true, read = true),
+            conv("g7", "Grace Okafor", listOf(grace), "That color palette is perfect", 80),
+            conv("g8", "Leo Carter", listOf(leo), "Haha no way 😂", 120, fromMe = true, read = true),
+            conv("g9", "Sofia Rossi", listOf(sofia), "Photos from the gallery opening", 150),
+            conv("g10", "Ethan Wright", listOf(ethan), "Sent you the invite", 190, fromMe = true, read = true),
+            conv("g11", "Chloe Bennett", listOf(chloe), "Coffee tomorrow? ☕", 240, unread = true),
+            conv("g12", "Daniel Price", listOf(daniel), "The new build looks amazing", 320),
+            conv("g13", "Zara Ali", listOf(zara), "Yesss, count me in", 600),
+            conv("g14", "Dad", listOf(dad), "Proud of you kiddo 👏", 900),
+            conv("g15", "Noah Fischer", listOf(noah), "Sounds like a plan", 1300),
+            conv("g16", "Isla Grant", listOf(isla), "Happy birthday!! 🎉", 1700),
+            conv("g17", "Andre Thompson", listOf(andre), "Let's run it back next week", 2300),
+            conv("g18", "Amara Johnson", listOf(amara), "See you there!", 3000),
+        )
+        list.forEach { convs[it.id] = it }
+        File(dir, "group.jpg").takeIf { it.exists() }?.let { prefs.setOpt("gphoto:g3", it.path) }
+
+        msgs["g1"] = listOf(
+            msg("g1", false, "Are we still on for Saturday? 🏔️", 95, maya),
+            msg("g1", true, "Yes! Leaving at 7. I'll grab coffee on the way", 92),
+            msg("g1", false, "You're a legend", 91, maya, reactions = listOf(Reaction("❤️", 1, listOf("me")))),
+            msg("g1", true, "Is everyone still coming?", 12),
+            msg("g1", false, "", 3, maya, media = photo("strip.jpg", 1050, 350)),
+            msg("g1", false, "Look who's coming Saturday 😄", 2, maya, reactions = listOf(Reaction("🔥", 1, listOf("me")))),
+        )
+        msgs["g3"] = listOf(
+            msg("g3", false, "Okay who's driving Saturday?", 60, tasha),
+            msg("g3", false, "I can take 4 people 🚗", 58, ethan),
+            msg("g3", true, "I'm in! I'll bring snacks", 55),
+            msg("g3", false, "", 20, andre, media = photo("collage.jpg", 700, 700)),
+            msg("g3", false, "Last trip was too good", 19, andre, reactions = listOf(Reaction("😂", 2, listOf("q18", "me")))),
+            msg("g3", false, "I'll bring the speaker 🔊", 14, kenji),
+        )
+        msgs["g2"] = listOf(
+            msg("g2", false, "Down for tacos tonight?", 9, jordan),
+        )
+        msgs["g5"] = listOf(
+            msg("g5", true, "Boarding now ✈️", 50),
+            msg("g5", false, "Call me when you land ❤️", 41, mom),
+        )
+        typing["g4"] = now + 600_000
+        contacts = listOf(maya, jordan, ava, marcus, grace, leo, sofia, mom, ethan, chloe, daniel, zara, dad, noah, isla, andre, amara)
+            .map { Contact(it.id, it.contactId, it.name, it.number, it.formatted, "") }
+        prefs.edit { it.copy(pinned = listOf("g1", "g2", "g3", "g4", "g5", "g6", "g7", "g9"), pinsSeeded = true, setupDone = true, profileName = "Justin Petry") }
+    }
+
     fun loadDemo() {
         demo = true
         paired = true

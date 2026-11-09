@@ -90,7 +90,7 @@ class MainActivity : FragmentActivity() {
     /** Sample data and settings for automated screenshots (adb only). */
     private fun setupDemo(i: Intent) {
         val repo = app.repo
-        repo.loadDemo()
+        if (i.getBooleanExtra("promo", false)) repo.loadPromo(java.io.File(getExternalFilesDir(null), "promo")) else repo.loadDemo()
         repo.demoOpen = i.getStringExtra("open")
         repo.prefs.edit { pr ->
             var x = pr.copy(toggles = pr.toggles + ("bioLock" to false))
