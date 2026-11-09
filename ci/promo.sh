@@ -48,25 +48,43 @@ shot() {
   echo "shot $name"
 }
 
-for dev in "s26-ultra 1440x3120 560" "fold8-cover 1080x2520 420" "fold8-open 1968x2184 420"; do
+# Fold 8 cover screen: the wide 5.5" one, 1248 x 1972.
+for dev in "fold8-cover 1248x1972 480"; do
   set -- $dev
   adb shell wm size "$2"
   adb shell wm density "$3"
   sleep 3
   sb enter
   sb clock -e hhmm 0941
-  # Peek only (the rest of the set is already done).
+  shot "$1-home"
+  shot "$1-home-dark" --es mode Dark
+  shot "$1-chat" --es route thread:g1
+  shot "$1-chat-dark" --es route thread:g1 --es mode Dark
+  shot "$1-group" --es route thread:g3
+  shot "$1-group-dark" --es route thread:g3 --es mode Dark
+  shot "$1-tacos" --es route thread:g2
+  shot "$1-mom-dark" --es route thread:g5 --es mode Dark
+  shot "$1-viewer" --es route thread:g1 --es open viewer
   WAIT=10 shot "$1-peek" --es open rowmenu
   WAIT=10 shot "$1-peek-dark" --es open rowmenu --es mode Dark
+  shot "$1-settings" --es route settings
+  shot "$1-appearance" --es route appearance
+  shot "$1-chat-theme" --es route theme:g1
+  shot "$1-home-forest" --es theme Forest
+  shot "$1-home-burgundy" --es theme Burgundy
+  shot "$1-home-cobalt" --es theme Cobalt
+  shot "$1-home-terracotta" --es theme Terracotta
+  shot "$1-home-plum" --es theme Plum
+  shot "$1-home-rose" --es theme Rose
+  shot "$1-home-mocha" --es theme Mocha
+  shot "$1-chat-forest" --es route thread:g1 --es theme Forest
+  shot "$1-chat-burgundy-dark" --es route thread:g2 --es theme Burgundy --es mode Dark
+  shot "$1-chat-cobalt" --es route thread:g3 --es theme Cobalt
+  shot "$1-chat-terracotta" --es route thread:g5 --es theme Terracotta
+  shot "$1-chat-plum-dark" --es route thread:g7 --es theme Plum --es mode Dark
+  shot "$1-chat-rose" --es route thread:g9 --es theme Rose
+  shot "$1-chat-mocha-dark" --es route thread:g11 --es theme Mocha --es mode Dark
 done
 adb shell wm size reset
 adb shell wm density reset
-sleep 3
-# Record the peek opening (the recording starts before launch, since a cold start is slow here).
-adb shell am force-stop $PKG
-(adb shell screenrecord --time-limit 25 --bit-rate 8000000 /sdcard/peek.mp4 || true) &
-sleep 1
-adb shell am start -n $PKG/.IconClassic --ez demo true --ez promo true --es theme Ocean --es mode Light --es open rowmenu > /dev/null
-wait
-adb pull /sdcard/peek.mp4 "$OUT/peek.mp4" > /dev/null 2>&1 || true
 ls "$OUT" | wc -l
