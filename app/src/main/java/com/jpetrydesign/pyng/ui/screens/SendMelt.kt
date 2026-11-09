@@ -233,7 +233,9 @@ fun SendMeltLayer(fx: SendFx, t: Tok, fontSize: Float, bold: Boolean, corner: Fl
         val r = min(h / 2f, lerp(24f * d, corner * d, g.T.prog(g.F.top)))
         val pivot = Offset(g.L.v + w / 2f, top + h / 2f)
         scale(g.sx, g.sy, pivot) {
-            drawRoundRect(t.outBg, topLeft = Offset(g.L.v, top), size = Size(w, h), cornerRadius = CornerRadius(r), alpha = lerp(0.22f, 1f, tint))
+            // It starts looking like the message box (so nothing behind shows through) and turns into the bubble.
+            if (tint < 1f) drawRoundRect(t.field.copy(alpha = 1f), topLeft = Offset(g.L.v, top), size = Size(w, h), cornerRadius = CornerRadius(r), alpha = 1f - tint)
+            drawRoundRect(t.outBg, topLeft = Offset(g.L.v, top), size = Size(w, h), cornerRadius = CornerRadius(r), alpha = tint)
             // Your words: the box's ink fading out as the bubble's ink fades in.
             val tx = g.L.v + lerp(g.T0.x - g.F.left, padL, g.L.prog(g.F.left))
             val ty = top + lerp(g.T0.y - g.F.top, padT, g.T.prog(g.F.top))

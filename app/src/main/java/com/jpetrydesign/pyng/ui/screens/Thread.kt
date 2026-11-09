@@ -216,6 +216,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
             "reply" -> replyTo = list.lastOrNull { !it.fromMe }
             "details" -> detailsFor = list.lastOrNull()
             "viewer" -> list.firstOrNull { m -> m.media.any { it.isImage } }?.let { m -> delay(700); viewing = m.key to m.media.first { it.isImage }.id }
+            "viewer-video" -> list.firstOrNull { m -> m.media.any { it.isVideo } }?.let { m -> delay(700); viewing = m.key to m.media.first { it.isVideo }.id }
         }
     }
 

@@ -87,6 +87,7 @@ adb pull /sdcard/send.mp4 ci-logs/send.mp4 > /dev/null 2>&1 || true
 echo "recorded send"
 shot 66-thread-media --es route thread:c9
 WAIT=10 shot 67-thread-viewer --es route thread:c9 --es open viewer
+WAIT=10 shot 67b-thread-viewer-video --es route thread:c9 --es open viewer-video
 shot 68-section-chats-top --es route section:chats
 
 # Fold inner screen

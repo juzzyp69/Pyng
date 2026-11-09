@@ -834,9 +834,13 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
             card.writeText("BEGIN:VCARD\nVERSION:3.0\nFN:Sam Rivera\nN:Rivera;Sam;;;\nORG:Northside Studio\nTEL;TYPE=CELL:(720) 555-0128\nEMAIL:sam@example.com\nEND:VCARD\n")
             val photo = MediaRef("demo-photo", "", "", "", "image/jpeg", "couch.jpg", pic.length(), 900, 1200, pic.path)
             val vcf = MediaRef("demo-card", "", "", "", "text/x-vcard", "Sam Rivera.vcf", card.length(), 0, 0, card.path)
+            val clip = File(dir, "clip.mp4")
+            if (!clip.exists()) app.assets.open("demo-clip.mp4").use { input -> clip.outputStream().use { input.copyTo(it) } }
+            val video = MediaRef("demo-video", "", "", "", "video/mp4", "clip.mp4", clip.length(), 480, 640, clip.path)
             msgs["c9"] = listOf(
                 msg("c9", false, "Look who claimed my spot on the couch", 1500).copy(media = listOf(photo)),
                 msg("c9", false, "Here's Sam's number for the shoot", 1499).copy(media = listOf(vcf)),
+                msg("c9", false, "", 1498).copy(media = listOf(video)),
             )
         }
         typing["c4"] = now + 600_000
