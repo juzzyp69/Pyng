@@ -337,8 +337,14 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                 }
             },
     ) {
-        val peekBlur by androidx.compose.animation.core.animateDpAsState(if (menuFor != null) 16.dp else 0.dp, label = "peekBlur")
-        Box(Modifier.fillMaxSize().then(if (peekBlur > 0.5.dp) Modifier.blur(peekBlur) else Modifier)) {
+        // While peeking, Home sinks back a little and blurs, so the preview reads clearly on top.
+        val peekBlur by androidx.compose.animation.core.animateDpAsState(if (menuFor != null) 30.dp else 0.dp, tween(260), label = "peekBlur")
+        val peekSink by animateFloatAsState(if (menuFor != null) 0.94f else 1f, spring(dampingRatio = 0.7f, stiffness = 380f), label = "peekSink")
+        Box(
+            Modifier.fillMaxSize()
+                .graphicsLayer { scaleX = peekSink; scaleY = peekSink }
+                .then(if (peekBlur > 0.5.dp) Modifier.blur(peekBlur) else Modifier),
+        ) {
         Glow()
         androidx.compose.runtime.CompositionLocalProvider(LocalHaze provides haze) {
             LazyColumn(
@@ -1017,23 +1023,42 @@ fun RowMenu(c: Conv?, onDismiss: () -> Unit, onEditPins: (() -> Unit)? = null) {
     Box(Modifier.fillMaxSize().zIndex(25f)) {
         androidx.compose.animation.AnimatedVisibility(c != null, enter = fadeIn(tween(180)), exit = androidx.compose.animation.fadeOut(tween(160))) {
             Box(
-                Modifier.fillMaxSize().background((if (t.dark) Color.Black else Color.White).copy(alpha = if (t.dark) 0.32f else 0.38f))
+                Modifier.fillMaxSize().background(if (t.dark) Color.Black.copy(alpha = 0.55f) else Color(0xFF1A1C22).copy(alpha = 0.28f))
                     .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onDismiss),
             )
         }
         androidx.compose.animation.AnimatedVisibility(
             c != null,
-            enter = fadeIn(tween(160)) + androidx.compose.animation.scaleIn(if (motion) spring(dampingRatio = 0.8f, stiffness = 520f) else tween(0), initialScale = 0.92f),
-            exit = androidx.compose.animation.fadeOut(tween(140)) + androidx.compose.animation.scaleOut(tween(140), targetScale = 0.96f),
+            // The cards bring their own springy entrance (see PeekBody); this just fades the layer.
+            enter = fadeIn(tween(if (motion) 90 else 0)),
+            exit = androidx.compose.animation.fadeOut(tween(140)) + androidx.compose.animation.scaleOut(tween(140), targetScale = 0.94f),
         ) {
             val cur = last ?: return@AnimatedVisibility
-            PeekBody(cur, repo, t, onDismiss, onEditPins, open = { onDismiss(); nav?.openChat(cur.id) })
+            PeekBody(cur, repo, t, motion, onDismiss, onEditPins, open = { onDismiss(); nav?.openChat(cur.id) })
         }
     }
 }
 
+/** A springy jelly pop: a little wider than tall at first, settling with a soft wobble. */
+private class Jelly(motion: Boolean) {
+    val x = Animatable(if (motion) 0f else 1f)
+    val y = Animatable(if (motion) 0f else 1f)
+    suspend fun play() = kotlinx.coroutines.coroutineScope {
+        launch { x.animateTo(1f, spring(dampingRatio = 0.52f, stiffness = 420f)) }
+        launch { y.animateTo(1f, spring(dampingRatio = 0.42f, stiffness = 300f)) }
+    }
+}
+
+private fun Modifier.jelly(j: Jelly, rise: Dp, originY: Float = 0.5f) = graphicsLayer {
+    scaleX = 0.84f + 0.16f * j.x.value
+    scaleY = 0.76f + 0.24f * j.y.value
+    translationY = (1f - j.y.value) * rise.toPx()
+    alpha = j.x.value.coerceIn(0f, 1f)
+    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, originY)
+}
+
 @Composable
-private fun PeekBody(cur: Conv, repo: com.jpetrydesign.pyng.data.Repo, t: com.jpetrydesign.pyng.ui.theme.Tok, onDismiss: () -> Unit, onEditPins: (() -> Unit)?, open: () -> Unit) {
+private fun PeekBody(cur: Conv, repo: com.jpetrydesign.pyng.data.Repo, t: com.jpetrydesign.pyng.ui.theme.Tok, motion: Boolean, onDismiss: () -> Unit, onEditPins: (() -> Unit)?, open: () -> Unit) {
     val p = repo.prefs.state
     val who = whoOf(cur)
     LaunchedEffect(cur.id) { if (repo.msgs[cur.id] == null) repo.loadMessages(cur.id) }
@@ -1041,27 +1066,41 @@ private fun PeekBody(cur: Conv, repo: com.jpetrydesign.pyng.data.Repo, t: com.jp
     val unread = cur.unread || cur.id in p.markedUnread
     val newCount = if (unread) repo.msgs[cur.id].orEmpty().takeLastWhile { !it.fromMe }.size.coerceAtLeast(1) else 0
     var reply by remember(cur.id) { mutableStateOf("") }
-    val card = if (t.dark) Color(0xFF1B1E26).copy(alpha = 0.96f) else Color.White.copy(alpha = 0.96f)
+    // Fully opaque cards: the blurred Home behind should never show through the text.
+    val card = if (t.dark) Color(0xFF1B1E26) else Color.White
     val cardShape = RoundedCornerShape(26.dp)
+    val top = remember(cur.id) { Jelly(motion) }
+    val bottom = remember(cur.id) { Jelly(motion) }
+    LaunchedEffect(cur.id) {
+        if (!motion) return@LaunchedEffect
+        launch { top.play() }
+        kotlinx.coroutines.delay(70)
+        bottom.play()
+    }
     Column(
         Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePaddingCompat()
             .verticalScrollCompat().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
     ) {
-        // Who, and how recent.
-        Row(Modifier.padding(horizontal = 6.dp).clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = open), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.shadow(14.dp, CircleShape, clip = false)) { Avatar(who.photo, who.ini, 58.dp, who.bg, who.ink) }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                T(cur.title, size = 19.sp, weight = FontWeight.Bold, maxLines = 1)
-                T(
-                    (if (newCount > 0) "$newCount new · " else "") + "last message " + clock(cur.ts).ifEmpty { "earlier" },
-                    size = 12.5.sp, color = t.soft, maxLines = 1,
-                )
+        // Who and how recent, then the last few messages and a reply box, all on one card.
+Column(Modifier.fillMaxWidth().jelly(top, 28.dp, originY = 1f).shadow(22.dp, cardShape, clip = false, ambientColor = t.shadow.copy(alpha = 0.18f), spotColor = t.shadow.copy(alpha = 0.22f)).clip(cardShape).background(card).padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+                    .clickable(onClick = open).padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Avatar(who.photo, who.ini, 46.dp, who.bg, who.ink)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    T(cur.title, size = 18.sp, weight = FontWeight.Bold, maxLines = 1)
+                    T(
+                        (if (newCount > 0) "$newCount new · " else "") + "last message " + clock(cur.ts).ifEmpty { "earlier" },
+                        size = 12.5.sp, color = t.soft, maxLines = 1,
+                    )
+                }
+                Ico(Icons.chev, t.soft, 18.dp)
             }
-        }
-        // The last few messages, and a reply box.
-        Column(Modifier.fillMaxWidth().shadow(22.dp, cardShape, clip = false, ambientColor = t.shadow.copy(alpha = 0.18f), spotColor = t.shadow.copy(alpha = 0.22f)).clip(cardShape).background(card).padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Box(Modifier.fillMaxWidth().padding(horizontal = 4.dp).padding(bottom = 6.dp).height(1.dp).background(t.hair))
             if (recent.isEmpty()) T(if (repo.msgs[cur.id] == null) "Loading…" else "No messages yet", size = 13.5.sp, color = t.soft, modifier = Modifier.padding(6.dp))
             recent.forEach { m ->
                 val me = m.fromMe
@@ -1092,7 +1131,7 @@ private fun PeekBody(cur: Conv, repo: com.jpetrydesign.pyng.data.Repo, t: com.jp
             }
         }
         // Actions.
-        Column(Modifier.fillMaxWidth().shadow(22.dp, cardShape, clip = false, ambientColor = t.shadow.copy(alpha = 0.16f), spotColor = t.shadow.copy(alpha = 0.2f)).clip(cardShape).background(card).padding(vertical = 8.dp)) {
+        Column(Modifier.fillMaxWidth().jelly(bottom, 40.dp, originY = 0f).shadow(22.dp, cardShape, clip = false, ambientColor = t.shadow.copy(alpha = 0.16f), spotColor = t.shadow.copy(alpha = 0.2f)).clip(cardShape).background(card).padding(vertical = 8.dp)) {
             val pinned = p.isPinned(cur.id)
             val muted = p.isMuted(cur.id)
             val archived = cur.status == "archived"

@@ -85,6 +85,14 @@ adb shell am start -W -n $PKG/.IconClassic --ez demo true --es route thread:c1 -
 adb shell screenrecord --time-limit 9 --bit-rate 8000000 /sdcard/send.mp4 || true
 adb pull /sdcard/send.mp4 ci-logs/send.mp4 > /dev/null 2>&1 || true
 echo "recorded send"
+# Record the hold-to-peek opening, to check its springy entrance.
+adb shell am force-stop $PKG
+(adb shell screenrecord --time-limit 8 --bit-rate 8000000 /sdcard/peek.mp4 || true) &
+sleep 1
+adb shell am start -n $PKG/.IconClassic --ez demo true --es open rowmenu > /dev/null
+wait
+adb pull /sdcard/peek.mp4 ci-logs/peek.mp4 > /dev/null 2>&1 || true
+echo "recorded peek"
 shot 66-thread-media --es route thread:c9
 WAIT=10 shot 67-thread-viewer --es route thread:c9 --es open viewer
 WAIT=10 shot 67b-thread-viewer-video --es route thread:c9 --es open viewer-video
