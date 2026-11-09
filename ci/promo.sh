@@ -39,6 +39,10 @@ shot() {
   adb shell am start -W -n $PKG/.IconClassic --ez demo true --ez promo true --es theme Ocean --es mode Light "$@" > /dev/null
   sleep "${WAIT:-7}"
   adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS > /dev/null 2>&1
+  # Re-apply the clean status bar each time (it can reset when system UI restarts).
+  sb enter; sb clock -e hhmm 0941; sb battery -e level 100 -e plugged false
+  sb network -e wifi show -e level 4 -e fully true; sb network -e mobile show -e datatype none -e level 4 -e fully true
+  sb notifications -e visible false
   sleep 1
   adb exec-out screencap -p > "$OUT/$name.png"
   echo "shot $name"
