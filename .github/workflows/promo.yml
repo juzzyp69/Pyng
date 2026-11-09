@@ -1,0 +1,52 @@
+name: Promo screenshots
+
+on:
+  push:
+    branches: [promo-tmp]
+
+permissions:
+  contents: write
+
+jobs:
+  shots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get the app
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$(cat ci/promo-tag.txt)" -p '*.apk' -O pyng.apk -R ${{ github.repository }}
+
+      - name: Enable KVM
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Screens
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash ci/promo.sh pyng.apk
+
+      - name: Save
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p /tmp/out && cp -r promo-out/* /tmp/out/ 2>/dev/null || true
+          git config user.name "pyng-ci"
+          git config user.email "pyng-ci@users.noreply.github.com"
+          git checkout --orphan promo-shots-tmp
+          git rm -rf --cached . > /dev/null
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -r /tmp/out/* . 2>/dev/null || echo "no shots" > none.txt
+          git add -A
+          git commit -m "Promo shots"
+          git push -f origin HEAD:promo-shots
