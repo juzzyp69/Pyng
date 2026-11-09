@@ -90,7 +90,12 @@ class MainActivity : FragmentActivity() {
     /** Sample data and settings for automated screenshots (adb only). */
     private fun setupDemo(i: Intent) {
         val repo = app.repo
-        if (i.getBooleanExtra("promo", false)) repo.loadPromo(java.io.File(getExternalFilesDir(null), "promo")) else repo.loadDemo()
+        if (i.getBooleanExtra("promo", false)) {
+            val inner = java.io.File(filesDir, "promo")
+            repo.loadPromo(if (inner.isDirectory) inner else java.io.File(getExternalFilesDir(null), "promo"))
+            // Clean frames for promo shots: no navigation bar or taskbar.
+            androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+        } else repo.loadDemo()
         repo.demoOpen = i.getStringExtra("open")
         repo.prefs.edit { pr ->
             var x = pr.copy(toggles = pr.toggles + ("bioLock" to false))

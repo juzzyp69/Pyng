@@ -766,7 +766,8 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     fun loadPromo(dir: File) {
         loadDemo()
         convs.clear(); msgs.clear(); typing.clear(); avatars.clear()
-        val now = System.currentTimeMillis()
+        // Everything is timed as if it's 9:41 this morning, to match the screenshots' clock.
+        val now = java.util.Calendar.getInstance().apply { set(java.util.Calendar.HOUR_OF_DAY, 9); set(java.util.Calendar.MINUTE, 41); set(java.util.Calendar.SECOND, 0) }.timeInMillis
         val min = 60_000L
         fun face(i: Int) = File(dir, "f%02d.jpg".format(i)).takeIf { it.exists() }?.path.orEmpty()
         fun person(id: String, name: String, num: String, faceIx: Int = -1): Person {
@@ -850,7 +851,7 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
             msg("g5", true, "Boarding now ✈️", 50),
             msg("g5", false, "Call me when you land ❤️", 41, mom),
         )
-        typing["g4"] = now + 600_000
+        typing["g4"] = System.currentTimeMillis() + 600_000
         contacts = listOf(maya, jordan, ava, marcus, grace, leo, sofia, mom, ethan, chloe, daniel, zara, dad, noah, isla, andre, amara)
             .map { Contact(it.id, it.contactId, it.name, it.number, it.formatted, "") }
         prefs.edit { it.copy(pinned = listOf("g1", "g2", "g3", "g4", "g5", "g6", "g7", "g9"), pinsSeeded = true, setupDone = true, profileName = "Justin Petry") }
