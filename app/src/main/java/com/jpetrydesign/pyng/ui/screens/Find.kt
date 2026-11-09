@@ -271,9 +271,9 @@ fun NewChatScreen(nav: Nav, group: Boolean) {
                         Column { T(if (groupMode) "Add $q" else "Send to $q", size = 15.sp, weight = FontWeight.SemiBold); T("Number", size = 13.sp, color = t.soft) }
                     }
                 }
-                item { T(if (repo.contacts.isEmpty()) "Loading contacts…" else "All contacts", size = 12.5.sp, weight = FontWeight.SemiBold, color = t.soft, modifier = Modifier.padding(start = 4.dp, top = 16.dp, bottom = 6.dp)) }
+                item { T(if (repo.contacts.isEmpty()) (if (repo.contactsLoaded) "No contacts found. Type a number above to text it." else "Loading contacts…") else if (query.isEmpty()) "All contacts" else "Contacts", size = 12.5.sp, weight = FontWeight.SemiBold, color = t.soft, modifier = Modifier.padding(start = 4.dp, top = 16.dp, bottom = 6.dp)) }
                 items(distinctContacts, key = { it.id + it.number }) { c ->
-                    LaunchedEffect(c.id) { if (repo.prefs.state.showPhotos == "Show") repo.ensureAvatars(listOf(c.id)) }
+                    LaunchedEffect(c.id) { if (repo.prefs.state.showPhotos == "Show" && !c.id.startsWith("dev:")) repo.ensureAvatars(listOf(c.id)) }
                     val on = picked.any { it.number == c.number }
                     Row(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).clickable {

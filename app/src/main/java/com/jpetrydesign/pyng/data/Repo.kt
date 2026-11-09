@@ -241,7 +241,12 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         }
     }
 
-    private fun upsert(m: Msg) {
+    /** Google's temporary id for a message → the id this app gave it when you tapped send. */
+    private val tmpAlias = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private fun aliased(m: Msg): Msg = tmpAlias[m.tmpId]?.let { m.copy(tmpId = it) } ?: m
+
+    private fun upsert(raw: Msg) {
+        val m = aliased(raw)
         val list = msgs[m.convId] ?: emptyList()
         val i = list.indexOfFirst { (m.id.isNotEmpty() && it.id == m.id) || (m.tmpId.isNotEmpty() && it.tmpId == m.tmpId) }
         val next = if (i >= 0) list.toMutableList().also { it[i] = m } else list + m
@@ -317,9 +322,9 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
                 else it.fetchMessages(convId, 40, "", 0)
             }
             r.onSuccess { json ->
-                val got = Msg.list(json)
+                val got = Msg.list(json).map { aliased(it) }
                 hasMore[convId] = got.size >= 40
-                val pendingLocal = cur.filter { it.id.isEmpty() }
+                val pendingLocal = cur.filter { it.id.isEmpty() && got.none { g -> g.tmpId == it.tmpId } }
                 msgs[convId] = tidy(if (older) got + cur else got + cur.filter { c -> got.none { it.id == c.id } && c.id.isNotEmpty() && c.ts > (got.lastOrNull()?.ts ?: 0) } + pendingLocal)
             }.onFailure {
                 if (!older && cur.isEmpty()) msgs[convId] = emptyList()
@@ -328,11 +333,50 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         }
     }
 
+    var contactsLoaded by mutableStateOf(false)
+
+    /** Your phone's own contacts first (instant), merged with the ones Google Messages knows. */
     fun loadContacts(force: Boolean = false) {
         if (demo) return
         if (contacts.isNotEmpty() && !force) return
-        scope.launch { hub.io { it.listContacts() }.onSuccess { j -> contacts = Contact.list(j).sortedBy { it.name.lowercase() } } }
+        scope.launch {
+            val phone = withContext(Dispatchers.IO) { deviceContacts() }
+            if (phone.isNotEmpty()) contacts = mergeContacts(phone, contacts)
+            val google = hub.io { Contact.list(it.listContacts()) }.getOrDefault(emptyList())
+            contacts = mergeContacts(contacts, google)
+            contactsLoaded = true
+        }
     }
+
+    private fun mergeContacts(a: List<Contact>, b: List<Contact>) =
+        (a + b).filter { it.number.isNotBlank() }
+            .distinctBy { it.name.trim().lowercase() + "|" + it.number.filter(Char::isDigit).takeLast(10) }
+            .sortedBy { it.name.lowercase() }
+
+    private fun deviceContacts(): List<Contact> = runCatching {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(app, android.Manifest.permission.READ_CONTACTS) != android.content.pm.PackageManager.PERMISSION_GRANTED) return emptyList()
+        val P = android.provider.ContactsContract.CommonDataKinds.Phone::class.java
+        val out = ArrayList<Contact>()
+        app.contentResolver.query(
+            android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            arrayOf(
+                android.provider.ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
+                android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME_PRIMARY,
+                android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER,
+                android.provider.ContactsContract.CommonDataKinds.Phone.NORMALIZED_NUMBER,
+            ),
+            null, null, null,
+        )?.use { c ->
+            while (c.moveToNext()) {
+                val name = c.getString(1)?.takeIf { it.isNotBlank() } ?: continue
+                val raw = c.getString(2)?.takeIf { it.isNotBlank() } ?: continue
+                val id = c.getLong(0)
+                out += Contact("dev:$id", id.toString(), name, c.getString(3)?.takeIf { it.isNotBlank() } ?: raw, raw, "")
+            }
+        }
+        @Suppress("UNUSED_VARIABLE") val unused = P
+        out
+    }.getOrDefault(emptyList())
 
     fun ensureAvatars(ids: List<String>, contactsKind: Boolean = false) {
         if (demo) return
@@ -520,7 +564,8 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
             val list = msgs[local.convId] ?: return@launch
             msgs[local.convId] = list.map { m ->
                 if (m.tmpId != local.tmpId) m
-                else r.fold({ tmp -> m.copy(tmpId = tmp, status = "OUTGOING_SENDING") }, { e -> m.copy(error = e.message ?: "Not sent") })
+                // Keep the app's own temporary id so the bubble keeps its place; remember Google's to match its echo.
+                else r.fold({ tmp -> if (tmp.isNotEmpty()) tmpAlias[tmp] = m.tmpId; m.copy(status = "OUTGOING_SENDING") }, { e -> m.copy(error = e.message ?: "Not sent") })
             }
         }
     }

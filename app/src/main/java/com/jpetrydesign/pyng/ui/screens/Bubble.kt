@@ -411,7 +411,8 @@ private fun MediaView(m: Msg, ref: MediaRef, shape: RoundedCornerShape, me: Bool
         if (ref.localPath.isEmpty()) {
             // The small preview first (it's quick), then the full file.
             if ((ref.isVideo || ref.isImage) && ref.thumbId.isNotEmpty()) repo.ensureMedia(ref, thumb = true)
-            if ((ref.isImage || ref.isAudio) && auto) repo.ensureMedia(ref)
+            // Short videos come down too, so the bubble shows a sharp first frame instead of the blurry preview.
+            if ((ref.isImage || ref.isAudio || (ref.isVideo && ref.size in 1..30_000_000L)) && auto) repo.ensureMedia(ref)
         }
     }
     // Only spin while something is actually downloading.
@@ -422,7 +423,8 @@ private fun MediaView(m: Msg, ref: MediaRef, shape: RoundedCornerShape, me: Bool
             val ratio = if (ref.w > 0 && ref.h > 0) ref.h.toFloat() / ref.w else 1f
             val w = 232.dp
             val h = (232f * ratio).coerceIn(140f, 320f).dp
-            val show = if (ref.isImage && full.isNotEmpty()) full else thumb
+            // A downloaded video shows its own first frame; until then, the preview.
+            val show = if (full.isNotEmpty()) full else thumb
             // PNGs, GIFs and stickers can be see-through: no box behind them, shown whole.
             val clear = ref.isImage && (ref.mime.contains("png") || ref.mime.contains("gif") || ref.mime.contains("webp"))
             Box(
