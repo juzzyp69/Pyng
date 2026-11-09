@@ -828,28 +828,63 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         list.forEach { convs[it.id] = it }
         File(dir, "group.jpg").takeIf { it.exists() }?.let { prefs.setOpt("gphoto:g3", it.path) }
 
+        // Photos are sized from the files themselves, so any crop works.
+        fun pic(name: String): List<MediaRef> = File(dir, name).takeIf { it.exists() }?.let { f ->
+            val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            android.graphics.BitmapFactory.decodeFile(f.path, o)
+            listOf(MediaRef("promo-$name", "", "", "", "image/jpeg", name, f.length(), o.outWidth, o.outHeight, f.path))
+        } ?: emptyList()
+
         msgs["g1"] = listOf(
             msg("g1", false, "Are we still on for Saturday? 🏔️", 95, maya),
             msg("g1", true, "Yes! Leaving at 7. I'll grab coffee on the way", 92),
             msg("g1", false, "You're a legend", 91, maya, reactions = listOf(Reaction("❤️", 1, listOf("me")))),
-            msg("g1", true, "Is everyone still coming?", 12),
-            msg("g1", false, "", 3, maya, media = photo("strip.jpg", 1050, 350)),
+            msg("g1", false, "", 40, maya, media = pic("trail.jpg")),
+            msg("g1", false, "This is the loop I was telling you about 🌲", 39, maya),
+            msg("g1", true, "Okay that's gorgeous. Is everyone still coming?", 12),
+            msg("g1", false, "", 3, maya, media = pic("roadtrip.jpg")),
             msg("g1", false, "Look who's coming Saturday 😄", 2, maya, reactions = listOf(Reaction("🔥", 1, listOf("me")))),
         )
         msgs["g3"] = listOf(
             msg("g3", false, "Okay who's driving Saturday?", 60, tasha),
             msg("g3", false, "I can take 4 people 🚗", 58, ethan),
             msg("g3", true, "I'm in! I'll bring snacks", 55),
-            msg("g3", false, "", 20, andre, media = photo("collage.jpg", 700, 700)),
-            msg("g3", false, "Last trip was too good", 19, andre, reactions = listOf(Reaction("😂", 2, listOf("q18", "me")))),
+            msg("g3", false, "", 20, andre, media = pic("concert.jpg")),
+            msg("g3", false, "Still not over this show", 19, andre, reactions = listOf(Reaction("😂", 2, listOf("q18", "me")))),
             msg("g3", false, "I'll bring the speaker 🔊", 14, kenji),
         )
         msgs["g2"] = listOf(
+            msg("g2", true, "That place on Tennyson was so good last time", 1500),
+            msg("g2", false, "Still thinking about those nachos", 1490, jordan),
+            msg("g2", false, "", 10, jordan, media = pic("tacos.jpg")),
             msg("g2", false, "Down for tacos tonight?", 9, jordan),
         )
         msgs["g5"] = listOf(
+            msg("g5", false, "", 70, mom, media = pic("dog.jpg")),
+            msg("g5", false, "Bruno says hurry home 🐶", 69, mom, reactions = listOf(Reaction("😍", 1, listOf("me")))),
             msg("g5", true, "Boarding now ✈️", 50),
             msg("g5", false, "Call me when you land ❤️", 41, mom),
+        )
+        msgs["g7"] = listOf(
+            msg("g7", true, "Here's the moodboard for the poster", 95),
+            msg("g7", true, "", 94, media = pic("moodboard.jpg")),
+            msg("g7", false, "Obsessed with the stone and gold", 82, grace),
+            msg("g7", false, "That color palette is perfect", 80, grace, reactions = listOf(Reaction("❤️", 1, listOf("me")))),
+        )
+        msgs["g8"] = listOf(
+            msg("g8", false, "", 125, leo, media = pic("cat.jpg")),
+            msg("g8", false, "She's judging my plant choices again", 124, leo),
+            msg("g8", true, "Haha no way 😂", 120),
+        )
+        msgs["g9"] = listOf(
+            msg("g9", false, "You missed a good one last night", 152, sofia),
+            msg("g9", false, "", 151, sofia, media = pic("gallery.jpg")),
+            msg("g9", false, "Photos from the gallery opening", 150, sofia, reactions = listOf(Reaction("🔥", 1, listOf("me")))),
+        )
+        msgs["g11"] = listOf(
+            msg("g11", false, "", 241, chloe, media = pic("coffee.jpg")),
+            msg("g11", false, "Found the cutest spot near you", 241, chloe),
+            msg("g11", false, "Coffee tomorrow? ☕", 240, chloe),
         )
         typing["g4"] = System.currentTimeMillis() + 600_000
         contacts = listOf(maya, jordan, ava, marcus, grace, leo, sofia, mom, ethan, chloe, daniel, zara, dad, noah, isla, andre, amara)

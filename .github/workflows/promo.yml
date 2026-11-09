@@ -13,10 +13,60 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Get the app
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+
+      - name: Restore engine
+        id: aarcache
+        uses: actions/cache/restore@v4
+        with:
+          path: app/libs
+          key: engine-v1-${{ hashFiles('engine/**') }}
+
+      - name: Build engine
+        id: engine
+        if: steps.aarcache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p ci-logs app/libs
+          {
+            export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+            echo "NDK: $ANDROID_NDK_HOME"
+            go version
+            go install golang.org/x/mobile/cmd/gomobile@latest
+            go install golang.org/x/mobile/cmd/gobind@latest
+            export PATH="$PATH:$(go env GOPATH)/bin"
+            gomobile init
+            cd engine
+            go get go.mau.fi/mautrix-gmessages@9567716bccd9da0d626a293d799629fec0ad6afd
+            go get -tool golang.org/x/mobile/cmd/gobind
+            go mod tidy
+            grep -n "mobile" go.mod
+            go vet ./...
+            gomobile bind -v -target=android/arm64,android/amd64 -androidapi 29 \
+              -javapkg=com.jpetrydesign.pyng -o ../app/libs/engine.aar .
+            ls -la ../app/libs
+          } 2>&1 | tee ci-logs/engine.log
+
+      - name: Build app
+        shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release download "$(cat ci/promo-tag.txt)" -p '*.apk' -O pyng.apk -R ${{ github.repository }}
+          GIPHY_KEY: ${{ secrets.GIPHY_KEY }}
+        run: |
+          gradle --no-daemon assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk pyng.apk
 
       - name: Enable KVM
         shell: bash
