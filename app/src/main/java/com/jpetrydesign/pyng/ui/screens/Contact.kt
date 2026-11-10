@@ -100,6 +100,12 @@ fun ContactScreen(nav: Nav, convId: String) {
         if (uri != null) { if (c.group) repo.setGroupPhoto(convId, uri) else repo.setContactPhoto(c.avatarId, uri) }
     }
     val enc = encryptionOf(c, msgs)
+    // Every photo and video in the chat, newest first. Tap one to swipe through them all.
+    val allMedia = remember(msgs) { msgs.flatMap { m -> m.media.filter { (it.isImage || it.isVideo) && !it.waiting }.map { m to it } }.asReversed() }
+    var viewing by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var showAll by remember { mutableStateOf(false) }
+    var forward by remember { mutableStateOf<com.jpetrydesign.pyng.data.Msg?>(null) }
+    var smsInfo by remember { mutableStateOf(false) }
     fun senderOf(m: com.jpetrydesign.pyng.data.Msg): String = if (m.fromMe) "You" else c.people.firstOrNull { it.id == m.participantId }?.short ?: m.senderFirst.ifBlank { m.sender.substringBefore(' ') }.ifBlank { c.shortTitle }
     Provide(t) {
         Box(Modifier.fillMaxSize()) {
@@ -213,9 +219,9 @@ fun ContactScreen(nav: Nav, convId: String) {
                             Spacer(Modifier.height(12.dp))
                             when (tab) {
                                 "Media" -> {
-                                    val media = msgs.flatMap { m -> m.media.filter { it.isImage || it.isVideo }.map { m to it } }.asReversed()
+                                    val media = allMedia
                                     if (media.isEmpty()) T("No photos shared yet", size = 13.5.sp, color = t.soft, modifier = Modifier.padding(4.dp))
-                                    media.take(12).chunked(3).forEach { row ->
+                                    (if (showAll) media else media.take(12)).chunked(3).forEach { row ->
                                         Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                             row.forEach { (m, ref) ->
                                                 // Videos show their thumbnail; anything that won't draw shows an icon, never a blank tile.
@@ -223,7 +229,7 @@ fun ContactScreen(nav: Nav, convId: String) {
                                                     else ref.localPath.ifEmpty { repo.media[ref.id] ?: repo.media[ref.thumbId] ?: ref.previewPath }
                                                 var broken by remember(path) { mutableStateOf(false) }
                                                 LaunchedEffect(ref.id) { if (path.isEmpty()) repo.ensureMedia(ref, thumb = true) }
-                                                Box(Modifier.weight(1f).height(108.dp).clip(RoundedCornerShape(14.dp)).background(t.tone).clickable { openMedia(ctx, repo, nav, ref) }) {
+                                                Box(Modifier.weight(1f).height(108.dp).clip(RoundedCornerShape(14.dp)).background(t.tone).clickable { viewing = m.key to ref.id }) {
                                                     if (path.isNotEmpty() && !broken) AsyncImage(File(path), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(), onError = { broken = true })
                                                     if (path.isEmpty() || broken) Ico(if (ref.isVideo) Icons.play else Icons.gallery, t.p.copy(alpha = 0.55f), 24.dp, modifier = Modifier.align(Alignment.Center))
                                                     else if (ref.isVideo) Box(Modifier.align(Alignment.Center).size(34.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f)), contentAlignment = Alignment.Center) {
@@ -246,6 +252,10 @@ fun ContactScreen(nav: Nav, convId: String) {
                                             repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                                         }
                                     }
+                                    if (media.size > 12) T(
+                                        if (showAll) "Show less" else "Show all ${media.size}", size = 13.5.sp, weight = FontWeight.SemiBold, color = t.p,
+                                        modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(14.dp)).clickable { showAll = !showAll }.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    )
                                 }
                                 "Links" -> {
                                     val links = msgs.mapNotNull { m -> detect(m.text).url?.let { m to it } }.asReversed()
@@ -287,6 +297,22 @@ fun ContactScreen(nav: Nav, convId: String) {
                         }
                     }
                     Spacer(Modifier.height(14.dp))
+                    // Encryption, and whether this chat only sends texts.
+                    Card {
+                        ListRow(
+                            when (enc) { Enc.E2EE -> "End-to-end encryption: On"; Enc.RCS -> "End-to-end encryption: Off"; Enc.SMS -> "Not encrypted · SMS/MMS" },
+                            sub = encExplain(enc), icon = Icons.lock, onClick = null, trailing = null,
+                        )
+                        if (!c.group) {
+                            Hairline()
+                            ListRow(
+                                "Only send SMS & MMS messages",
+                                sub = if (c.smsOnly) "On · this chat sends texts, not chat messages" else "Off · uses RCS chat when it can",
+                                icon = Icons.message, onClick = { smsInfo = true }, trailing = { com.jpetrydesign.pyng.ui.kit.Toggle(c.smsOnly) },
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(14.dp))
                     Card {
                         if (!c.known && !c.group) {
                             ListRow("Add to contacts", icon = Icons.contact, onClick = {
@@ -312,6 +338,22 @@ fun ContactScreen(nav: Nav, convId: String) {
             }
             com.jpetrydesign.pyng.ui.kit.StatusScrim(Modifier.align(Alignment.TopCenter))
             RenameSheet(renaming, c.title, { renaming = false }) { repo.setGroupName(convId, it) }
+            SmsOnlySheet(smsInfo, c.smsOnly) { smsInfo = false }
+            ForwardSheet(forward) { target, m ->
+                forward = null
+                if (target != null) {
+                    val f = m.media.firstOrNull()?.let { ref -> ref.localPath.ifEmpty { repo.media[ref.id].orEmpty() } to ref }
+                    if (f != null && f.first.isNotEmpty()) { repo.send(target, m.text, attachments = listOf(com.jpetrydesign.pyng.data.Pending(f.first, f.second.mime, f.second.name))); repo.toast("Forwarded") }
+                    else repo.toast("Open the photo once to download it, then forward")
+                }
+            }
+            PhotoViewer(viewing, allMedia, c, c.me?.id.orEmpty(),
+                onClose = { viewing = null },
+                onReply = { m -> viewing = null; nav.go(Route.Thread(convId, highlight = m.id)) },
+                onReact = { m, e -> repo.react(m, e) },
+                onDelete = { m -> repo.confirm("Delete message?", "It'll be deleted from Google Messages on your phone too. The other person still has their copy.") { viewing = null; repo.deleteMessages(listOf(m)); repo.toast("Message deleted") } },
+                onForward = { viewing = null; forward = it },
+                showInChat = { m -> viewing = null; nav.go(Route.Thread(convId, highlight = m.id)) })
         }
     }
 }
@@ -367,6 +409,17 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
         }
     }
     val wall = look.wall.ifEmpty { p.defWall }
+    val lib = remember { ThemeLibrary() }
+    fun currentAsTheme(): com.jpetrydesign.pyng.data.SavedTheme {
+        val own = look.key == "chat-custom"
+        val mode = if (own) look.mode else "Mono"
+        val c1 = if (own) look.c1 else com.jpetrydesign.pyng.ui.theme.toHsl(t.p)
+        return com.jpetrydesign.pyng.data.SavedTheme(java.util.UUID.randomUUID().toString(), suggestName(mode, c1, p.savedThemes.map { it.name }), mode, c1, look.c2, look.custom)
+    }
+    val savedOn: (com.jpetrydesign.pyng.data.SavedTheme) -> Boolean = { st ->
+        look.key == "chat-custom" && look.mode == st.mode && look.c1 == st.c1 && (st.mode == "Mono" || look.c2 == st.c2) && look.custom == st.custom
+    }
+    val usePicked: (com.jpetrydesign.pyng.data.SavedTheme) -> Unit = { st -> set { it.copy(key = "chat-custom", mode = st.mode, c1 = st.c1, c2 = st.c2, custom = st.custom) } }
     Provide(t) {
         val themeHaze = remember { dev.chrisbanes.haze.HazeState() }
         var barH by remember { androidx.compose.runtime.mutableIntStateOf(0) }
@@ -409,6 +462,8 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
                         // Starts from what the chat looks like now, so you're tweaking, not starting over.
                         val cur = look.custom[part] ?: com.jpetrydesign.pyng.ui.theme.toHsl(shown(part))
                         ColorWheel(cur) { h -> set { it.copy(custom = it.custom + (part to h)) } }
+                        Spacer(Modifier.height(14.dp))
+                        MyThemes(lib, savedOn, usePicked, if (look.custom.isNotEmpty()) ({ lib.saving = currentAsTheme() }) else null, side = 0.dp)
                         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
                             if (look.custom.containsKey(part)) T("Use automatic", size = 13.5.sp, weight = FontWeight.SemiBold, color = t.p,
                                 modifier = Modifier.clip(RoundedCornerShape(14.dp)).clickable { set { it.copy(custom = it.custom - part) } }.padding(horizontal = 10.dp, vertical = 6.dp))
@@ -420,6 +475,8 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
                             Swatch("Any color", androidx.compose.ui.graphics.Brush.sweepGradient(listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)), look.key == "chat-custom") { set { it.copy(key = "chat-custom") } }
                             (Palettes.favorites + Palettes.colors + Palettes.duos).forEach { x -> Swatch(x.name, swatchOf(x), look.key == x.name) { set { it.copy(key = x.name) } } }
                         }
+                        Spacer(Modifier.height(16.dp))
+                        MyThemes(lib, savedOn, usePicked, if (look.key == "chat-custom" || look.custom.isNotEmpty()) ({ lib.saving = currentAsTheme() }) else null)
                         if (look.key == "chat-custom") {
                             Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                                 Seg(listOf("Mono", "Duotone", "Gradient"), look.mode, { m -> set { it.copy(mode = m) } })
@@ -465,6 +522,7 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
             }
             com.jpetrydesign.pyng.ui.kit.PageTop("Chat theme", { nav.back() }, sub = "Only for ${c?.title ?: "this chat"}", haze = themeHaze,
                 modifier = Modifier.align(Alignment.TopCenter).onSizeChanged { barH = it.height })
+            ThemeLibrarySheets(lib)
         }
     }
 }
@@ -500,5 +558,32 @@ fun WallTile(name: String, wall: String?, on: Boolean, t: com.jpetrydesign.pyng.
         }
         Spacer(Modifier.height(5.dp))
         T(name, size = 11.5.sp, weight = FontWeight.Medium, color = t.soft)
+    }
+}
+
+/**
+ * Google Messages keeps "Only send SMS & MMS messages" on the phone and doesn't let linked apps change
+ * it, so Pyng shows it and explains where to switch it.
+ */
+@Composable
+private fun SmsOnlySheet(visible: Boolean, on: Boolean, onDismiss: () -> Unit) {
+    val t = LocalTok.current
+    val ctx = LocalContext.current
+    val gm = remember { ctx.packageManager.getLaunchIntentForPackage("com.google.android.apps.messaging") }
+    com.jpetrydesign.pyng.ui.kit.Sheet(visible, onDismiss) {
+        Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+            T("Only send SMS & MMS", size = 18.sp, weight = FontWeight.Bold)
+            T(
+                (if (on) "It's on for this chat, so messages go out as regular texts. " else "It's off, so this chat uses RCS when both phones can. ") +
+                    "Google Messages only lets you change this on the phone itself: open the chat there, tap the name at the top, then switch Only send SMS & MMS messages. Pyng picks it up right away.",
+                size = 13.5.sp, color = t.soft, lineHeight = 19.sp, modifier = Modifier.padding(top = 6.dp),
+            )
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PillButton("Got it", onClick = onDismiss, modifier = Modifier.weight(1f), primary = gm == null)
+                if (gm != null) PillButton("Open Google Messages", onClick = { onDismiss(); runCatching { ctx.startActivity(gm) } }, modifier = Modifier.weight(1.4f))
+            }
+            Spacer(Modifier.height(10.dp))
+        }
     }
 }

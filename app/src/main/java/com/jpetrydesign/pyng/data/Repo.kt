@@ -227,7 +227,7 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
                             put("id", c.id); put("name", c.name); put("preview", c.preview); put("fromMe", c.fromMe)
                             put("sender", c.sender); put("lastStatus", c.lastStatus); put("ts", c.ts); put("unread", c.unread)
                             put("group", c.group); put("rcs", c.rcs); put("color", c.color); put("pinned", c.pinned)
-                            put("readOnly", c.readOnly); put("status", c.status); put("groupPhoto", c.groupPhoto)
+                            put("readOnly", c.readOnly); put("status", c.status); put("groupPhoto", c.groupPhoto); put("smsOnly", c.smsOnly)
                             put("people", JSONArray(c.people.map { p ->
                                 org.json.JSONObject().put("id", p.id).put("number", p.number).put("formatted", p.formatted)
                                     .put("name", p.name).put("first", p.first).put("color", p.color).put("me", p.me).put("contactId", p.contactId)
@@ -568,21 +568,27 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
 
     // ---------- sending ----------
 
-    private fun localMsg(convId: String, text: String, replyTo: String, att: Pending?): Msg = Msg(
+    private fun localMsg(convId: String, text: String, replyTo: String, att: Pending?, order: Int = 0): Msg = Msg(
         id = "", tmpId = "local-" + UUID.randomUUID(), convId = convId, participantId = "", sender = "", senderFirst = "",
         fromMe = true, status = "LOCAL", statusText = "", text = text,
         media = att?.let { listOf(MediaRef("", "", "", "", it.mime, it.name, File(it.path).length(), 0, 0, it.path)) } ?: emptyList(),
-        ts = System.currentTimeMillis(), reactions = emptyList(), replyTo = replyTo, type = 0, kind = "text",
+        ts = System.currentTimeMillis() + order, reactions = emptyList(), replyTo = replyTo, type = 0, kind = "text",
     )
+
+    /** One queue per chat, so what you send arrives in the order you sent it. */
+    private val sendLocks = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.sync.Mutex>()
 
     fun send(convId: String, text: String, replyTo: String = "", attachments: List<Pending> = emptyList()) {
         val body = text.trim()
         if (body.isEmpty() && attachments.isEmpty()) return
-        val locals = attachments.mapIndexed { i, a -> localMsg(convId, if (i == attachments.lastIndex) body else "", if (i == 0) replyTo else "", a) }
-            .ifEmpty { listOf(localMsg(convId, body, replyTo, null)) }
+        // Photos and videos first, in the order you picked them, then the text underneath them.
+        val pics = attachments.mapIndexed { i, a -> localMsg(convId, "", if (i == 0 && body.isEmpty()) replyTo else "", a, order = i) }
+        val note = if (body.isNotEmpty()) listOf(localMsg(convId, body, replyTo, null, order = attachments.size)) else emptyList()
+        val locals = pics + note
         if (msgs.containsKey(convId)) msgs[convId] = tidy(msgs[convId].orEmpty() + locals)
         locals.forEach { l -> l.media.firstOrNull()?.takeIf { it.localPath.isNotEmpty() }?.let { sentFiles[l.tmpId] = it } }
-        locals.forEach { deliver(it) }
+        if (demo) locals.forEach { deliver(it) }
+        else scope.launch { locals.forEach { deliverNow(it) } }
         prefs.edit { it.copy(drafts = it.drafts - convId, markedUnread = it.markedUnread - convId) }
     }
 
@@ -598,19 +604,27 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
             }
             return
         }
-        scope.launch {
+        scope.launch { deliverNow(local) }
+    }
+
+    /** Sends one message, waiting its turn behind anything else going to the same chat. */
+    private suspend fun deliverNow(local: Msg) {
+        if (demo) { deliver(local); return }
+        val lock = sendLocks.getOrPut(local.convId) { kotlinx.coroutines.sync.Mutex() }
+        lock.lock()
+        try {
             val att = local.media.firstOrNull()
             val r = hub.io {
                 if (att != null) it.sendMedia(local.convId, att.localPath, att.mime, att.name, local.text, local.replyTo)
                 else it.sendText(local.convId, local.text, local.replyTo)
             }
-            val list = msgs[local.convId] ?: return@launch
+            val list = msgs[local.convId] ?: return
             msgs[local.convId] = list.map { m ->
                 if (m.tmpId != local.tmpId) m
                 // Keep the app's own temporary id so the bubble keeps its place; remember Google's to match its echo.
                 else r.fold({ tmp -> if (tmp.isNotEmpty()) tmpAlias[tmp] = m.tmpId; m.copy(status = "OUTGOING_SENDING") }, { e -> m.copy(error = e.message ?: "Not sent") })
             }
-        }
+        } finally { lock.unlock() }
     }
 
     fun retry(m: Msg) {
@@ -975,10 +989,27 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
             val clip = File(dir, "clip.mp4")
             if (!clip.exists()) app.assets.open("demo-clip.mp4").use { input -> clip.outputStream().use { input.copyTo(it) } }
             val video = MediaRef("demo-video", "", "", "", "video/mp4", "clip.mp4", clip.length(), 480, 640, clip.path)
+            // A few more sent back to back, so they show as one strip.
+            fun shot(name: String, a: Int, b: Int): MediaRef {
+                val f = File(dir, name)
+                if (!f.exists()) {
+                    val bmp = android.graphics.Bitmap.createBitmap(1200, 900, android.graphics.Bitmap.Config.ARGB_8888)
+                    val cv = android.graphics.Canvas(bmp)
+                    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+                    paint.shader = android.graphics.LinearGradient(0f, 0f, 1200f, 900f, a, b, android.graphics.Shader.TileMode.CLAMP)
+                    cv.drawRect(0f, 0f, 1200f, 900f, paint)
+                    f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 86, it) }
+                }
+                return MediaRef("demo-$name", "", "", "", "image/jpeg", name, f.length(), 1200, 900, f.path)
+            }
             msgs["c9"] = listOf(
                 msg("c9", false, "Look who claimed my spot on the couch", 1500).copy(media = listOf(photo)),
                 msg("c9", false, "Here's Sam's number for the shoot", 1499).copy(media = listOf(vcf)),
                 msg("c9", false, "", 1498).copy(media = listOf(video)),
+                msg("c9", false, "", 1498).copy(media = listOf(shot("beach.jpg", 0xFFF6D365.toInt(), 0xFFFDA085.toInt()))),
+                msg("c9", false, "", 1498).copy(media = listOf(shot("lake.jpg", 0xFF84FAB0.toInt(), 0xFF8FD3F4.toInt()))),
+                msg("c9", false, "", 1498).copy(media = listOf(shot("dusk.jpg", 0xFFA18CD1.toInt(), 0xFFFBC2EB.toInt()))),
+                msg("c9", false, "Last day of the trip", 1497),
             )
         }
         typing["c4"] = now + 600_000

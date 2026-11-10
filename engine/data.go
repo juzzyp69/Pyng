@@ -858,6 +858,7 @@ func convJSON(c *gmproto.Conversation) map[string]any {
 		"unread":     c.GetUnread(),
 		"group":      c.GetIsGroupChat(),
 		"rcs":        c.GetType() == gmproto.ConversationType_RCS,
+		"smsOnly":    c.GetSendMode() != gmproto.ConversationSendMode_SEND_MODE_AUTO,
 		"color":      c.GetAvatarHexColor(),
 		"pinned":     c.GetPinned(),
 		"readOnly":   c.GetReadOnly(),

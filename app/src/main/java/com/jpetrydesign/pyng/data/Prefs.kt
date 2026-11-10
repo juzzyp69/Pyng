@@ -79,6 +79,31 @@ val DEFAULT_OPTS = mapOf(
     "stamps" to "Grouped", "gifRating" to "pg", "gradient" to "Across the screen",
 )
 
+/** A theme you made and named, kept to use again for the app or any chat. */
+data class SavedTheme(
+    val id: String,
+    val name: String,
+    /** Mono, Duotone or Gradient. */
+    val mode: String,
+    val c1: Hsl,
+    val c2: Hsl,
+    /** Colors set one by one (bg, inBg, inInk, outBg, outInk, accent), when the theme came from a chat's Custom colors. */
+    val custom: Map<String, Hsl> = emptyMap(),
+    val at: Long = 0L,
+) {
+    fun json(): JSONObject = JSONObject().put("id", id).put("name", name).put("mode", mode).put("c1", c1.json()).put("c2", c2.json()).put("at", at)
+        .put("custom", JSONObject().apply { custom.forEach { (k, v) -> put(k, v.json()) } })
+
+    companion object {
+        fun from(o: JSONObject) = SavedTheme(
+            o.optString("id"), o.optString("name"), o.optString("mode", "Mono"),
+            Hsl.from(o.optJSONObject("c1"), Hsl(214f, 0.75f, 0.47f)), Hsl.from(o.optJSONObject("c2"), Hsl(340f, 0.62f, 0.62f)),
+            o.optJSONObject("custom")?.let { c -> c.keys().asSequence().associateWith { k -> Hsl.from(c.optJSONObject(k), Hsl(0f, 0f, 0.5f)) } } ?: emptyMap(),
+            o.optLong("at"),
+        )
+    }
+}
+
 data class AppPrefs(
     val setupDone: Boolean = false,
     val themeKey: String = "Ocean",
@@ -111,6 +136,7 @@ data class AppPrefs(
     val dismissedUnknown: Set<String> = emptySet(),
     val notSpam: Set<String> = emptySet(),
     val permsAsked: Int = 0,
+    val savedThemes: List<SavedTheme> = emptyList(),
 ) {
     fun on(key: String) = toggles[key] ?: DEFAULT_TOGGLES[key] ?: false
     fun opt(key: String) = opts[key] ?: DEFAULT_OPTS[key].orEmpty()
@@ -135,6 +161,7 @@ private fun AppPrefs.toJson(): JSONObject = JSONObject().apply {
     put("profileName", profileName); put("profilePhoto", profilePhoto)
     put("dismissedUnknown", JSONArray(dismissedUnknown.toList())); put("notSpam", JSONArray(notSpam.toList()))
     put("permsAsked", permsAsked)
+    put("savedThemes", JSONArray(savedThemes.map { it.json() }))
 }
 
 private fun JSONObject.strList(k: String) = optJSONArray(k).mapEach { optJSONArray(k)!!.optString(it) }
@@ -182,6 +209,7 @@ private fun fromJson(o: JSONObject): AppPrefs {
         dismissedUnknown = o.strList("dismissedUnknown").toSet(),
         notSpam = o.strList("notSpam").toSet(),
         permsAsked = o.optInt("permsAsked"),
+        savedThemes = o.optJSONArray("savedThemes").mapEach { SavedTheme.from(o.optJSONArray("savedThemes")!!.getJSONObject(it)) },
     )
 }
 

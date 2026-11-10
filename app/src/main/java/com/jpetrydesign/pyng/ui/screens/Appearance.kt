@@ -406,6 +406,7 @@ fun ColorStrip(onDone: () -> Unit) {
     val p = repo.prefs.state
     var tab by remember { mutableStateOf(if (p.themeKey.startsWith("Custom")) "Custom" else if (Palettes.duos.any { it.name == p.themeKey }) "Duotones" else "Colors") }
     var target by remember { mutableStateOf("c1") }
+    val lib = remember { ThemeLibrary() }
     BackHandler(onBack = onDone)
     var shown by remember { mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(Unit) { shown = true }
@@ -424,6 +425,17 @@ fun ColorStrip(onDone: () -> Unit) {
                     }
                     PillButton("Done", onDone, height = 40.dp)
                 }
+                // Themes you saved, ready to use for the whole app.
+                MyThemes(
+                    lib,
+                    isOn = { st -> p.themeKey.startsWith("Custom") && p.c1 == st.c1 && (st.mode == "Mono") == (p.themeKey == "Custom color") && (st.mode == "Mono" || p.c2 == st.c2) },
+                    onPick = { st -> repo.prefs.edit { it.copy(themeKey = if (st.mode == "Mono") "Custom color" else "Custom duotone", c1 = st.c1, c2 = st.c2) } },
+                    onSave = if (tab == "Custom" && p.themeKey.startsWith("Custom")) ({
+                        val mode = if (p.themeKey == "Custom duotone") "Duotone" else "Mono"
+                        lib.saving = com.jpetrydesign.pyng.data.SavedTheme(java.util.UUID.randomUUID().toString(), suggestName(mode, p.c1, p.savedThemes.map { it.name }), mode, p.c1, p.c2)
+                    }) else null,
+                    side = 20.dp,
+                )
                 Seg(listOf("Colors", "Duotones", "Custom"), tab, { tab = it }, Modifier.padding(horizontal = 20.dp))
                 if (tab != "Custom") {
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -463,6 +475,7 @@ fun ColorStrip(onDone: () -> Unit) {
                 }
             }
         }
+        ThemeLibrarySheets(lib)
     }
 }
 

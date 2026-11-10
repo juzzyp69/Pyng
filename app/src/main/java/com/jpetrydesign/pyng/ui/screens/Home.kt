@@ -399,7 +399,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                                 scaleX = 1f - 0.04f * pr
                                 scaleY = 1f - 0.04f * pr
                                 transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
-                            }.padding(horizontal = 18.dp),
+                            }.padding(horizontal = if (layout == "Grid" || layout == "Large") 12.dp else 18.dp),
                         ) { PinnedArea(layout, pins, pinCtl, p.pinStyle, revealTick) }
                     }
                     item("sheetTop") {
@@ -947,10 +947,10 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
     when (layout) {
         "Large", "Grid" -> {
             val cols = if (layout == "Large") 3 else 4
-            val av = if (layout == "Large") 84.dp else 76.dp
+            val av = if (layout == "Large") 92.dp else 84.dp
             // Open layout: no card behind the faces, more air between them, a hairline under the set.
             Column(
-                Modifier.fillMaxWidth().padding(start = 2.dp, end = 2.dp, top = 6.dp, bottom = 22.dp),
+                Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 22.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 val rowsN = (pins.size + cols - 1) / cols
@@ -960,10 +960,10 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
                             Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
                                 PinItem(pin, r * cols + i, ctl, Modifier.enterOnce("pin:$layout:" + pin.c.id, r * cols + i, pop = true)) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Box(Modifier.jellyRise(reveal, r * cols + i, cols, rowsN)) { PinFace(pin, av, if (layout == "Large") 26f else 22f, style, ringHot = true) }
+                                        Box(Modifier.jellyRise(reveal, r * cols + i, cols, rowsN)) { PinFace(pin, av, if (layout == "Large") 28f else 24f, style, ringHot = true) }
                                         Spacer(Modifier.height(8.dp))
                                         Box(Modifier.jellyRise(reveal, r * cols + i, cols, rowsN, name = true)) {
-                                            PinName(pin, if (layout == "Large") 14f else 12.5f, if (layout == "Large") 100.dp else 80.dp)
+                                            PinName(pin, if (layout == "Large") 14f else 12.5f, if (layout == "Large") 108.dp else 88.dp)
                                         }
                                     }
                                 }

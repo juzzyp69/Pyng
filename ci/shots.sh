@@ -128,6 +128,8 @@ WAIT=10 shot 67-thread-viewer --es route thread:c9 --es open viewer
 # Memory after a chat full of photos and the viewer.
 adb shell dumpsys meminfo $PKG > ci-logs/meminfo-media.txt 2>&1
 WAIT=10 shot 67b-thread-viewer-video --es route thread:c9 --es open viewer-video
+WAIT=10 shot 67c-thread-viewer-strip --es route thread:c9 --es open viewer-strip
+shot 40b-contact-media --es route contact:c9
 shot 68-section-chats-top --es route section:chats
 
 # Fold inner screen

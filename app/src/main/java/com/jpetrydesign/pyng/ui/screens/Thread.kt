@@ -217,6 +217,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
             "details" -> detailsFor = list.lastOrNull()
             "viewer" -> list.firstOrNull { m -> m.media.any { it.isImage } }?.let { m -> delay(700); viewing = m.key to m.media.first { it.isImage }.id }
             "viewer-video" -> list.firstOrNull { m -> m.media.any { it.isVideo } }?.let { m -> delay(700); viewing = m.key to m.media.first { it.isVideo }.id }
+            "viewer-strip" -> list.lastOrNull { m -> m.text.isBlank() && m.media.any { it.isImage } }?.let { m -> delay(700); viewing = m.key to m.media.first().id }
         }
     }
 
@@ -248,6 +249,8 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     val typing = (repo.typing[convId] ?: 0L) > System.currentTimeMillis() && p.on("typing")
     val myId = conv?.me?.id.orEmpty()
     val byId = remember(msgs) { msgs.associateBy { it.id } }
+    // Photos and videos sent together (or back to back) sit in one swipeable strip.
+    val bundles = remember(msgs) { mediaBundles(msgs) }
 
     // New messages arriving while open: mark read, fire effects.
     LaunchedEffect(msgs.size) {
@@ -267,6 +270,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     val matches = if (searching && q.isNotEmpty()) msgs.filter { it.text.lowercase().contains(q) }.map { it.key } else emptyList()
     val curMatch = if (matches.isNotEmpty()) matches[(matches.size - 1 - (matchIdx % matches.size)).coerceIn(0, matches.size - 1)] else null
     val reversed = msgs.asReversed()
+    val rowOf = remember(reversed) { HashMap<String, Int>().also { m -> reversed.forEachIndexed { i, x -> m[x.key] = i } } }
     // A message you send keeps the same row when Google confirms it (its id changes, its temporary
     // id doesn't), so it never disappears and fades back in.
     val listKeys = remember(reversed) {
@@ -338,7 +342,9 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     }
 
     val blur by androidx.compose.animation.core.animateDpAsState(if (menuFor != null) 18.dp else if (viewing != null) 22.dp else 0.dp, label = "blur")
-    val photos = remember(msgs) { msgs.flatMap { m -> m.media.filter { (it.isImage || it.isVideo) && !it.waiting }.map { m to it } } }
+    // The viewer swipes through the strip you tapped, or just the one photo. Everything is on the contact page.
+    val viewSet = viewing?.let { (k, _) -> bundles.of[k] ?: msgs.firstOrNull { it.key == k }?.let { m -> m.media.map { m to it } } }.orEmpty()
+        .filter { (it.second.isImage || it.second.isVideo) && !it.second.waiting }
     Provide(t) {
         androidx.compose.runtime.CompositionLocalProvider(LocalSendFx provides sendFx) {
         Box(Modifier.fillMaxSize().onGloballyPositioned { rootCoords[0] = it }) {
@@ -376,15 +382,22 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                             TypingDots(t.soft, 6.dp, 4.dp)
                         }
                     }
-                    itemsIndexed(reversed, key = { i, m -> listKeys.getOrElse(i) { m.key } }) { i, m ->
+                    itemsIndexed(reversed, key = { i, m -> listKeys.getOrElse(i) { m.key } }) { i, m0 ->
+                        // The rest of a photo strip is drawn in its first message's row.
+                        if (m0.key in bundles.hidden) return@itemsIndexed
+                        val bundle = bundles.byAnchor[m0.key]
+                        val last = if (bundle != null) bundles.newest[m0.key] ?: m0 else m0
+                        val failedOne = bundle?.firstOrNull { it.first.failed }?.first
+                        // A strip shows its newest message's status, and any reactions on its own photos.
+                        val m = if (bundle == null) m0 else m0.copy(reactions = emptyList(), status = failedOne?.status ?: last.status, error = failedOne?.error ?: "")
                         // i counts from newest; neighbours in time order are i+1 (older) and i-1 (newer).
                         val older = reversed.getOrNull(i + 1)
-                        val newer = reversed.getOrNull(i - 1)
+                        val newer = reversed.getOrNull((rowOf[last.key] ?: i) - 1)
                         val gap = older == null || m.ts - older.ts > 60 * 60_000L || dayOf(m.ts) != dayOf(older.ts)
                         fun same(a: Msg?, b: Msg) = a != null && !a.isSys && !b.isSys && a.fromMe == b.fromMe && a.participantId == b.participantId && kotlin.math.abs(a.ts - b.ts) < 10 * 60_000L
                         val prevSame = !gap && same(older, m)
-                        val newerGap = newer != null && (newer.ts - m.ts > 60 * 60_000L || dayOf(newer.ts) != dayOf(m.ts))
-                        val nextSame = !newerGap && same(newer, m)
+                        val newerGap = newer != null && (newer.ts - last.ts > 60 * 60_000L || dayOf(newer.ts) != dayOf(last.ts))
+                        val nextSame = !newerGap && same(newer, last)
                         // Older messages glide up to make room instead of jumping.
                         Column(if (motion) Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = spring(dampingRatio = 0.9f, stiffness = 380f)) else Modifier) {
                             if (gap && m.ts > 0) T(stamp(m.ts), size = 12.sp, weight = FontWeight.Medium, color = t.soft, modifier = Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 8.dp), align = androidx.compose.ui.text.style.TextAlign.Center)
@@ -410,15 +423,18 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                 val rc = RowCtx(
                                         t = t, group = conv?.group == true, prevSame = prevSame, nextSame = nextSame, fontSize = fontSize, shape = shape,
                                         info = inf?.first, infoIcon = inf?.second ?: Icons.check, infoInk = if (inf?.third == true) t.p else t.soft,
-                                        selecting = selecting, selected = m.key in selected, highlighted = curMatch == m.key || hl == m.id,
+                                        selecting = selecting, selected = m.key in selected || bundle?.any { it.first.key in selected } == true, highlighted = curMatch == m.key || hl == m.id,
                                         quote = quote, senderName = if (conv?.group == true && !m.fromMe && !prevSame) (sender?.short ?: m.senderFirst.ifBlank { m.sender }) else null,
                                         senderWho = sender?.let { whoOf(it) }, starred = p.isStarred(m.key), chips = if (m.fromMe) emptyList() else chips,
                                         showPreview = p.on("previews") && spamWhy == null, tsShift = tsShift, timeLabel = clock(m.ts),
                                         enterDelay = if (i < 10 && m.key in introKeys && introPlayed.add(m.key)) (80 + i * 45) else -1,
-                                        isNew = m.ts > openedAt && !sendFx.arrived(m), burst = burst?.takeIf { it.first == m.key }?.second, myId = myId,
+                                        isNew = m.ts > openedAt && !sendFx.arrived(m), burst = burst?.takeIf { b -> b.first == m.key || bundle?.any { it.first.key == b.first } == true }?.second, myId = myId,
                                         nameColor = if (conv?.group == true && !m.fromMe) groupNameColor(t, conv.others.indexOfFirst { it.id == m.participantId }) else null,
+                                        bundle = bundle,
                                     )
                                 rowCtxs[m.key] = rc
+                                // Holding one photo in a strip opens the menu for just that photo.
+                                bundle?.forEach { (bm, _) -> rowCtxs[bm.key] = rc.copy(bundle = null, prevSame = false, nextSame = false, info = null, chips = emptyList()) }
                                 MessageRow(
                                     m, rc,
                                     RowActs(
@@ -431,8 +447,12 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                         onLong = { if (!selecting) { openMenu(m); info = null } },
                                         onReply = { replyTo = m },
                                         onOpenMedia = { ref -> if (selecting) toggle(selected, m.key) else view(m, ref) },
-                                        onRetry = { repo.retry(m) },
+                                        onRetry = { if (bundle == null) repo.retry(m) else bundle.map { it.first }.distinctBy { it.key }.filter { it.failed }.forEach { repo.retry(it) } },
                                         onPlaced = { bubbleCoords[m.key] = it },
+                                        onOpenItem = { bm, r -> if (selecting) toggle(selected, bm.key) else view(bm, r) },
+                                        onLongItem = { bm -> if (!selecting) { openMenu(bm); info = null } },
+                                        onDoubleItem = { bm -> if (bm.id.isNotEmpty()) { repo.react(bm, "❤️"); burst = bm.key to "❤️" } },
+                                        onPlacedKey = { k, c -> bubbleCoords[k] = c },
                                     ),
                                 )
                             }
@@ -528,7 +548,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
             }
             CallSheet(callSheet, conv) { callSheet = false }
             ContactSheet()
-            PhotoViewer(viewing, photos, conv, myId,
+            PhotoViewer(viewing, viewSet, conv, myId,
                 onClose = { viewing = null },
                 onReply = { viewing = null; replyTo = it },
                 onReact = { m, e -> repo.react(m, e); burst = m.key to e },

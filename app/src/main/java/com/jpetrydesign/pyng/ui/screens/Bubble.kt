@@ -111,6 +111,8 @@ data class RowCtx(
     val myId: String,
     /** This person's name color in a group chat, picked from the chat's theme. */
     val nameColor: Color? = null,
+    /** Photos and videos sent together, drawn as one swipeable strip in this row. */
+    val bundle: List<Pair<Msg, MediaRef>>? = null,
 )
 
 class RowActs(
@@ -122,6 +124,11 @@ class RowActs(
     val onOpenMedia: (MediaRef) -> Unit,
     val onRetry: () -> Unit,
     val onPlaced: (androidx.compose.ui.layout.LayoutCoordinates) -> Unit = {},
+    /** For a strip: open, hold or double-tap one photo in it. */
+    val onOpenItem: ((Msg, MediaRef) -> Unit)? = null,
+    val onLongItem: ((Msg) -> Unit)? = null,
+    val onDoubleItem: ((Msg) -> Unit)? = null,
+    val onPlacedKey: ((String, androidx.compose.ui.layout.LayoutCoordinates) -> Unit)? = null,
 )
 
 fun bubbleShape(me: Boolean, prev: Boolean, next: Boolean, big: Dp, small: Dp): RoundedCornerShape =
@@ -192,7 +199,7 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
                     Row(
                         verticalAlignment = Alignment.Bottom,
                         horizontalArrangement = if (me) Arrangement.End else Arrangement.Start,
-                        modifier = Modifier.fillMaxWidth(if (x.group && !me) 0.8f else 0.72f).widthIn(max = 420.dp),
+                        modifier = if (x.bundle != null) Modifier.fillMaxWidth() else Modifier.fillMaxWidth(if (x.group && !me) 0.8f else 0.72f).widthIn(max = 420.dp),
                     ) {
                         if (x.group && !me) {
                             val w = x.senderWho
@@ -343,6 +350,7 @@ fun MenuBubble(m: Msg, x: RowCtx) {
 
 @Composable
 private fun BubbleBody(m: Msg, x: RowCtx, shape: RoundedCornerShape, jumbo: Int, a: RowActs) {
+    if (x.bundle != null) { MediaStrip(x.bundle, m.fromMe, x, a); return }
     val t = x.t
     val me = m.fromMe
     val gradMode = LocalRepo.current.prefs.state.opt("gradient")

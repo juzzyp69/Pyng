@@ -53,6 +53,8 @@ data class Conv(
     val status: String,
     val people: List<Person>,
     val groupPhoto: String,
+    /** "Only send SMS & MMS messages" is on for this chat in Google Messages. */
+    val smsOnly: Boolean = false,
 ) {
     val others get() = people.filter { !it.me }
     val me get() = people.firstOrNull { it.me }
@@ -89,6 +91,7 @@ data class Conv(
             status = o.optString("status", "active"),
             people = o.optJSONArray("people").objects().map(Person::from),
             groupPhoto = o.optString("groupPhoto"),
+            smsOnly = o.optBoolean("smsOnly"),
         )
 
         fun list(json: String): List<Conv> = JSONArray(json).objects().map(::from).filter { it.id.isNotEmpty() }
