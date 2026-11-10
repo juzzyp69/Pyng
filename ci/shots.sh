@@ -78,8 +78,9 @@ for K in pinLayout pinStyle bubble textSize showPhotos density appIcon defWall; 
 shot 54-profile --es route profile
 shot 55-react --es route react
 for K in archived starred scheduled spam; do shot "56-list-$K" --es route "lists:$K"; done
-for N in 0 1 2 3; do shot "60-setup-$N" --es route "setup:$N"; done
+for N in 0 1 2 3 4 5; do shot "60-setup-$N" --es route "setup:$N"; done
 shot 61-log --es route log
+shot 61b-ai-note --es route section:ai
 shot 62-home-editpins --es open editpins
 shot 63-theme --es route theme:c1
 shot 64-theme-custom --es route theme:c1 --es open custom
