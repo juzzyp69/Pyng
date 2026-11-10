@@ -384,9 +384,7 @@ private fun BubbleBody(m: Msg, x: RowCtx, shape: RoundedCornerShape, jumbo: Int,
                     .then(if (fx != null) Modifier.graphicsLayer { alpha = fx.alphaFor(m); scaleX = fx.scaleXFor(m); scaleY = fx.scaleYFor(m) } else Modifier)
                     .clip(shape)
                     .then(if (acrossScreen) Modifier.screenGradient(t.outTop, t.outBottom) else Modifier.background(bg))
-                    .padding(horizontal = 16.dp, vertical = 11.dp).widthIn(min = 24.dp),
-                // A short word ("Ok", "...") sits centered in its pill instead of hugging the left edge.
-                horizontalAlignment = if (x.quote == null) Alignment.CenterHorizontally else Alignment.Start,
+                    .padding(horizontal = 16.dp, vertical = 11.dp),
             ) {
                 if (x.quote != null) {
                     Column(Modifier.padding(top = 1.dp, bottom = 7.dp).clip(RoundedCornerShape(12.dp)).background(quoteBg).padding(horizontal = 10.dp, vertical = 6.dp)) {
@@ -652,12 +650,7 @@ fun LinkCard(url: String, me: Boolean, modifier: Modifier = Modifier) {
 
 @Composable
 private fun LinkText(text: String, size: Float, color: Color, weight: FontWeight) {
-    val ctx = androidx.compose.ui.platform.LocalContext.current
     val links = remember(text) { Regex("https?://[^\\s]+").findAll(text).toList() }
-    if (links.isEmpty()) {
-        T(text, size = size.sp, color = color, lineHeight = (size * 1.4f).sp, weight = weight)
-        return
-    }
     val annotated = remember(text, color) {
         androidx.compose.ui.text.buildAnnotatedString {
             var i = 0
@@ -671,11 +664,19 @@ private fun LinkText(text: String, size: Float, color: Color, weight: FontWeight
             append(text.substring(i))
         }
     }
-    androidx.compose.material3.Text(
-        annotated,
-        style = androidx.compose.ui.text.TextStyle(fontFamily = com.jpetrydesign.pyng.ui.theme.Geist, fontSize = size.sp, lineHeight = (size * 1.4f).sp, color = color, fontWeight = weight),
-    )
-    @Suppress("UNUSED_VARIABLE") val unused = ctx
+    val style = androidx.compose.ui.text.TextStyle(fontFamily = com.jpetrydesign.pyng.ui.theme.Geist, fontSize = size.sp, lineHeight = (size * 1.4f).sp, color = color, fontWeight = weight)
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    // The bubble hugs its text: a wrapped message is as wide as its longest line (no empty gap on the right),
+    // and a very short one ("k", "?") gets even padding on both sides so its pill never ends up taller than it is wide.
+    androidx.compose.ui.layout.Layout(content = { androidx.compose.material3.Text(annotated, style = style) }) { kids, c ->
+        val r = measurer.measure(annotated, style, constraints = androidx.compose.ui.unit.Constraints(maxWidth = c.maxWidth))
+        val widest = if (r.lineCount <= 1) r.size.width
+        else (0 until r.lineCount).maxOf { kotlin.math.ceil(r.getLineRight(it) - r.getLineLeft(it)).toInt() }
+        val textW = (widest + 1).coerceAtMost(c.maxWidth)
+        val p = kids.first().measure(androidx.compose.ui.unit.Constraints(minWidth = textW, maxWidth = textW))
+        val w = maxOf(textW, (size * 1.4f).sp.roundToPx()).coerceIn(c.minWidth, c.maxWidth)
+        layout(w, p.height) { p.place((w - textW) / 2, 0) }
+    }
 }
 
 @Suppress("unused")
