@@ -665,17 +665,21 @@ private fun LinkText(text: String, size: Float, color: Color, weight: FontWeight
         }
     }
     val style = androidx.compose.ui.text.TextStyle(fontFamily = com.jpetrydesign.pyng.ui.theme.Geist, fontSize = size.sp, lineHeight = (size * 1.4f).sp, color = color, fontWeight = weight)
-    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val laid = remember { arrayOfNulls<androidx.compose.ui.text.TextLayoutResult>(1) }
     // The bubble hugs its text: a wrapped message is as wide as its longest line (no empty gap on the right),
     // and a very short one ("k", "?") gets even padding on both sides so its pill never ends up taller than it is wide.
-    androidx.compose.ui.layout.Layout(content = { androidx.compose.material3.Text(annotated, style = style) }) { kids, c ->
-        val r = measurer.measure(annotated, style, constraints = androidx.compose.ui.unit.Constraints(maxWidth = c.maxWidth))
-        val widest = if (r.lineCount <= 1) r.size.width
-        else (0 until r.lineCount).maxOf { kotlin.math.ceil(r.getLineRight(it) - r.getLineLeft(it)).toInt() }
-        val textW = (widest + 1).coerceAtMost(c.maxWidth)
-        val p = kids.first().measure(androidx.compose.ui.unit.Constraints(minWidth = textW, maxWidth = textW))
+    androidx.compose.ui.layout.Layout(content = { androidx.compose.material3.Text(annotated, style = style, onTextLayout = { laid[0] = it }) }) { kids, c ->
+        val p = kids.first().measure(c.copy(minWidth = 0))
+        val r = laid[0]
+        var left = 0f
+        var right = p.width.toFloat()
+        if (r != null && r.lineCount > 1) {
+            left = (0 until r.lineCount).minOf { r.getLineLeft(it) }
+            right = (0 until r.lineCount).maxOf { r.getLineRight(it) }
+        }
+        val textW = kotlin.math.ceil(right - left).toInt().coerceIn(0, p.width)
         val w = maxOf(textW, (size * 1.4f).sp.roundToPx()).coerceIn(c.minWidth, c.maxWidth)
-        layout(w, p.height) { p.place((w - textW) / 2, 0) }
+        layout(w, p.height) { p.place((w - textW) / 2 - left.toInt(), 0) }
     }
 }
 
