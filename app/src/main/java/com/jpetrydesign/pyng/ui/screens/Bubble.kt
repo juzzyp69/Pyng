@@ -7,7 +7,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.using
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -763,8 +762,7 @@ private fun StatusLine(st: Triple<String, String, Boolean>?, face: Who?, t: Tok)
             targetState = s,
             transitionSpec = {
                 (androidx.compose.animation.slideInVertically(spring(dampingRatio = 0.7f, stiffness = 500f)) { it } + androidx.compose.animation.fadeIn(tween(180))) togetherWith
-                    (androidx.compose.animation.slideOutVertically(tween(180)) { -it } + androidx.compose.animation.fadeOut(tween(140))) using
-                    androidx.compose.animation.SizeTransform(clip = false)
+                    (androidx.compose.animation.slideOutVertically(tween(180)) { -it } + androidx.compose.animation.fadeOut(tween(140)))
             },
             label = "status",
             modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 5.dp),

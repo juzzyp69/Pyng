@@ -122,6 +122,7 @@ fun MediaStrip(items: List<Pair<Msg, MediaRef>>, me: Boolean, x: RowCtx, a: RowA
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val tileW = minOf(maxWidth * 0.46f, 240.dp)
         val tileH = tileW * 1.2f
+        val mw = maxWidth
         Column(Modifier.fillMaxWidth(), horizontalAlignment = if (me) Alignment.End else Alignment.Start) {
             Row(Modifier.padding(start = 6.dp, end = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Ico(Icons.stack, t.soft, 14.dp, 2f)
@@ -129,10 +130,10 @@ fun MediaStrip(items: List<Pair<Msg, MediaRef>>, me: Boolean, x: RowCtx, a: RowA
                 T(label, size = 12.5.sp, weight = FontWeight.Medium, color = t.soft)
             }
             when (style) {
-                "Stack" -> StackStyle(items, me, tileW, tileH, maxWidth, x, a)
+                "Stack" -> StackStyle(items, me, tileW, tileH, mw, x, a)
                 "Rail" -> RailStyle(items, me, tileW, tileH, x, a)
                 "Deck" -> DeckStyle(items, me, tileW, tileH, x, a)
-                else -> PeekStyle(items, me, tileW, tileH, maxWidth, x, a, nudge = x.isNew || x.enterDelay >= 0)
+                else -> PeekStyle(items, me, tileW, tileH, mw, x, a, nudge = x.isNew || x.enterDelay >= 0)
             }
         }
     }
