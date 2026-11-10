@@ -109,7 +109,7 @@ fun ContactScreen(nav: Nav, convId: String) {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.enter(0, pop = true)) {
                         Box(Modifier.edge(CircleShape, elevation = 16.dp).clip(CircleShape).clickable { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
-                            Avatar(w.photo, w.ini, 116.dp, w.bg, w.ink, 38.sp)
+                            WhoAvatar(w, 116.dp, 38.sp)
                         }
                         // Tap the photo to change it (in Pyng only), with a crop step.
                         Box(
@@ -149,11 +149,11 @@ fun ContactScreen(nav: Nav, convId: String) {
                         }
                         acts.forEachIndexed { i, (label, icon, go) ->
                             Column(
-                                Modifier.weight(1f).enter(2 + i, pop = true).clip(RoundedCornerShape(20.dp)).background(t.tone).press(0.94f, go).padding(vertical = 12.dp),
+                                Modifier.weight(1f).enter(2 + i, pop = true).clip(RoundedCornerShape(20.dp)).background(if (t.dark) t.card else Color.White).press(0.94f, go).padding(vertical = 11.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
-                                Ico(icon, t.p, 20.dp, 1.9f)
-                                Spacer(Modifier.height(6.dp))
+                                Ico(icon, t.p, 19.dp, 1.9f)
+                                Spacer(Modifier.height(5.dp))
                                 T(label, size = 12.5.sp, weight = FontWeight.SemiBold, color = t.p)
                             }
                         }
@@ -189,13 +189,18 @@ fun ContactScreen(nav: Nav, convId: String) {
                             T("${c.others.size + 1} people", size = 13.sp, weight = FontWeight.SemiBold, color = t.soft, modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 4.dp))
                             c.others.forEach { person ->
                                 val pw = whoOf(person)
-                                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Avatar(pw.photo, pw.ini, 40.dp, t.tone, t.p)
+                                // Tap someone to go to your one-on-one chat with them (started if there isn't one).
+                                Row(
+                                    Modifier.fillMaxWidth().clickable { openDirect(repo, nav, scope, person) }.padding(horizontal = 16.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    WhoAvatar(pw, 40.dp)
                                     Spacer(Modifier.width(12.dp))
                                     Column(Modifier.weight(1f)) {
                                         T(person.display, size = 15.sp, weight = FontWeight.Medium)
                                         if (person.name.isNotBlank() && person.formatted.isNotBlank()) T(person.formatted, size = 12.5.sp, color = t.soft)
                                     }
+                                    Ico(Icons.message, t.p, 18.dp)
                                 }
                             }
                             Spacer(Modifier.height(6.dp))
@@ -213,10 +218,17 @@ fun ContactScreen(nav: Nav, convId: String) {
                                     media.take(12).chunked(3).forEach { row ->
                                         Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                             row.forEach { (m, ref) ->
-                                                val path = ref.localPath.ifEmpty { repo.media[ref.id] ?: repo.media[ref.thumbId].orEmpty() }
+                                                // Videos show their thumbnail; anything that won't draw shows an icon, never a blank tile.
+                                                val path = if (ref.isVideo) (repo.media[ref.thumbId] ?: ref.previewPath.ifEmpty { null } ?: ref.localPath.ifEmpty { repo.media[ref.id].orEmpty() })
+                                                    else ref.localPath.ifEmpty { repo.media[ref.id] ?: repo.media[ref.thumbId] ?: ref.previewPath }
+                                                var broken by remember(path) { mutableStateOf(false) }
                                                 LaunchedEffect(ref.id) { if (path.isEmpty()) repo.ensureMedia(ref, thumb = true) }
                                                 Box(Modifier.weight(1f).height(108.dp).clip(RoundedCornerShape(14.dp)).background(t.tone).clickable { openMedia(ctx, repo, nav, ref) }) {
-                                                    if (path.isNotEmpty()) AsyncImage(File(path), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                                    if (path.isNotEmpty() && !broken) AsyncImage(File(path), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(), onError = { broken = true })
+                                                    if (path.isEmpty() || broken) Ico(if (ref.isVideo) Icons.play else Icons.gallery, t.p.copy(alpha = 0.55f), 24.dp, modifier = Modifier.align(Alignment.Center))
+                                                    else if (ref.isVideo) Box(Modifier.align(Alignment.Center).size(34.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f)), contentAlignment = Alignment.Center) {
+                                                        Ico(Icons.play, Color.White, 16.dp, 2f, fill = Color.White)
+                                                    }
                                                     // Who sent it, in groups.
                                                     if (c.group) {
                                                         val who = c.people.firstOrNull { it.id == m.participantId }
@@ -224,7 +236,7 @@ fun ContactScreen(nav: Nav, convId: String) {
                                                             Modifier.align(Alignment.BottomStart).padding(5.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black.copy(alpha = 0.45f)).padding(start = 2.dp, end = 7.dp, top = 2.dp, bottom = 2.dp),
                                                             verticalAlignment = Alignment.CenterVertically,
                                                         ) {
-                                                            if (who != null && !m.fromMe) { val ww = whoOf(who); Avatar(ww.photo, ww.ini, 16.dp, ww.bg, ww.ink, 7.sp); Spacer(Modifier.width(4.dp)) }
+                                                            if (who != null && !m.fromMe) { val ww = whoOf(who); WhoAvatar(ww, 16.dp, 7.sp); Spacer(Modifier.width(4.dp)) }
                                                             else Spacer(Modifier.width(5.dp))
                                                             T(senderOf(m), size = 10.5.sp, weight = FontWeight.SemiBold, color = Color.White, maxLines = 1)
                                                         }

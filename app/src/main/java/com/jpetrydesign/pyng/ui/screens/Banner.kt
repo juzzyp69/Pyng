@@ -95,7 +95,7 @@ fun InAppBanner(item: Pair<Conv, Msg>?, onOpen: (String) -> Unit, onClose: () ->
                 .clickable { onOpen(c.id) }.padding(14.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Avatar(w.photo, w.ini, 42.dp, w.bg, w.ink)
+                WhoAvatar(w, 42.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     T(if (c.group) c.title else c.title, size = 15.sp, weight = FontWeight.SemiBold, maxLines = 1)

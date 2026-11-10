@@ -30,6 +30,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -90,6 +92,14 @@ sealed interface Route {
 /** The app's navigation, for the few deep places that need to open a chat (a shared contact's Message button). */
 val LocalNav = androidx.compose.runtime.staticCompositionLocalOf<Nav?> { null }
 
+/** The hold-to-peek preview. It's drawn above every pane, so on a Fold it centers over the whole screen. */
+class PeekState {
+    var conv by mutableStateOf<com.jpetrydesign.pyng.data.Conv?>(null)
+    var onEditPins: (() -> Unit)? = null
+}
+
+val LocalPeek = androidx.compose.runtime.staticCompositionLocalOf { PeekState() }
+
 /** A simple back stack with direction, so transitions slide the right way. */
 class Nav(start: Route) {
     val stack = mutableStateListOf(start)
@@ -130,7 +140,10 @@ fun rememberTok(repo: Repo): Tok {
 @Composable
 fun PyngRoot(repo: Repo, nav: Nav) {
     val t = rememberTok(repo)
-    val motion = !repo.prefs.state.on("reduceMotion")
+    // Motion follows both Pyng's own "Reduce motion" and Android's "Remove animations".
+    val actx = androidx.compose.ui.platform.LocalContext.current
+    val systemAnim = remember { runCatching { android.provider.Settings.Global.getFloat(actx.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) }.getOrDefault(1f) > 0f }
+    val motion = !repo.prefs.state.on("reduceMotion") && systemAnim
     val scheme = if (t.dark) darkColorScheme(primary = t.p, background = t.bg, surface = t.bg, onBackground = t.ink, onSurface = t.ink)
     else lightColorScheme(primary = t.p, background = t.bg, surface = t.bg, onBackground = t.ink, onSurface = t.ink)
     var toast by remember { mutableStateOf<Toast?>(null) }
@@ -163,7 +176,8 @@ fun PyngRoot(repo: Repo, nav: Nav) {
         val baseDensity = androidx.compose.ui.platform.LocalDensity.current
         val textScale = com.jpetrydesign.pyng.ui.kit.textScaleOf(repo.prefs.state.textSize)
         val scaled = androidx.compose.ui.unit.Density(baseDensity.density, baseDensity.fontScale * textScale)
-        CompositionLocalProvider(LocalTok provides t, LocalRepo provides repo, LocalMotion provides motion, androidx.compose.ui.platform.LocalDensity provides scaled, LocalNav provides nav) {
+        val peek = remember { PeekState() }
+        CompositionLocalProvider(LocalTok provides t, LocalRepo provides repo, LocalMotion provides motion, androidx.compose.ui.platform.LocalDensity provides scaled, LocalNav provides nav, LocalPeek provides peek) {
             // Everything on screen feeds the in-app banner's frosted glass, but only while a banner
             // is up (and a moment after, while it slides away), so normal scrolling costs nothing extra.
             val appHaze = remember { dev.chrisbanes.haze.HazeState() }
@@ -172,9 +186,22 @@ fun PyngRoot(repo: Repo, nav: Nav) {
             BoxWithConstraints(Modifier.fillMaxSize().background(t.bg)) {
                 val wide = maxWidth >= 600.dp
                 val fullW = maxWidth
-                Box(Modifier.fillMaxSize().then(if (hazeOn) Modifier.hazeSource(appHaze) else Modifier)) {
+                // While peeking, everything behind sinks back a little and blurs, so the preview reads clearly.
+                val peeking = peek.conv != null
+                val peekBlur by androidx.compose.animation.core.animateDpAsState(if (peeking) 30.dp else 0.dp, tween(260), label = "peekBlur")
+                val peekSink by androidx.compose.animation.core.animateFloatAsState(
+                    if (peeking) 0.94f else 1f,
+                    if (motion) androidx.compose.animation.core.spring(dampingRatio = 0.7f, stiffness = 380f) else tween(0), label = "peekSink",
+                )
+                Box(
+                    Modifier.fillMaxSize()
+                        .graphicsLayer { scaleX = peekSink; scaleY = peekSink }
+                        .then(if (peekBlur > 0.5.dp) Modifier.blur(peekBlur) else Modifier)
+                        .then(if (hazeOn) Modifier.hazeSource(appHaze) else Modifier),
+                ) {
                     if (wide) WideLayout(nav, fullW) else Pane(nav, Modifier.fillMaxSize(), wide = false)
                 }
+                com.jpetrydesign.pyng.ui.screens.RowMenu(peek.conv, onDismiss = { peek.conv = null }, onEditPins = peek.onEditPins)
                 ToastHost(toast, onUndo = { toast?.undo?.invoke(); toast = null }, Modifier.align(Alignment.BottomCenter))
                 com.jpetrydesign.pyng.ui.kit.AskDialog(repo.ask) { repo.ask = null }
                 com.jpetrydesign.pyng.ui.screens.PhotoCropper(repo.crop) { repo.crop = null }

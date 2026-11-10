@@ -486,7 +486,7 @@ fun ListScreen(nav: Nav, kind: String) {
             val c = repo.convs[it.convId]
             Column(Modifier.enter(i).fillMaxWidth().padding(bottom = 10.dp).clip(RoundedCornerShape(22.dp)).background(t.card).clickable(onClick = it.open).padding(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (c != null) { val w = whoOf(c); Avatar(w.photo, w.ini, 42.dp, w.bg, w.ink) } else Avatar(null, "#", 42.dp)
+                    if (c != null) { val w = whoOf(c); WhoAvatar(w, 42.dp) } else Avatar(null, "#", 42.dp)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Row { T(it.title, size = 15.sp, weight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f)); if (it.meta != null) T(it.meta, size = 12.sp, color = t.soft) }

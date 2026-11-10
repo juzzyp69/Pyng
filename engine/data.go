@@ -692,10 +692,46 @@ func errText(err error) string {
 	return err.Error()
 }
 
+// logOutgoingMedia records what the phone reports for attachments you send,
+// so a log shows where a photo or video stopped (uploading, sending, failed).
+func (m *Messenger) logOutgoingMedia(msg *gmproto.Message) {
+	if msg == nil {
+		return
+	}
+	st := msg.GetMessageStatus().GetStatus()
+	if st < gmproto.MessageStatusType_OUTGOING_COMPLETE || st >= gmproto.MessageStatusType_INCOMING_COMPLETE {
+		return
+	}
+	if len(msg.GetMessageInfo()) == 0 {
+		m.log.Info().
+			Str("message_id", msg.GetMessageID()).
+			Str("tmp_id", msg.GetTmpID()).
+			Str("status", st.String()).
+			Msg("Sent message update with no content yet")
+		return
+	}
+	for _, part := range msg.GetMessageInfo() {
+		media := part.GetMediaContent()
+		if media == nil {
+			continue
+		}
+		m.log.Info().
+			Str("message_id", msg.GetMessageID()).
+			Str("tmp_id", msg.GetTmpID()).
+			Str("status", st.String()).
+			Str("status_text", msg.GetMessageStatus().GetStatusText()).
+			Str("mime", media.GetMimeType()).
+			Int64("size", media.GetSize()).
+			Bool("has_media_id", media.GetMediaID() != "").
+			Msg("Sent attachment update")
+	}
+}
+
 func (m *Messenger) handleEvent(evt any) {
 	defer m.guard(fmt.Sprintf("event %T", evt), nil)
 	switch e := evt.(type) {
 	case *libgm.WrappedMessage:
+		m.logOutgoingMedia(e.Message)
 		m.emit("message", msgJSON(e.Message))
 	case *gmproto.Conversation:
 		m.mu.Lock()

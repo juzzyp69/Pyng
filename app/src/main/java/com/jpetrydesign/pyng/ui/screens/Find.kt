@@ -177,7 +177,7 @@ private fun ResultRow(cid: String, sub: String, meta: String?, hl: String? = nul
     val c = repo.convs[cid] ?: return
     val w = whoOf(c)
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).clickable(onClick = onClick).padding(horizontal = 4.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Avatar(w.photo, w.ini, 44.dp, w.bg, w.ink)
+        WhoAvatar(w, 44.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row { T(c.title, size = 15.sp, weight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f)); if (meta != null) T(meta, size = 12.sp, color = t.soft) }
@@ -282,7 +282,8 @@ fun NewChatScreen(nav: Nav, group: Boolean) {
                         }.padding(horizontal = 4.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Avatar(repo.avatars[c.id]?.ifEmpty { null }, initialsOf(c.name), 44.dp)
+                        val (cb, ci) = toneOf(c.number, c.name)
+                        Avatar(repo.avatars[c.id]?.ifEmpty { null }, initialsOf(c.name), 44.dp, cb, ci)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             T(c.name, size = 15.5.sp, weight = FontWeight.Medium, maxLines = 1)

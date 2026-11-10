@@ -243,7 +243,23 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
 
     /** Google's temporary id for a message → the id this app gave it when you tapped send. */
     private val tmpAlias = java.util.concurrent.ConcurrentHashMap<String, String>()
-    private fun aliased(m: Msg): Msg = tmpAlias[m.tmpId]?.let { m.copy(tmpId = it) } ?: m
+    /** Files you sent, by the app's own temporary id. Google's copy of the message only names its upload, so this keeps your photo on the bubble. */
+    private val sentFiles = java.util.concurrent.ConcurrentHashMap<String, MediaRef>()
+
+    /**
+     * Google's first copy of a photo you send can arrive before the attachment is attached to it,
+     * so it would show as an empty (hidden) message. Until Google's copy carries the photo, the
+     * bubble keeps yours; once it does, it still shows your local file instead of downloading it back.
+     */
+    private fun aliased(m: Msg): Msg {
+        val a = tmpAlias[m.tmpId]?.let { m.copy(tmpId = it) } ?: m
+        val mine = sentFiles[a.tmpId] ?: return a
+        if (!File(mine.localPath).exists()) return a
+        val first = a.media.firstOrNull() ?: return a.copy(media = listOf(mine))
+        if (first.localPath.isNotEmpty()) return a
+        if (first.id.isNotEmpty()) media[first.id] = mine.localPath
+        return a.copy(media = listOf(first.copy(localPath = mine.localPath)) + a.media.drop(1))
+    }
 
     private fun upsert(raw: Msg) {
         val m = aliased(raw)
@@ -378,8 +394,30 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         out
     }.getOrDefault(emptyList())
 
+    private var avatarsUpgraded = false
+
+    /**
+     * Once per launch: anyone showing Google's small thumbnail gets their phone contact's
+     * full-size photo instead, if their card has one (it may have been added since).
+     */
+    private fun upgradeAvatars() {
+        if (avatarsUpgraded) return
+        avatarsUpgraded = true
+        scope.launch {
+            delay(2500)
+            val swaps = withContext(Dispatchers.IO) {
+                avatars.toMap().filter { (_, v) -> !v.startsWith("content://") }.keys.mapNotNull { id ->
+                    val person = convs.values.firstNotNullOfOrNull { c -> c.others.firstOrNull { it.id == id } } ?: return@mapNotNull null
+                    contactPhoto(person.number.ifBlank { person.formatted })?.let { id to it }
+                }
+            }
+            if (swaps.isNotEmpty()) { swaps.forEach { (id, uri) -> avatars[id] = uri }; saveAvatars() }
+        }
+    }
+
     fun ensureAvatars(ids: List<String>, contactsKind: Boolean = false) {
         if (demo) return
+        upgradeAvatars()
         val need = ids.filter { it.isNotEmpty() && !avatars.containsKey(it) && it !in avatarPending }
         if (need.isEmpty()) return
         avatarPending += need
@@ -543,6 +581,7 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         val locals = attachments.mapIndexed { i, a -> localMsg(convId, if (i == attachments.lastIndex) body else "", if (i == 0) replyTo else "", a) }
             .ifEmpty { listOf(localMsg(convId, body, replyTo, null)) }
         if (msgs.containsKey(convId)) msgs[convId] = tidy(msgs[convId].orEmpty() + locals)
+        locals.forEach { l -> l.media.firstOrNull()?.takeIf { it.localPath.isNotEmpty() }?.let { sentFiles[l.tmpId] = it } }
         locals.forEach { deliver(it) }
         prefs.edit { it.copy(drafts = it.drafts - convId, markedUnread = it.markedUnread - convId) }
     }
@@ -577,6 +616,7 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     fun retry(m: Msg) {
         val list = msgs[m.convId] ?: return
         val fresh = m.copy(error = "", status = "LOCAL", tmpId = "local-" + UUID.randomUUID(), ts = System.currentTimeMillis())
+        fresh.media.firstOrNull()?.takeIf { it.localPath.isNotEmpty() }?.let { sentFiles[fresh.tmpId] = it }
         msgs[m.convId] = tidy(list.filter { it.key != m.key } + fresh)
         deliver(fresh)
     }

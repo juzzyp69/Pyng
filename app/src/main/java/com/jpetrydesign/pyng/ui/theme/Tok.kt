@@ -5,6 +5,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -60,7 +61,15 @@ data class Tok(
     val shadowP: Color,
     val hdrBg: Color,
     val accent2: Color,
+    /** Solid avatar colors for people without a photo: (background, letters), nudged toward the theme. */
+    val tones: List<Pair<Color, Color>> = emptyList(),
+    /** The two ends of the sent-bubble gradient: the theme's own pair, or gentle shades of its color. */
+    val outTop: Color = Color.Unspecified,
+    val outBottom: Color = Color.Unspecified,
 ) {
+    /** The same person always gets the same tone. */
+    fun toneFor(key: String): Pair<Color, Color> =
+        if (tones.isEmpty()) neutral to neutralInk else tones[Math.floorMod(key.hashCode(), tones.size)]
     val dot get() = Brush.linearGradient(listOf(p, pal.plus ?: pal.s))
     fun swatch(): Brush = swatchOf(pal)
 }
@@ -86,9 +95,10 @@ fun tok(P: Pal, dark: Boolean, solid: Boolean = false, highContrast: Boolean = f
         soft = if (dark) inkD.copy(alpha = if (highContrast) 0.84f else 0.66f) else inkL.copy(alpha = if (highContrast) 0.8f else 0.63f),
         faint = if (dark) inkD.copy(alpha = if (highContrast) 0.58f else 0.42f) else inkL.copy(alpha = if (highContrast) 0.55f else 0.4f),
         hair = if (dark) Color.White.copy(alpha = if (highContrast) 0.18f else 0.07f) else inkL.copy(alpha = if (highContrast) 0.18f else 0.07f),
-        neutral = if (dark) Color.White.copy(alpha = 0.08f) else inkL.copy(alpha = 0.05f),
+        // Solid, never see-through: a shadow behind an avatar must not show through it.
+        neutral = (if (dark) Color.White.copy(alpha = 0.08f) else inkL.copy(alpha = 0.05f)).compositeOver(bg),
         neutralInk = if (dark) inkD.copy(alpha = 0.82f) else inkL.copy(alpha = 0.72f),
-        tone = p.a(if (dark) 0x2E else 0x1F),
+        tone = p.a(if (dark) 0x2E else 0x1F).compositeOver(bg),
         glass = if (solid) (if (dark) hex("#22252D") else if (P.bg != null) Color.White else hex("#EEF1F7")) else (if (dark) Color.White.copy(alpha = 0.08f) else p.a(0x14)),
         glassStrong = if (solid) (if (dark) hex("#1C1F26") else Color.White) else (if (dark) hex("#1E2028").copy(alpha = 0.72f) else Color.White.copy(alpha = 0.7f)),
         sheet = if (solid) (if (dark) hex("#181A21") else Color.White) else (if (dark) hex("#181A21").copy(alpha = 0.97f) else Color.White.copy(alpha = 0.98f)),
@@ -111,8 +121,21 @@ fun tok(P: Pal, dark: Boolean, solid: Boolean = false, highContrast: Boolean = f
         shadowP = if (dark) Color.Black.copy(alpha = 0.45f) else plus.a(0x88),
         hdrBg = if (solid) (if (dark) hex("#181A21") else Color.White) else (if (dark) hex("#16181F").copy(alpha = 0.6f) else Color.White.copy(alpha = 0.6f)),
         accent2 = P.plus ?: P.s,
+        outTop = P.grad?.first ?: androidx.compose.ui.graphics.lerp(fill, Color.White, if (dark) 0.10f else 0.08f),
+        outBottom = P.grad?.second ?: androidx.compose.ui.graphics.lerp(fill, Color.Black, if (dark) 0.10f else 0.18f),
+        tones = (if (dark) darkTones else lightTones).map { (b, i) -> androidx.compose.ui.graphics.lerp(b, fill, if (dark) 0.10f else 0.12f) to i },
     )
 }
+
+// Sage, moss, eucalyptus, honey, sea, clay, heather, stone.
+private val lightTones = listOf(
+    "#D9E5D6" to "#33502F", "#E4E8CF" to "#4F5A1F", "#CFE3DD" to "#24564B", "#EFE3C8" to "#6A5016",
+    "#D6E0E8" to "#2F4C63", "#EEDDD2" to "#7A4430", "#E5DBE6" to "#5A3D5B", "#E1E3DE" to "#41463F",
+).map { (b, i) -> hex(b) to hex(i) }
+private val darkTones = listOf(
+    "#2B3A2A" to "#BCD2B7", "#363A22" to "#D3DBA6", "#1F3833" to "#A9D6CB", "#3D3220" to "#E8CF9A",
+    "#22313D" to "#AFC8DC", "#3F2A22" to "#E7BCA6", "#362838" to "#D9BEDB", "#2C2F2B" to "#C9CDC5",
+).map { (b, i) -> hex(b) to hex(i) }
 
 /** Wallpaper and glow backgrounds, as layered brushes over the base color. */
 fun wallBrushes(name: String, t: Tok): List<Brush> {

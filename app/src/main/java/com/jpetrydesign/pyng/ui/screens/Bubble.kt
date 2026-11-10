@@ -67,6 +67,7 @@ import com.jpetrydesign.pyng.ui.kit.Ico
 import com.jpetrydesign.pyng.ui.kit.Icons
 import com.jpetrydesign.pyng.ui.kit.LocalMotion
 import com.jpetrydesign.pyng.ui.kit.LocalRepo
+import androidx.compose.ui.node.invalidateDraw
 import com.jpetrydesign.pyng.ui.kit.T
 import com.jpetrydesign.pyng.ui.kit.swipeDir
 import com.jpetrydesign.pyng.ui.theme.LocalTok
@@ -194,8 +195,16 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
                     ) {
                         if (x.group && !me) {
                             val w = x.senderWho
-                            Box(Modifier.size(30.dp).graphicsLayer { alpha = if (x.nextSame) 0f else 1f }) {
-                                if (w != null) Avatar(w.photo, w.ini, 30.dp, t.tone, t.p, 11.sp)
+                            val repoB = LocalRepo.current
+                            val navB = com.jpetrydesign.pyng.ui.LocalNav.current
+                            // Tap their photo to go to your own chat with them.
+                            Box(
+                                Modifier.size(30.dp).graphicsLayer { alpha = if (x.nextSame) 0f else 1f }
+                                    .then(if (!x.nextSame && !x.selecting) Modifier.clip(CircleShape).clickable {
+                                        repoB.convs[m.convId]?.people?.firstOrNull { it.id == m.participantId }?.let { openDirect(repoB, navB, scope, it) }
+                                    } else Modifier),
+                            ) {
+                                if (w != null) WhoAvatar(w, 30.dp, 11.sp)
                             }
                             Spacer(Modifier.width(8.dp))
                         }
@@ -335,7 +344,14 @@ fun MenuBubble(m: Msg, x: RowCtx) {
 private fun BubbleBody(m: Msg, x: RowCtx, shape: RoundedCornerShape, jumbo: Int, a: RowActs) {
     val t = x.t
     val me = m.fromMe
-    val bg: Brush = if (me) t.outBg else Brush.linearGradient(listOf(t.inBg, t.inBg))
+    val gradMode = LocalRepo.current.prefs.state.opt("gradient")
+    val bg: Brush = when {
+        !me -> Brush.linearGradient(listOf(t.inBg, t.inBg))
+        gradMode == "Off" -> Brush.linearGradient(listOf(t.outFlat, t.outFlat))
+        else -> Brush.verticalGradient(listOf(t.outTop, t.outBottom))
+    }
+    // Across the screen: every sent bubble shows its slice of one screen-tall gradient (like iMessage).
+    val acrossScreen = me && gradMode == "Across the screen"
     val fg = if (me) t.outInk else t.inInk
     val sub = if (me) (if (t.dark) Color(0x9E101218) else Color(0xBFFFFFFF)) else t.soft
     val quoteBg = if (me) Color.White.copy(alpha = 0.18f) else t.neutral
@@ -365,7 +381,9 @@ private fun BubbleBody(m: Msg, x: RowCtx, shape: RoundedCornerShape, jumbo: Int,
                 Modifier
                     .then(if (fx != null && fx.isTarget(m)) Modifier.onGloballyPositioned { fx.bubble = it } else Modifier)
                     .then(if (fx != null) Modifier.graphicsLayer { alpha = fx.alphaFor(m); scaleX = fx.scaleXFor(m); scaleY = fx.scaleYFor(m) } else Modifier)
-                    .clip(shape).background(bg).padding(horizontal = 16.dp, vertical = 11.dp).widthIn(min = 24.dp),
+                    .clip(shape)
+                    .then(if (acrossScreen) Modifier.screenGradient(t.outTop, t.outBottom) else Modifier.background(bg))
+                    .padding(horizontal = 16.dp, vertical = 11.dp).widthIn(min = 24.dp),
             ) {
                 if (x.quote != null) {
                     Column(Modifier.padding(top = 1.dp, bottom = 7.dp).clip(RoundedCornerShape(12.dp)).background(quoteBg).padding(horizontal = 10.dp, vertical = 6.dp)) {
@@ -659,3 +677,34 @@ private fun LinkText(text: String, size: Float, color: Color, weight: FontWeight
 
 @Suppress("unused")
 private fun Modifier.minH(h: Dp) = this.heightIn(min = h)
+
+
+/**
+ * Paints one gradient that spans the whole screen, showing the part where this element sits.
+ * It follows the element as it scrolls by redrawing only, never recomposing.
+ */
+fun Modifier.screenGradient(top: Color, bottom: Color): Modifier = this then ScreenGradElement(top, bottom)
+
+private data class ScreenGradElement(val top: Color, val bottom: Color) : androidx.compose.ui.node.ModifierNodeElement<ScreenGradNode>() {
+    override fun create() = ScreenGradNode(top, bottom)
+    override fun update(node: ScreenGradNode) { node.top = top; node.bottom = bottom; node.invalidateDrawSafe() }
+}
+
+private class ScreenGradNode(var top: Color, var bottom: Color) :
+    Modifier.Node(), androidx.compose.ui.node.DrawModifierNode, androidx.compose.ui.node.GlobalPositionAwareModifierNode {
+    private var y = 0f
+    private var h = 1f
+
+    fun invalidateDrawSafe() { if (isAttached) invalidateDraw() }
+
+    override fun onGloballyPositioned(coordinates: androidx.compose.ui.layout.LayoutCoordinates) {
+        val ny = coordinates.localToRoot(androidx.compose.ui.geometry.Offset.Zero).y
+        val nh = coordinates.findRootCoordinates().size.height.toFloat().coerceAtLeast(1f)
+        if (ny != y || nh != h) { y = ny; h = nh; invalidateDrawSafe() }
+    }
+
+    override fun androidx.compose.ui.graphics.drawscope.ContentDrawScope.draw() {
+        drawRect(Brush.verticalGradient(listOf(top, bottom), startY = -y, endY = h - y))
+        drawContent()
+    }
+}

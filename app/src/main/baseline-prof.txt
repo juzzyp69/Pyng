@@ -1,0 +1,4 @@
+# Startup profile: Android compiles these ahead of time when the app is installed,
+# so opening Pyng and scrolling the first screens doesn't wait on the JIT.
+HSPLcom/jpetrydesign/pyng/**->**(**)**
+Lcom/jpetrydesign/pyng/**;

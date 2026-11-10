@@ -54,7 +54,20 @@ class PyngApp : Application(), ImageLoaderFactory {
             add(VideoFrameDecoder.Factory())
         }
         .crossfade(true)
+        // A firm ceiling on decoded pictures in memory; they're decoded at the size shown, not full size.
+        .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(0.18).build() }
         .build()
+
+    /** When Android is short on memory, let go of pictures it can decode again later. */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
+            runCatching { coil.Coil.imageLoader(this).memoryCache?.trimMemory(level) }
+        }
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
+            runCatching { coil.Coil.imageLoader(this).memoryCache?.clear() }
+        }
+    }
 
     /** A crash report from the last run (app or engine), or null. */
     fun lastCrash(): String? {

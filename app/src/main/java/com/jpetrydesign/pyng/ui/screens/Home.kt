@@ -68,6 +68,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -132,7 +133,9 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
     val t = LocalTok.current
     val p = repo.prefs.state
     val haze = remember { HazeState() }
-    var menuFor by remember { mutableStateOf<Conv?>(null) }
+    // The peek itself is drawn by the app above every pane (so on a Fold it centers over the whole screen).
+    val peek = com.jpetrydesign.pyng.ui.LocalPeek.current
+    var menuFor by peek::conv
     // Edit pins: the pinned chats wiggle, drag to reorder, tap the minus to unpin, Done to finish.
     // Outside it, holding a chat only opens its menu, so it's always clear when you're editing.
     var editPins by remember { mutableStateOf(false) }
@@ -337,14 +340,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                 }
             },
     ) {
-        // While peeking, Home sinks back a little and blurs, so the preview reads clearly on top.
-        val peekBlur by androidx.compose.animation.core.animateDpAsState(if (menuFor != null) 30.dp else 0.dp, tween(260), label = "peekBlur")
-        val peekSink by animateFloatAsState(if (menuFor != null) 0.94f else 1f, spring(dampingRatio = 0.7f, stiffness = 380f), label = "peekSink")
-        Box(
-            Modifier.fillMaxSize()
-                .graphicsLayer { scaleX = peekSink; scaleY = peekSink }
-                .then(if (peekBlur > 0.5.dp) Modifier.blur(peekBlur) else Modifier),
-        ) {
+        Box(Modifier.fillMaxSize()) {
         Glow()
         androidx.compose.runtime.CompositionLocalProvider(LocalHaze provides haze) {
             LazyColumn(
@@ -447,7 +443,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                         PinItem(pin, i, pinCtl, Modifier.enterOnce("pin:$layout:" + pin.c.id, i, pop = true)) {
                             val badgeHaze = remember { dev.chrisbanes.haze.HazeState() }
                             Box(Modifier.size(46.dp)) {
-                                Box(if (pin.count > 0) Modifier.hazeSource(badgeHaze) else Modifier) { Avatar(pin.who.photo, pin.who.ini, 46.dp, pin.who.bg, pin.who.ink, 15.sp) }
+                                Box(if (pin.count > 0) Modifier.hazeSource(badgeHaze) else Modifier) { WhoAvatar(pin.who, 46.dp, 15.sp) }
                                 if (pin.count > 0) {
                                     CountBadge(pin.count, h = 20.dp, modifier = Modifier.align(Alignment.TopEnd).offset(4.dp, (-3).dp), haze = badgeHaze)
                                 }
@@ -458,6 +454,11 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
             }
 
             val fabAlpha by androidx.compose.animation.core.animateFloatAsState(if ((dragId != null && dragMoved) || editPins) 0f else 1f, label = "fab")
+            // Rows fade out before they reach the buttons, so no preview text sits under them.
+            Box(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(150.dp).graphicsLayer { alpha = fabAlpha }
+                    .background(Brush.verticalGradient(0f to t.bg.copy(alpha = 0f), 0.55f to t.bg.copy(alpha = 0.86f), 1f to t.bg)),
+            )
             Row(
                 Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 20.dp, bottom = 28.dp).graphicsLayer { alpha = fabAlpha },
                 horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically,
@@ -483,7 +484,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                     .size(ghostSize)
                     .graphicsLayer { scaleX = ghostScale.value; scaleY = ghostScale.value; alpha = ghostAlpha.value }
                     .edge(CircleShape, elevation = 18.dp).clip(CircleShape),
-            ) { Avatar(w.photo, w.ini, ghostSize, w.bg, w.ink, 21.sp) }
+            ) { WhoAvatar(w, ghostSize, 21.sp) }
         }
         // While dragging: a hint at the bottom says what letting go will do.
         val hint = when {
@@ -538,7 +539,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
         }
 
         }
-        RowMenu(menuFor, onDismiss = { menuFor = null }, onEditPins = { editPins = true })
+        androidx.compose.runtime.SideEffect { peek.onEditPins = { editPins = true } }
         PermissionSheet(askPerms) { askPerms = false; repo.prefs.edit { it.copy(permsAsked = 1) } }
         if (nav.strip) ColorStrip(onDone = { nav.strip = false })
     }
@@ -670,7 +671,7 @@ fun ConvRow(
                     Modifier.fillMaxWidth().padding(vertical = if (compact) 9.dp else 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Avatar(who.photo, who.ini, av, who.bg, who.ink, 17.sp)
+                    WhoAvatar(who, av, 17.sp)
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -825,17 +826,14 @@ private fun PinItem(pin: Pin, index: Int, ctl: PinCtl, modifier: Modifier = Modi
 }
 
 @Composable
-private fun PinFace(pin: Pin, av: Dp, iniSize: Float, style: String, badgeH: Dp = 21.dp) {
+private fun PinFace(pin: Pin, av: Dp, iniSize: Float, style: String, badgeH: Dp = 21.dp, ringHot: Boolean = false) {
     val t = LocalTok.current
     val hot = pin.count > 0 || pin.typing
     // The photo is what the badge's frosted glass blurs.
     val badgeHaze = remember { dev.chrisbanes.haze.HazeState() }
     Box(Modifier.size(av)) {
         Box(if (pin.count > 0 && style != "Rings") Modifier.hazeSource(badgeHaze) else Modifier) {
-            Avatar(
-                pin.who.photo, pin.who.ini, av, pin.who.bg, pin.who.ink, iniSize.sp,
-                halo = if (style == "Rings" && hot) (t.pal.plus ?: t.p) else null,
-            )
+            WhoAvatar(pin.who, av, iniSize.sp, halo = if ((style == "Rings" || ringHot) && hot) (t.pal.plus ?: t.p) else null)
         }
         if (pin.count > 0 && style != "Rings") {
             val bh = badgeH + 2.dp
@@ -860,7 +858,8 @@ private fun PinFace(pin: Pin, av: Dp, iniSize: Float, style: String, badgeH: Dp 
 @Composable
 private fun PinName(pin: Pin, size: Float, max: Dp) {
     val hot = pin.count > 0 || pin.typing
-    T(pin.c.shortTitle, size = size.sp, weight = if (hot) FontWeight.SemiBold else FontWeight.Medium, maxLines = 1, align = TextAlign.Center, modifier = Modifier.widthIn(max = max))
+    val t = LocalTok.current
+    T(pin.c.shortTitle, size = size.sp, weight = if (hot) FontWeight.SemiBold else FontWeight.Medium, color = if (hot) t.ink else t.soft, maxLines = 1, align = TextAlign.Center, modifier = Modifier.widthIn(max = max))
 }
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
@@ -884,17 +883,23 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
     when (layout) {
         "Large", "Grid" -> {
             val cols = if (layout == "Large") 3 else 4
-            val av = if (layout == "Large") 88.dp else 74.dp
-            Column(cardMod.padding(horizontal = if (layout == "Large") 10.dp else 8.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            val av = if (layout == "Large") 84.dp else 68.dp
+            // Open layout: no card behind the faces, more air between them, a hairline under the set.
+            Column(
+                Modifier.fillMaxWidth().padding(bottom = 10.dp).drawBehind {
+                    drawLine(t.hair, Offset(22.dp.toPx(), size.height - 0.5f), Offset(size.width - 22.dp.toPx(), size.height - 0.5f), 1f)
+                }.padding(start = 2.dp, end = 2.dp, top = 12.dp, bottom = 22.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+            ) {
                 pins.chunked(cols).forEachIndexed { r, row ->
                     Row(Modifier.fillMaxWidth()) {
                         row.forEachIndexed { i, pin ->
                             Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
                                 PinItem(pin, r * cols + i, ctl, Modifier.enterOnce("pin:$layout:" + pin.c.id, r * cols + i, pop = true)) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        PinFace(pin, av, if (layout == "Large") 26f else 22f, style)
-                                        Spacer(Modifier.height(8.dp))
-                                        PinName(pin, if (layout == "Large") 14f else 13f, if (layout == "Large") 100.dp else 80.dp)
+                                        PinFace(pin, av, if (layout == "Large") 26f else 22f, style, ringHot = true)
+                                        Spacer(Modifier.height(9.dp))
+                                        PinName(pin, if (layout == "Large") 14f else 12.5f, if (layout == "Large") 100.dp else 80.dp)
                                     }
                                 }
                             }
@@ -1062,13 +1067,15 @@ private fun PeekBody(cur: Conv, repo: com.jpetrydesign.pyng.data.Repo, t: com.jp
     val p = repo.prefs.state
     val who = whoOf(cur)
     LaunchedEffect(cur.id) { if (repo.msgs[cur.id] == null) repo.loadMessages(cur.id) }
-    val recent = repo.msgs[cur.id].orEmpty().filter { it.visible && !it.isSys }.takeLast(4)
+    val all = repo.msgs[cur.id]
     val unread = cur.unread || cur.id in p.markedUnread
-    val newCount = if (unread) repo.msgs[cur.id].orEmpty().takeLastWhile { !it.fromMe }.size.coerceAtLeast(1) else 0
+    val newCount = if (unread) all.orEmpty().filter { it.visible && !it.isSys }.takeLastWhile { !it.fromMe }.size.coerceAtLeast(1) else 0
+    // Only what's new: their latest message. With nothing new, just a way into the chat.
+    val latest = if (newCount > 0) all.orEmpty().lastOrNull { !it.fromMe && it.visible && !it.isSys } else null
     var reply by remember(cur.id) { mutableStateOf("") }
-    // Fully opaque cards: the blurred Home behind should never show through the text.
+    // Fully opaque cards: the blurred screen behind should never show through the text.
     val card = if (t.dark) Color(0xFF1B1E26) else Color.White
-    val cardShape = RoundedCornerShape(26.dp)
+    val cardShape = RoundedCornerShape(28.dp)
     val top = remember(cur.id) { Jelly(motion) }
     val bottom = remember(cur.id) { Jelly(motion) }
     LaunchedEffect(cur.id) {
@@ -1081,67 +1088,95 @@ private fun PeekBody(cur: Conv, repo: com.jpetrydesign.pyng.data.Repo, t: com.jp
         Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePaddingCompat()
             .verticalScrollCompat().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Who and how recent, then the last few messages and a reply box, all on one card.
-Column(Modifier.fillMaxWidth().jelly(top, 28.dp, originY = 1f).shadow(22.dp, cardShape, clip = false, ambientColor = t.shadow.copy(alpha = 0.18f), spotColor = t.shadow.copy(alpha = 0.22f)).clip(cardShape).background(card).padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Column(
+            Modifier.widthIn(max = 460.dp).fillMaxWidth().jelly(top, 28.dp, originY = 1f)
+                .shadow(22.dp, cardShape, clip = false, ambientColor = t.shadow.copy(alpha = 0.18f), spotColor = t.shadow.copy(alpha = 0.22f))
+                .clip(cardShape).background(card).padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
-                    .clickable(onClick = open).padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 8.dp),
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).clickable(onClick = open).padding(2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Avatar(who.photo, who.ini, 46.dp, who.bg, who.ink)
+                WhoAvatar(who, 46.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    T(cur.title, size = 18.sp, weight = FontWeight.Bold, maxLines = 1)
-                    T(
-                        (if (newCount > 0) "$newCount new · " else "") + "last message " + clock(cur.ts).ifEmpty { "earlier" },
-                        size = 12.5.sp, color = t.soft, maxLines = 1,
-                    )
+                    T(cur.title, size = 17.sp, weight = FontWeight.Bold, maxLines = 1)
+                    if (newCount > 0) T(if (newCount == 1) "1 new message" else "$newCount new messages", size = 12.5.sp, weight = FontWeight.SemiBold, color = t.p, maxLines = 1)
+                    else T("No new messages · last one " + listTime(cur.ts).ifEmpty { "earlier" }, size = 12.5.sp, color = t.soft, maxLines = 1)
                 }
                 Ico(Icons.chev, t.soft, 18.dp)
             }
-            Box(Modifier.fillMaxWidth().padding(horizontal = 4.dp).padding(bottom = 6.dp).height(1.dp).background(t.hair))
-            if (recent.isEmpty()) T(if (repo.msgs[cur.id] == null) "Loading…" else "No messages yet", size = 13.5.sp, color = t.soft, modifier = Modifier.padding(6.dp))
-            recent.forEach { m ->
-                val me = m.fromMe
-                val text = m.text.ifBlank { m.media.firstOrNull()?.kindLabel ?: m.summary }
-                Box(Modifier.fillMaxWidth(), contentAlignment = if (me) Alignment.CenterEnd else Alignment.CenterStart) {
+            if (latest != null) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (newCount > 1) T("+${newCount - 1} earlier", size = 12.sp, color = t.soft, modifier = Modifier.padding(start = 4.dp))
+                    val pic = latest.media.firstOrNull { it.isImage || it.isVideo }
+                    if (pic != null) {
+                        LaunchedEffect(pic.id) { repo.ensureMedia(pic, thumb = pic.isVideo) }
+                        val path = pic.localPath.ifEmpty { repo.media[pic.id] ?: repo.media[pic.thumbId] ?: pic.previewPath }
+                        Box(
+                            Modifier.widthIn(max = 220.dp).fillMaxWidth().height(150.dp).clip(RoundedCornerShape(20.dp)).background(t.inBg).clickable(onClick = open),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (path.isNotEmpty()) coil.compose.AsyncImage(java.io.File(path), null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                            else Ico(if (pic.isVideo) Icons.play else Icons.gallery, t.soft, 26.dp)
+                        }
+                    }
+                    if (latest.text.isNotBlank() || pic == null) {
+                        Box(
+                            Modifier.widthIn(max = 320.dp).clip(RoundedCornerShape(21.dp)).background(t.inBg).clickable(onClick = open).padding(horizontal = 15.dp, vertical = 10.dp),
+                        ) { T(latest.text.ifBlank { latest.summary }, size = 15.sp, color = t.inInk, maxLines = 5, lineHeight = 21.sp) }
+                    }
+                    T("Received " + clock(latest.ts), size = 12.sp, color = t.soft, modifier = Modifier.padding(start = 4.dp))
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.weight(1f).heightIn(min = 46.dp).clip(RoundedCornerShape(23.dp)).background(t.field).padding(horizontal = 18.dp, vertical = 12.dp), contentAlignment = Alignment.CenterStart) {
+                        if (reply.isEmpty()) T("Reply to " + cur.shortTitle, size = 15.sp, color = t.soft, maxLines = 1)
+                        androidx.compose.foundation.text.BasicTextField(
+                            reply, { reply = it },
+                            textStyle = androidx.compose.ui.text.TextStyle(fontFamily = com.jpetrydesign.pyng.ui.theme.Geist, fontSize = 15.sp, color = t.ink),
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(t.p), maxLines = 4, modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                     Box(
-                        Modifier.widthIn(max = 280.dp).clip(RoundedCornerShape(20.dp)).background(if (me) t.outFlat else t.inBg)
-                            .clickable(onClick = open).padding(horizontal = 14.dp, vertical = 9.dp),
-                    ) { T(text, size = 14.5.sp, color = if (me) t.outInk else t.ink, maxLines = 4, lineHeight = 20.sp) }
+                        Modifier.size(46.dp).clip(CircleShape).background(if (reply.isBlank()) t.tone else t.fill).clickable(enabled = reply.isNotBlank()) {
+                            repo.send(cur.id, reply); reply = ""; repo.toast("Sent to " + cur.shortTitle); onDismiss()
+                        },
+                        contentAlignment = Alignment.Center,
+                    ) { Ico(Icons.send, if (reply.isBlank()) t.p else t.onFill, 20.dp, 2f) }
                 }
-            }
-            if (recent.isNotEmpty()) T(clock(recent.last().ts), size = 11.sp, color = t.soft, modifier = Modifier.padding(start = 6.dp, top = 1.dp))
-            Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.weight(1f).heightIn(min = 44.dp).clip(RoundedCornerShape(22.dp)).background(t.field).padding(horizontal = 16.dp, vertical = 11.dp), contentAlignment = Alignment.CenterStart) {
-                    if (reply.isEmpty()) T("Reply to " + cur.shortTitle, size = 14.5.sp, color = t.soft, maxLines = 1)
-                    androidx.compose.foundation.text.BasicTextField(
-                        reply, { reply = it },
-                        textStyle = androidx.compose.ui.text.TextStyle(fontFamily = com.jpetrydesign.pyng.ui.theme.Geist, fontSize = 14.5.sp, color = t.ink),
-                        cursorBrush = androidx.compose.ui.graphics.SolidColor(t.p), maxLines = 4, modifier = Modifier.fillMaxWidth(),
-                    )
+            } else if (all == null) {
+                T("Loading…", size = 13.5.sp, color = t.soft, modifier = Modifier.padding(4.dp))
+            } else {
+                Row(
+                    Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(23.dp)).background(t.fill).clickable(onClick = open),
+                    horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Ico(Icons.message, t.onFill, 18.dp, 2f)
+                    Spacer(Modifier.width(8.dp))
+                    T("Open chat", size = 15.sp, weight = FontWeight.SemiBold, color = t.onFill)
                 }
-                Box(
-                    Modifier.size(44.dp).clip(CircleShape).background(if (reply.isBlank()) t.tone else t.fill).clickable(enabled = reply.isNotBlank()) {
-                        repo.send(cur.id, reply); reply = ""; repo.toast("Sent to " + cur.shortTitle); onDismiss()
-                    },
-                    contentAlignment = Alignment.Center,
-                ) { Ico(Icons.send, if (reply.isBlank()) t.p else t.onFill, 20.dp, 2f) }
             }
         }
-        // Actions.
-        Column(Modifier.fillMaxWidth().jelly(bottom, 40.dp, originY = 0f).shadow(22.dp, cardShape, clip = false, ambientColor = t.shadow.copy(alpha = 0.16f), spotColor = t.shadow.copy(alpha = 0.2f)).clip(cardShape).background(card).padding(vertical = 8.dp)) {
+        // Actions: the everyday four, then the rest in one compact row.
+        Column(
+            Modifier.widthIn(max = 460.dp).fillMaxWidth().jelly(bottom, 40.dp, originY = 0f)
+                .shadow(22.dp, cardShape, clip = false, ambientColor = t.shadow.copy(alpha = 0.16f), spotColor = t.shadow.copy(alpha = 0.2f))
+                .clip(cardShape).background(card).padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             val pinned = p.isPinned(cur.id)
             val muted = p.isMuted(cur.id)
             val archived = cur.status == "archived"
-            Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp)) {
+            Row(Modifier.fillMaxWidth()) {
                 @Composable fun big(label: String, icon: String, go: () -> Unit) {
                     Column(
-                        Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).clickable { go(); onDismiss() }.padding(vertical = 8.dp),
+                        Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).clickable { go(); onDismiss() }.padding(vertical = 6.dp),
                         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Box(Modifier.size(44.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(icon, t.p, 20.dp) }
+                        Box(Modifier.size(42.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(icon, t.p, 19.dp) }
                         T(label, size = 12.sp, weight = FontWeight.Medium, maxLines = 1)
                     }
                 }
@@ -1153,20 +1188,24 @@ Column(Modifier.fillMaxWidth().jelly(top, 28.dp, originY = 1f).shadow(22.dp, car
                     repo.toast(if (!archived) "Chat archived" else "Moved back to your inbox", if (!archived) ({ repo.setArchived(cur.id, false) }) else null)
                 }
             }
-            Box(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp).height(1.dp).background(t.hair))
-            @Composable fun row(label: String, icon: String, danger: Boolean = false, go: () -> Unit) {
-                Row(Modifier.fillMaxWidth().clickable(onClick = go).padding(horizontal = 20.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Ico(icon, if (danger) t.danger else t.ink, 20.dp)
-                    Spacer(Modifier.width(16.dp))
-                    T(label, size = 15.sp, weight = FontWeight.Medium, color = if (danger) t.danger else t.ink)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                @Composable fun small(label: String, icon: String, danger: Boolean = false, go: () -> Unit) {
+                    Row(
+                        Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(22.dp))
+                            .background(if (danger) t.danger.copy(alpha = if (t.dark) 0.16f else 0.09f) else t.surface).clickable(onClick = go),
+                        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Ico(icon, if (danger) t.danger else t.ink, 16.dp, 2f)
+                        Spacer(Modifier.width(7.dp))
+                        T(label, size = 13.sp, weight = FontWeight.SemiBold, color = if (danger) t.danger else t.ink, maxLines = 1)
+                    }
                 }
-            }
-            row("Open chat", Icons.message, go = open)
-            if (onEditPins != null && pinned) row("Edit pins", Icons.pencil) { onDismiss(); onEditPins() }
-            if (!cur.group) row("Block", Icons.block) { onDismiss(); repo.setBlocked(cur.id, true); repo.toast("Blocked ${cur.shortTitle}") { repo.setBlocked(cur.id, false) } }
-            row("Delete conversation", Icons.trash, danger = true) {
-                onDismiss()
-                repo.confirm("Delete this conversation?", "All of ${cur.shortTitle}'s messages will be deleted from Google Messages on your phone too.") { repo.deleteConversation(cur.id); repo.toast("Conversation deleted") }
+                if (onEditPins != null && pinned) small("Edit pins", Icons.pencil) { onDismiss(); onEditPins() }
+                if (!cur.group) small("Block", Icons.block) { onDismiss(); repo.setBlocked(cur.id, true); repo.toast("Blocked ${cur.shortTitle}") { repo.setBlocked(cur.id, false) } }
+                small("Delete", Icons.trash, danger = true) {
+                    onDismiss()
+                    repo.confirm("Delete this conversation?", "All of ${cur.shortTitle}'s messages will be deleted from Google Messages on your phone too.") { repo.deleteConversation(cur.id); repo.toast("Conversation deleted") }
+                }
             }
         }
     }

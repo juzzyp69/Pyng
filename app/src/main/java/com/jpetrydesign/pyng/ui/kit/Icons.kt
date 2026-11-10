@@ -27,6 +27,7 @@ object Icons {
     const val bellOff = "M8.7 4.4A6 6 0 0 1 18 9.5V14l1.6 2.4M15 17H4.4L6 14.5v-5a6 6 0 0 1 .5-2.4M10 20a2.2 2.2 0 0 0 4 0M3.5 3.5l17 17"
     const val pinned = "M9 3h6l-1 6 4 4H6l4-4zM12 13v8"
     const val chev = "M9 6l6 6-6 6"
+    const val building = "M3 21h18M5 21V8l7-4 7 4v13M9 21v-5h6v5M9 11h.01M15 11h.01"
     const val palette = "M12 3a9 9 0 1 0 0 18c1 0 1.5-.8 1.5-1.6 0-1.3-1-1.6-1-2.7 0-.9.7-1.7 1.7-1.7H17a4 4 0 0 0 4-4C21 6.4 17 3 12 3zM7.5 11.5h.01M10 7.5h.01M15 7.5h.01"
     const val shield = "M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6zM9 12l2 2 4-4"
     const val read = "M2 12.5l4 4L14 8.5M10 16.5l1 0L20 8.5"

@@ -571,7 +571,13 @@ fun openMedia(ctx: Context, repo: com.jpetrydesign.pyng.data.Repo, nav: Nav, ref
 private fun infoFor(m: Msg, c: Conv?, receipts: Boolean): Triple<String, String, Boolean> = when {
     m.status == "OUTGOING_SCHEDULED" -> Triple("Scheduled for " + m.statusText, Icons.clock, false)
     !m.fromMe -> Triple("Received " + whenText(m.ts), Icons.inbox, false)
-    m.failed -> Triple("Not sent", Icons.warn, false)
+    m.failed -> Triple(when {
+        m.status == "OUTGOING_FAILED_TOO_LARGE" -> "Not sent · too large"
+        m.status == "OUTGOING_FAILED_RECIPIENT_LOST_RCS" -> "Not sent · they're no longer on RCS"
+        m.status == "OUTGOING_CANCELED" -> "Canceled"
+        m.error.isNotEmpty() -> "Not sent · " + m.error.substringBefore(':').take(60)
+        else -> "Not sent"
+    }, Icons.warn, false)
     m.pending -> Triple("Sending…", Icons.clock, false)
     m.readByThem && receipts -> Triple("Read " + whenText(m.ts), Icons.eye, true)
     m.delivered -> Triple("Delivered " + whenText(m.ts), Icons.read, false)
@@ -600,7 +606,7 @@ private fun ThreadHeader(t: Tok, c: Conv?, typing: Boolean, wide: Boolean, onBac
         Row(Modifier.weight(1f).clip(RoundedCornerShape(24.dp)).clickable(onClick = onContact).padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             if (c != null) {
                 val w = whoOf(c)
-                Box(Modifier.edge(CircleShape, elevation = 6.dp)) { Avatar(w.photo, w.ini, 46.dp, w.bg, w.ink, 15.sp) }
+                Box(Modifier.edge(CircleShape, elevation = 6.dp)) { WhoAvatar(w, 46.dp, 15.sp) }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f, fill = false)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -706,7 +712,7 @@ private fun UnknownBanner(t: Tok, c: Conv?, onDismiss: () -> Unit, onAdd: () -> 
 private fun EmptyThread(c: Conv, t: Tok, onHi: () -> Unit) {
     val w = whoOf(c)
     Column(Modifier.fillMaxWidth().padding(top = 40.dp, bottom = 30.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Avatar(w.photo, w.ini, 84.dp, w.bg, w.ink, 28.sp)
+        WhoAvatar(w, 84.dp, 28.sp)
         Spacer(Modifier.height(10.dp))
         T(c.title, size = 18.sp, weight = FontWeight.SemiBold)
         T(if (c.rcs) "Chat features are on. Typing, read receipts and HD photos work here." else "Texts send as SMS/MMS.", size = 13.5.sp, color = t.soft, align = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 4.dp, start = 30.dp, end = 30.dp))

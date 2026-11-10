@@ -275,7 +275,7 @@ fun ForwardSheet(m: Msg?, onPick: (String?, Msg) -> Unit) {
             items(convs, key = { it.id }) { c ->
                 val w = whoOf(c)
                 Row(Modifier.fillMaxWidth().clickable { onPick(c.id, cur) }.padding(horizontal = 22.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(w.photo, w.ini, 42.dp, w.bg, w.ink)
+                    WhoAvatar(w, 42.dp)
                     Spacer(Modifier.width(12.dp))
                     T(c.title, size = 15.5.sp, weight = FontWeight.Medium, maxLines = 1, modifier = Modifier.weight(1f))
                     Ico(Icons.send, t.p, 18.dp, 2f)
@@ -293,7 +293,7 @@ fun CallSheet(open: Boolean, conv: Conv?, onDismiss: () -> Unit) {
         val c = conv ?: return@Sheet
         val w = whoOf(c)
         Column(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Avatar(w.photo, w.ini, 64.dp, w.bg, w.ink, 22.sp)
+            WhoAvatar(w, 64.dp, 22.sp)
             Spacer(Modifier.height(8.dp))
             T(c.title, size = 18.sp, weight = FontWeight.SemiBold)
             T(c.number, size = 13.5.sp, color = t.soft)

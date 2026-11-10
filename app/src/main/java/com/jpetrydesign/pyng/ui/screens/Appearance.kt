@@ -109,28 +109,45 @@ fun AppearanceScreen(nav: Nav) {
     val pal = Palettes.byKey(p.themeKey, p.c1, p.c2)
     Box(Modifier.fillMaxSize()) {
         Page("Appearance", { nav.back() }) {
+            // App theme: a live sample of your chats in the current color, a quick row of favorites, and Change for the full set.
             val shape = RoundedCornerShape(28.dp)
-            Column(Modifier.enter(0).fillMaxWidth().clip(shape).background(t.card).clickable { nav.strip = true; nav.home() }.padding(18.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(44.dp).clip(CircleShape).background(swatchOf(pal)))
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f)) {
-                        T("Select color", size = 16.5.sp, weight = FontWeight.SemiBold)
-                        T("${pal.name} · live preview on your messages", size = 12.5.sp, color = t.soft)
+            val quick = listOf("Sage", "Ocean", "Forest", "Burgundy", "Cobalt", "Terracotta", "Plum", "Rose", "Mocha")
+                .let { if (pal.name in it) it else listOf(pal.name) + it.dropLast(1) }
+                .mapNotNull { n -> if (n == pal.name) pal else Palettes.all.firstOrNull { it.name == n } }
+            SectionLabel("App theme")
+            Column(Modifier.enter(0).fillMaxWidth().clip(shape).background(if (t.dark) t.card else Color.White).padding(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+                        .background(Brush.linearGradient(listOf(t.tone, if (t.dark) t.surface else t.bg)))
+                        .padding(horizontal = 14.dp, vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Box(Modifier.clip(RoundedCornerShape(19.dp)).background(t.inBg).padding(horizontal = 14.dp, vertical = 8.dp)) { T("Dinner at 7?", size = 14.sp, color = t.inInk) }
+                    Box(Modifier.align(Alignment.End).clip(RoundedCornerShape(19.dp)).background(Brush.verticalGradient(listOf(t.outTop, androidx.compose.ui.graphics.lerp(t.outTop, t.outBottom, 0.5f)))).padding(horizontal = 14.dp, vertical = 8.dp)) {
+                        T("Sounds perfect", size = 14.sp, color = t.outInk)
                     }
-                    Ico(Icons.chev, t.faint, 16.dp, 2f)
+                    Box(Modifier.align(Alignment.End).clip(RoundedCornerShape(19.dp)).background(Brush.verticalGradient(listOf(androidx.compose.ui.graphics.lerp(t.outTop, t.outBottom, 0.5f), t.outBottom))).padding(horizontal = 14.dp, vertical = 8.dp)) {
+                        T("I'll bring dessert", size = 14.sp, color = t.outInk)
+                    }
                 }
-                Spacer(Modifier.height(14.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    listOf("M", "AV", "DC", "JL").forEachIndexed { i, s ->
-                        if (i > 0) Spacer(Modifier.width(8.dp))
-                        Avatar(null, s, 38.dp, if (i % 2 == 0) t.tone else t.neutral, if (i % 2 == 0) t.p else t.neutralInk, 12.sp)
+                Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        T(pal.name, size = 20.sp, weight = FontWeight.Bold)
+                        T("Bubbles, buttons and highlights", size = 13.sp, color = t.soft)
                     }
-                    Spacer(Modifier.weight(1f))
-                    Box(Modifier.clip(RoundedCornerShape(18.dp)).background(t.outBg).padding(horizontal = 14.dp, vertical = 9.dp)) { T("Looks good!", size = 14.sp, weight = FontWeight.Medium, color = t.outInk) }
+                    PillButton("Change", { nav.strip = true; nav.home() }, height = 44.dp)
+                }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp).padding(bottom = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    quick.forEach { x ->
+                        val on = x.name == pal.name
+                        Box(
+                            Modifier.size(32.dp).then(if (on) Modifier.border(2.dp, t.p, CircleShape) else Modifier).padding(if (on) 4.dp else 3.dp)
+                                .clip(CircleShape).background(swatchOf(x)).clickable { repo.prefs.edit { it.copy(themeKey = x.name) } },
+                        )
+                    }
                 }
             }
-            SectionLabel("Appearance")
+            SectionLabel("Mode")
             Seg(listOf("Light", "Dark", "Match system"), p.mode, { m -> repo.prefs.edit { it.copy(mode = m) } })
             Spacer(Modifier.height(14.dp))
             Card {
@@ -138,6 +155,7 @@ fun AppearanceScreen(nav: Nav) {
                     Triple("pinLayout", "Pinned layout", Icons.pinned) to p.pinLayout,
                     Triple("pinStyle", "Pinned notifications", Icons.bell) to p.pinStyle,
                     Triple("bubble", "Bubble shape", Icons.message) to p.bubble,
+                    Triple("gradient", "Bubble gradient", Icons.density) to p.opt("gradient"),
                     Triple("textSize", "Text size", Icons.textSize) to (TS[p.textSize] ?: p.textSize),
                     Triple("showPhotos", "Contact photos", Icons.contact) to p.showPhotos,
                     Triple("density", "List density", Icons.density) to p.density,
@@ -189,6 +207,7 @@ private fun StylePicker(key: String?, onDone: () -> Unit) {
             "pinLayout" -> "Pinned layout" to "Hold a pinned chat, then drag to rearrange"
             "pinStyle" -> "Pinned notifications" to "How pinned chats show something new"
             "bubble" -> "Bubble shape" to "Tap a style to preview it live"
+            "gradient" -> "Bubble gradient" to "How color flows through the bubbles you send"
             "textSize" -> "Text size" to "Messages and your conversation list"
             "showPhotos" -> "Contact photos" to "Tap a style to preview it live"
             "density" -> "List density" to "Tap a style to preview it live"
@@ -246,6 +265,26 @@ private fun StylePicker(key: String?, onDone: () -> Unit) {
                     Tile(n, s, p.showPhotos == n, { repo.prefs.edit { it.copy(showPhotos = n) } }) {
                         Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                             repeat(3) { Row(verticalAlignment = Alignment.CenterVertically) { if (n == "Show") { dot(18.dp)(); Spacer(Modifier.width(8.dp)) }; Box(Modifier.size(if (n == "Show") 84.dp else 110.dp, 10.dp).clip(RoundedCornerShape(4.dp)).background(LN)) } }
+                        }
+                    }
+                }
+                "gradient" -> tiles = listOf(
+                    "Across the screen" to "Lighter at the top, deeper below",
+                    "Each bubble" to "Every bubble has its own",
+                    "Off" to "One solid color",
+                ).map { (n, s) ->
+                    Tile(n, s, p.opt("gradient") == n, { repo.prefs.setOpt("gradient", n) }) {
+                        Column(verticalArrangement = Arrangement.spacedBy(5.dp), horizontalAlignment = Alignment.End) {
+                            listOf(0, 1, 2).forEach { i ->
+                                val a = androidx.compose.ui.graphics.lerp(t.outTop, t.outBottom, i / 3f)
+                                val b = androidx.compose.ui.graphics.lerp(t.outTop, t.outBottom, (i + 1) / 3f)
+                                val fill = when (n) {
+                                    "Across the screen" -> Brush.verticalGradient(listOf(a, b))
+                                    "Each bubble" -> Brush.verticalGradient(listOf(t.outTop, t.outBottom))
+                                    else -> Brush.linearGradient(listOf(t.outFlat, t.outFlat))
+                                }
+                                Box(Modifier.size(width = (54 + i * 10).dp, height = 18.dp).clip(RoundedCornerShape(9.dp)).background(fill))
+                            }
                         }
                     }
                 }

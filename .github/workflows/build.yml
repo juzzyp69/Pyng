@@ -73,7 +73,7 @@ jobs:
         run: |
           set -o pipefail
           gradle --no-daemon --stacktrace assembleDebug 2>&1 | tee ci-logs/app.log
-          cp app/build/outputs/apk/debug/app-debug.apk "pyng-0.4.4.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "pyng-0.5.apk"
 
       - name: Publish test build
         uses: softprops/action-gh-release@v2
@@ -84,7 +84,7 @@ jobs:
           body: |
             Test build from ${{ github.sha }}.
             Download the APK below on your phone and open it to install.
-          files: pyng-0.4.4.apk
+          files: pyng-0.5.apk
 
       - name: Enable KVM
         if: steps.app.outcome == 'success'
@@ -107,7 +107,7 @@ jobs:
           profile: pixel_7
           disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: bash ci/shots.sh pyng-0.4.4.apk
+          script: bash ci/shots.sh pyng-0.5.apk
 
       - name: Save build logs
         if: always()

@@ -240,7 +240,7 @@ fun Composer(
                                 .clickable { onDraft(draft.replace(Regex("@(\\w*)$"), "@" + person.short + " ")) }.padding(start = 4.dp, end = 14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            com.jpetrydesign.pyng.ui.kit.Avatar(w.photo, w.ini, 30.dp, t.tone, t.p, 11.sp)
+                            WhoAvatar(w, 30.dp, 11.sp)
                             Spacer(Modifier.width(8.dp))
                             T("@" + person.short, size = 13.5.sp, weight = FontWeight.SemiBold)
                         }

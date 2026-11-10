@@ -12,6 +12,9 @@ done
 adb shell settings put global window_animation_scale 1
 adb shell settings put global transition_animation_scale 1
 adb shell settings put global animator_duration_scale 1
+# Keep the emulator's own launcher and its "isn't responding" dialogs out of the way.
+adb shell settings put global hide_error_dialogs 1
+adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher > /dev/null 2>&1 || true
 
 shot() {
   local name="$1"; shift
@@ -85,19 +88,24 @@ adb shell am start -W -n $PKG/.IconClassic --ez demo true --es route thread:c1 -
 adb shell screenrecord --time-limit 9 --bit-rate 8000000 /sdcard/send.mp4 || true
 adb pull /sdcard/send.mp4 ci-logs/send.mp4 > /dev/null 2>&1 || true
 echo "recorded send"
-# Record a real long-press on Jordan Lee's row, with the app already open, to check the springy entrance.
+# Record a real long-press on a chat row, with the app already open, to check the springy entrance.
 adb shell am force-stop $PKG
 adb shell am start -W -n $PKG/.IconClassic --ez demo true > /dev/null
 sleep 12
+adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS > /dev/null 2>&1
+# Memory with Home open and settled.
+adb shell dumpsys meminfo $PKG > ci-logs/meminfo-home.txt 2>&1
 (adb shell screenrecord --time-limit 7 --bit-rate 8000000 /sdcard/peek.mp4 || true) &
 sleep 1
-adb shell input swipe 300 1180 300 1180 900
+adb shell input swipe 300 1500 300 1500 900
 wait
 adb pull /sdcard/peek.mp4 ci-logs/peek.mp4 > /dev/null 2>&1 || true
 adb exec-out screencap -p > "$OUT/05b-home-peek-held.png" 2>/dev/null || true
 echo "recorded peek"
 shot 66-thread-media --es route thread:c9
 WAIT=10 shot 67-thread-viewer --es route thread:c9 --es open viewer
+# Memory after a chat full of photos and the viewer.
+adb shell dumpsys meminfo $PKG > ci-logs/meminfo-media.txt 2>&1
 WAIT=10 shot 67b-thread-viewer-video --es route thread:c9 --es open viewer-video
 shot 68-section-chats-top --es route section:chats
 

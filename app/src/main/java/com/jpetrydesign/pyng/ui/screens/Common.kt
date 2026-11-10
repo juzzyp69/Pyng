@@ -1,6 +1,24 @@
 package com.jpetrydesign.pyng.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.jpetrydesign.pyng.ui.kit.Avatar
+import com.jpetrydesign.pyng.ui.kit.Ico
+import com.jpetrydesign.pyng.ui.kit.Icons
 import androidx.compose.ui.graphics.Color
 import com.jpetrydesign.pyng.data.Conv
 import com.jpetrydesign.pyng.data.Msg
@@ -10,13 +28,23 @@ import com.jpetrydesign.pyng.ui.kit.LocalRepo
 import com.jpetrydesign.pyng.ui.kit.initialsOf
 import com.jpetrydesign.pyng.ui.theme.LocalTok
 import com.jpetrydesign.pyng.ui.theme.Tok
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
 /** How a conversation or person is drawn as an avatar. */
-data class Who(val photo: String?, val ini: String, val bg: Color, val ink: Color)
+data class Who(
+    val photo: String?,
+    val ini: String,
+    val bg: Color,
+    val ink: Color,
+    /** A short code or business number: drawn as a building, not "#". */
+    val business: Boolean = false,
+    /** Up to three members of a group without a photo, drawn as overlapping circles. */
+    val stack: List<Who> = emptyList(),
+)
 
 @Composable
 fun whoOf(c: Conv): Who {
@@ -30,17 +58,86 @@ fun whoOf(c: Conv, repo: Repo, t: Tok): Who {
     val photo = if (!show) null
         else if (c.group) repo.prefs.state.opt("gphoto:" + c.id).takeIf { it.isNotBlank() && java.io.File(it).exists() } ?: c.groupPhoto.takeIf { it.startsWith("http") }
         else repo.prefs.state.opt("cphoto:" + c.avatarId).takeIf { it.isNotBlank() && java.io.File(it).exists() } ?: repo.avatars[c.avatarId]?.takeIf { it.isNotEmpty() }
-    val tinted = c.group || c.business
-    return Who(photo, initialsOf(c.title), if (tinted) t.tone else t.neutral, if (tinted) t.p else t.neutralInk)
+    if (c.group) {
+        val stack = if (photo != null) emptyList() else c.others.take(3).map { personWho(it, repo, t) }
+        return Who(photo, initialsOf(c.title), t.tone, t.p, stack = stack)
+    }
+    if (c.business) return Who(photo, initialsOf(c.title), t.neutral, t.neutralInk, business = true)
+    val (bg, ink) = t.toneFor(toneKey(c.number, c.avatarId.ifEmpty { c.id }))
+    return Who(photo, initialsOf(c.title), bg, ink)
+}
+
+fun personWho(p: Person, repo: Repo, t: Tok): Who {
+    val show = repo.prefs.state.showPhotos == "Show"
+    val photo = if (show) repo.prefs.state.opt("cphoto:" + p.id).takeIf { it.isNotBlank() && java.io.File(it).exists() } ?: repo.avatars[p.id]?.takeIf { it.isNotEmpty() } else null
+    val (bg, ink) = t.toneFor(toneKey(p.number, p.id))
+    return Who(photo, initialsOf(p.display), bg, ink)
 }
 
 @Composable
-fun whoOf(p: Person): Who {
-    val repo = LocalRepo.current
-    val t = LocalTok.current
-    val show = repo.prefs.state.showPhotos == "Show"
-    val photo = if (show) repo.prefs.state.opt("cphoto:" + p.id).takeIf { it.isNotBlank() && java.io.File(it).exists() } ?: repo.avatars[p.id]?.takeIf { it.isNotEmpty() } else null
-    return Who(photo, initialsOf(p.display), t.tone, t.p)
+fun whoOf(p: Person): Who = personWho(p, LocalRepo.current, LocalTok.current)
+
+/** Goes to your one-on-one chat with someone from a group, starting it if there isn't one yet. */
+fun openDirect(repo: Repo, nav: com.jpetrydesign.pyng.ui.Nav?, scope: kotlinx.coroutines.CoroutineScope, person: Person) {
+    val number = person.number.ifBlank { person.formatted }
+    if (number.isBlank() || nav == null) return
+    val digits = number.filter(Char::isDigit).takeLast(10)
+    val existing = repo.convs.values.firstOrNull { c -> !c.group && c.others.any { it.number.filter(Char::isDigit).takeLast(10) == digits } }
+    if (existing != null) { nav.openChat(existing.id); return }
+    scope.launch {
+        repo.startChat(listOf(number)).onSuccess { c -> nav.openChat(c.id) }.onFailure { repo.toast(it.message ?: "Couldn't start the chat") }
+    }
+}
+
+/** Tones follow the phone number, so a person has the same color in chats, groups and contacts. */
+fun toneKey(number: String, fallback: String): String = number.filter(Char::isDigit).takeLast(10).ifEmpty { fallback }
+
+/** A tone for someone known only by name or number (contact lists, search). */
+@Composable
+fun toneOf(number: String, fallback: String): Pair<Color, Color> = LocalTok.current.toneFor(toneKey(number, fallback))
+
+/**
+ * The one way to draw a [Who]: their photo, their initials on a solid tone, a building for
+ * businesses, or up to three overlapping member circles for a group without a photo.
+ */
+@Composable
+fun WhoAvatar(w: Who, size: Dp, fontSize: TextUnit = (size.value / 3.1f).sp, halo: Color? = null, ring: Color = LocalTok.current.bg) {
+    when {
+        w.photo == null && w.stack.size >= 2 -> GroupStack(w.stack, size, ring, halo)
+        w.photo == null && w.business -> Box(
+            Modifier.size(size).clip(CircleShape).background(w.bg),
+            contentAlignment = Alignment.Center,
+        ) { Ico(Icons.building, w.ink, size * 0.44f, 1.9f) }
+        else -> Avatar(w.photo, w.ini, size, w.bg, w.ink, fontSize, halo)
+    }
+}
+
+@Composable
+private fun GroupStack(members: List<Who>, size: Dp, ring: Color, halo: Color?) {
+    val three = members.size >= 3
+    val d = if (three) size * 0.58f else size * 0.66f
+    val font = (d.value / 2.7f).sp
+    val edge = (size.value / 26f).coerceIn(1.5f, 3f).dp
+    @Composable
+    fun One(w: Who, x: Dp, y: Dp) {
+        Box(Modifier.offset(x, y).size(d).clip(CircleShape).background(ring).padding(edge)) {
+            Avatar(w.photo, w.ini, d - edge * 2, w.bg, w.ink, font)
+        }
+    }
+    var m = Modifier.size(size)
+    if (halo != null) m = m.drawBehind {
+        drawCircle(halo, radius = this.size.minDimension / 2 + 3.5.dp.toPx(), style = Stroke(2.dp.toPx()))
+    }
+    Box(m) {
+        if (three) {
+            One(members[0], 0.dp, size * 0.02f)
+            One(members[1], size - d, size * 0.02f)
+            One(members[2], (size - d) / 2, size - d + size * 0.04f)
+        } else {
+            One(members[0], 0.dp, 0.dp)
+            One(members[1], size - d, size - d)
+        }
+    }
 }
 
 private val timeFmt get() = SimpleDateFormat("h:mm a", Locale.getDefault())

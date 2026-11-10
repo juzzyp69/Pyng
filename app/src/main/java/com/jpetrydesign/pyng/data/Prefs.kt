@@ -76,7 +76,7 @@ val DEFAULT_TOGGLES = mapOf(
 
 val DEFAULT_OPTS = mapOf(
     "autoDl" to "Always", "quality" to "High", "swipe" to "Archive", "swipeR" to "Read/Unread",
-    "stamps" to "Grouped", "gifRating" to "pg",
+    "stamps" to "Grouped", "gifRating" to "pg", "gradient" to "Across the screen",
 )
 
 data class AppPrefs(
