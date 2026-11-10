@@ -15,7 +15,7 @@ android {
         minSdk = 29
         targetSdk = 35
         versionCode = buildNumber
-        versionName = "0.5.2"
+        versionName = "0.6.0"
         buildConfigField("String", "GIPHY_KEY", "\"" + (System.getenv("GIPHY_KEY") ?: "") + "\"")
     }
 
@@ -33,7 +33,10 @@ android {
             signingConfig = signingConfigs.getByName("test")
         }
         release {
-            isMinifyEnabled = false
+            // Strip unused code and resources: the app's own code shrinks from about 42 MB to a few.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("test")
         }
     }
@@ -51,6 +54,15 @@ android {
     }
     packaging {
         jniLibs.useLegacyPackaging = false
+    }
+    // One APK per phone type: arm64 for real phones, x86_64 for the test emulator. Nobody downloads the other.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "x86_64")
+            isUniversalApk = false
+        }
     }
 }
 
