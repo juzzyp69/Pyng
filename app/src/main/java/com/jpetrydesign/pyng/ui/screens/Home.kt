@@ -10,6 +10,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -340,16 +342,71 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                 }
             },
     ) {
+        // With pins at the top, the chats sit on a sheet that slides up over them and snaps open or shut.
+        val sheetMode = pins.isNotEmpty() && layout != "List" && layout != "Dock"
+        val sheetBg = if (t.dark) androidx.compose.ui.graphics.lerp(t.bg, Color.Black, 0.3f) else Color.White
+        val sheetShape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)
+        var pinsH by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+        var revealTick by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+        LaunchedEffect(sheetMode) {
+            if (!sheetMode) return@LaunchedEffect
+            var last = 0
+            var dir = 0
+            var armed = false
+            snapshotFlow { Triple(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, listState.isScrollInProgress) }.collect { (idx, off, moving) ->
+                val h = pinsH.takeIf { it > 0 } ?: return@collect
+                val y = if (idx == 0) off else h
+                if (y != last) { dir = if (y > last) 1 else -1; last = y }
+                val pr = y.toFloat() / h
+                // Once the pins were covered, uncovering them plays the jelly rise.
+                if (pr > 0.85f) armed = true
+                if (armed && pr < 0.7f) { armed = false; revealTick++ }
+                if (!moving && idx == 0 && off in 1 until h) {
+                    val collapse = when { pr > 0.85f -> true; pr < 0.15f -> false; else -> dir > 0 }
+                    if (collapse && !listState.canScrollForward) return@collect
+                    launch { if (collapse) listState.animateScrollToItem(1) else listState.animateScrollToItem(0) }
+                }
+            }
+        }
+        val onSheet = if (sheetMode) Modifier.fillMaxWidth().background(sheetBg).padding(horizontal = 18.dp) else Modifier
         Box(Modifier.fillMaxSize()) {
-        Glow()
+        if (sheetMode) {
+            // A soft wash of the theme color behind the pins, fading into the sheet.
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+                0f to androidx.compose.ui.graphics.lerp(t.bg, t.p, if (t.dark) 0.12f else 0.075f),
+                0.32f to androidx.compose.ui.graphics.lerp(t.bg, t.p, if (t.dark) 0.06f else 0.035f),
+                0.6f to sheetBg,
+            )))
+        } else Glow()
         androidx.compose.runtime.CompositionLocalProvider(LocalHaze provides haze) {
             LazyColumn(
                 Modifier.fillMaxSize().hazeSource(haze),
                 state = listState,
-                contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = with(density) { if (barH > 0) barH.toDp() else WindowInsets.statusBars.getTop(this).toDp() + 66.dp } + 14.dp, bottom = 150.dp),
+                contentPadding = PaddingValues(start = if (sheetMode) 0.dp else 18.dp, end = if (sheetMode) 0.dp else 18.dp, top = with(density) { if (barH > 0) barH.toDp() else WindowInsets.statusBars.getTop(this).toDp() + 66.dp } + 14.dp, bottom = 150.dp),
             ) {
-                if (pins.isNotEmpty() && layout != "List" && layout != "Dock") {
-                    item("pins") { PinnedArea(layout, pins, pinCtl, p.pinStyle) }
+                if (sheetMode) {
+                    item("pins") {
+                        // Held in place while the sheet scrolls over it, dimming slightly as it's covered.
+                        Box(
+                            Modifier.fillMaxWidth().onSizeChanged { pinsH = it.height }.graphicsLayer {
+                                val off = if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset.toFloat() else 0f
+                                val pr = if (pinsH > 0) (off / pinsH).coerceIn(0f, 1f) else 0f
+                                translationY = off
+                                alpha = 1f - 0.35f * pr
+                                scaleX = 1f - 0.04f * pr
+                                scaleY = 1f - 0.04f * pr
+                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
+                            }.padding(horizontal = 18.dp),
+                        ) { PinnedArea(layout, pins, pinCtl, p.pinStyle, revealTick) }
+                    }
+                    item("sheetTop") {
+                        Box(
+                            Modifier.fillMaxWidth().height(22.dp)
+                                .shadow(18.dp, sheetShape, clip = false, ambientColor = t.shadow.copy(alpha = 0.10f), spotColor = t.shadow.copy(alpha = 0.12f))
+                                .background(sheetBg, sheetShape),
+                            contentAlignment = Alignment.TopCenter,
+                        ) { Box(Modifier.padding(top = 8.dp).size(36.dp, 4.dp).clip(RoundedCornerShape(2.dp)).background(t.hair.copy(alpha = 0.9f))) }
+                    }
                 } else if (pins.isEmpty() && rows.isNotEmpty()) {
                     item("nopins") {
                         DisposableEffect(Unit) { onDispose { dh.zone = null } }
@@ -381,25 +438,25 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                 }
                 items(rows, key = { "r:" + it.id }) { c ->
                     val i = rows.indexOf(c)
-                    ConvRow(
+                    Box(onSheet) { ConvRow(
                         c = c, index = i, pinMark = layout == "List" && c.id in pinnedIds, count = countOf(c), unread = unreadOf(c),
                         typing = typingOf(c), selected = wide && (nav.top as? Route.Thread)?.id == c.id,
                         onOpen = { nav.openChat(c.id) }, onMenu = { menuFor = c },
                         lifted = ghostId == c.id,
                         onLift = if (layout == "List") null else ({ at, center, size -> liftAt(c.id, at, center, size, true) }), home = dh,
                         onSwipe = { side -> swipeAct(repo, c, if (side > 0) p.opt("swipeR") else p.opt("swipe")) },
-                    )
+                    ) }
                 }
-                if (archCount > 0) item("arch") { FolderRow(Icons.archive, "Archived · $archCount") { nav.go(Route.Lists("archived")) } }
-                if (spamCount > 0) item("spam") { FolderRow(Icons.shield, "Spam & blocked · $spamCount") { nav.go(Route.Lists("spam")) } }
-                item("hint") {
+                if (archCount > 0) item("arch") { Box(onSheet) { FolderRow(Icons.archive, "Archived · $archCount") { nav.go(Route.Lists("archived")) } } }
+                if (spamCount > 0) item("spam") { Box(onSheet) { FolderRow(Icons.shield, "Spam & blocked · $spamCount") { nav.go(Route.Lists("spam")) } } }
+                item("hint") { Box(if (sheetMode) onSheet.heightIn(min = 400.dp) else Modifier.fillMaxWidth()) {
                     val v = mapOf("Read/Unread" to "mark read", "Archive" to "archive", "Delete" to "delete", "Pin" to "pin", "Mute" to "mute")
                     val parts = listOfNotNull(v[p.opt("swipeR")]?.let { "swipe right to $it" }, v[p.opt("swipe")]?.let { "swipe left to $it" })
                     if (parts.isNotEmpty() && rows.isNotEmpty()) T(
                         parts.joinToString(", ").replaceFirstChar { it.uppercase() }, size = 11.5.sp, color = t.faint, align = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                     )
-                }
+                } }
             }
 
             // The title bar stays pinned at the top; the chats slide under its frost.
@@ -455,9 +512,11 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
 
             val fabAlpha by androidx.compose.animation.core.animateFloatAsState(if ((dragId != null && dragMoved) || editPins) 0f else 1f, label = "fab")
             // Rows fade out before they reach the buttons, so no preview text sits under them.
+            // Only a faint haze at the very bottom; the buttons' own shadows lift them off the list.
+            val fadeTo = if (sheetMode) sheetBg else t.bg
             Box(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(150.dp).graphicsLayer { alpha = fabAlpha }
-                    .background(Brush.verticalGradient(0f to t.bg.copy(alpha = 0f), 0.55f to t.bg.copy(alpha = 0.86f), 1f to t.bg)),
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(52.dp).graphicsLayer { alpha = fabAlpha }
+                    .background(Brush.verticalGradient(0f to fadeTo.copy(alpha = 0f), 1f to fadeTo.copy(alpha = 0.5f))),
             )
             Row(
                 Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 20.dp, bottom = 28.dp).graphicsLayer { alpha = fabAlpha },
@@ -465,11 +524,13 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
             ) {
                 // Frosted glass: light blur, mostly see-through, with a bright rim instead of a heavy shadow.
                 Box(
-                    Modifier.size(60.dp).glassRim(CircleShape).frost(CircleShape, if (t.solid) t.fab else t.fab.copy(alpha = if (t.dark) 0.14f else 0.2f), 9.dp).press(0.9f) { nav.go(Route.Search) },
+                    Modifier.size(60.dp).shadow(14.dp, CircleShape, clip = false, ambientColor = t.shadow.copy(alpha = 0.22f), spotColor = t.shadow.copy(alpha = 0.28f))
+                        .glassRim(CircleShape).frost(CircleShape, if (t.solid) t.fab else t.fab.copy(alpha = if (t.dark) 0.14f else 0.2f), 9.dp).press(0.9f) { nav.go(Route.Search) },
                     contentAlignment = Alignment.Center,
                 ) { SolidSearch(t.ink, 24.dp) }
                 Box(
-                    Modifier.size(60.dp).glassRim(CircleShape).frost(CircleShape, if (t.solid) t.plusFlat else t.plusFlat.copy(alpha = if (t.dark) 0.3f else 0.34f), 9.dp).press(0.9f) { nav.go(Route.NewChat()) },
+                    Modifier.size(60.dp).shadow(16.dp, CircleShape, clip = false, ambientColor = t.plusFlat.copy(alpha = 0.35f), spotColor = t.plusFlat.copy(alpha = 0.45f))
+                        .glassRim(CircleShape).frost(CircleShape, if (t.solid) t.plusFlat else t.plusFlat.copy(alpha = if (t.dark) 0.3f else 0.34f), 9.dp).press(0.9f) { nav.go(Route.NewChat()) },
                     contentAlignment = Alignment.Center,
                 ) { SolidCompose(if (t.solid) t.plusInk else t.ink, if (t.solid) t.plusFlat else t.plusFlat, 27.dp) }
             }
@@ -864,7 +925,7 @@ private fun PinName(pin: Pin, size: Float, max: Dp) {
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
-private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: String) {
+private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: String, reveal: Int = 0) {
     val t = LocalTok.current
     val cardShape = RoundedCornerShape(32.dp)
     val cardMod = Modifier.fillMaxWidth().padding(bottom = 14.dp).clip(cardShape).background(t.card).cardEdge(cardShape)
@@ -883,23 +944,24 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
     when (layout) {
         "Large", "Grid" -> {
             val cols = if (layout == "Large") 3 else 4
-            val av = if (layout == "Large") 84.dp else 68.dp
+            val av = if (layout == "Large") 84.dp else 76.dp
             // Open layout: no card behind the faces, more air between them, a hairline under the set.
             Column(
-                Modifier.fillMaxWidth().padding(bottom = 10.dp).drawBehind {
-                    drawLine(t.hair, Offset(22.dp.toPx(), size.height - 0.5f), Offset(size.width - 22.dp.toPx(), size.height - 0.5f), 1f)
-                }.padding(start = 2.dp, end = 2.dp, top = 12.dp, bottom = 22.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
+                Modifier.fillMaxWidth().padding(start = 2.dp, end = 2.dp, top = 6.dp, bottom = 22.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
+                val rowsN = (pins.size + cols - 1) / cols
                 pins.chunked(cols).forEachIndexed { r, row ->
                     Row(Modifier.fillMaxWidth()) {
                         row.forEachIndexed { i, pin ->
                             Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
                                 PinItem(pin, r * cols + i, ctl, Modifier.enterOnce("pin:$layout:" + pin.c.id, r * cols + i, pop = true)) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        PinFace(pin, av, if (layout == "Large") 26f else 22f, style, ringHot = true)
-                                        Spacer(Modifier.height(9.dp))
-                                        PinName(pin, if (layout == "Large") 14f else 12.5f, if (layout == "Large") 100.dp else 80.dp)
+                                        Box(Modifier.jellyRise(reveal, r * cols + i, cols, rowsN)) { PinFace(pin, av, if (layout == "Large") 26f else 22f, style, ringHot = true) }
+                                        Spacer(Modifier.height(8.dp))
+                                        Box(Modifier.jellyRise(reveal, r * cols + i, cols, rowsN, name = true)) {
+                                            PinName(pin, if (layout == "Large") 14f else 12.5f, if (layout == "Large") 100.dp else 80.dp)
+                                        }
                                     }
                                 }
                             }
@@ -1252,4 +1314,61 @@ object SeenRows {
     private val ids = HashSet<String>()
     fun contains(id: String) = id in ids
     fun add(id: String) { ids += id }
+}
+
+
+/**
+ * Jelly rise: when the pins come back into view, the faces float up from the list's edge and land
+ * with a squish (the same jelly as sending), bottom row first, each on its own timing and bounce.
+ * Names lift in just after their face.
+ */
+@Composable
+private fun Modifier.jellyRise(tick: Int, index: Int, cols: Int, rows: Int, name: Boolean = false): Modifier {
+    val motion = LocalMotion.current
+    val prog = remember { Animatable(1f) }
+    val row = index / cols
+    val col = index % cols
+    val amp = intArrayOf(1, 2, 0, 1, 2, 0, 1, 2)[index % 8]
+    LaunchedEffect(tick) {
+        if (tick == 0 || !motion) { prog.snapTo(1f); return@LaunchedEffect }
+        val order = (rows - 1 - row) * cols + col
+        val jitter = intArrayOf(0, 35, -15, 20, 10, -20, 30, 0)[index % 8]
+        var d = (order * 55 + jitter + if (row < rows - 1) 50 else 0).coerceAtLeast(0).toLong()
+        if (name) d += 170 + if (amp == 2) 60 else 0
+        prog.snapTo(0f)
+        kotlinx.coroutines.delay(d)
+        prog.animateTo(1f, tween(if (name) 460 else intArrayOf(620, 740, 840)[amp], easing = LinearEasing))
+    }
+    return graphicsLayer {
+        val f = prog.value
+        if (f >= 1f) return@graphicsLayer
+        if (name) {
+            val k = jellyFrames(f, NAME_FRAMES)
+            translationY = k[0] * density
+            alpha = k[3]
+        } else {
+            val k = jellyFrames(f, JELLY_FRAMES[amp])
+            translationY = k[0] * density
+            scaleX = k[1]
+            scaleY = k[2]
+            alpha = k[3]
+            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
+        }
+    }
+}
+
+// Keyframes: time, then rise (dp), squash across, squash down, opacity.
+private val JELLY_FRAMES = arrayOf(
+    arrayOf(floatArrayOf(0f, 80f, 0.92f, 1.08f, 0f), floatArrayOf(0.5f, -4f, 1.05f, 0.95f, 1f), floatArrayOf(1f, 0f, 1f, 1f, 1f)),
+    arrayOf(floatArrayOf(0f, 100f, 0.86f, 1.16f, 0f), floatArrayOf(0.45f, -7f, 1.1f, 0.9f, 1f), floatArrayOf(0.66f, 2f, 0.96f, 1.04f, 1f), floatArrayOf(1f, 0f, 1f, 1f, 1f)),
+    arrayOf(floatArrayOf(0f, 120f, 0.8f, 1.25f, 0f), floatArrayOf(0.42f, -12f, 1.16f, 0.84f, 1f), floatArrayOf(0.6f, 3f, 0.92f, 1.08f, 1f), floatArrayOf(0.78f, 0f, 1.04f, 0.96f, 1f), floatArrayOf(1f, 0f, 1f, 1f, 1f)),
+)
+private val NAME_FRAMES = arrayOf(floatArrayOf(0f, 10f, 1f, 1f, 0f), floatArrayOf(0.7f, -1.5f, 1f, 1f, 1f), floatArrayOf(1f, 0f, 1f, 1f, 1f))
+
+private fun jellyFrames(t: Float, frames: Array<FloatArray>): FloatArray {
+    val i = frames.indexOfLast { it[0] <= t }.coerceIn(0, frames.size - 2)
+    val a = frames[i]
+    val b = frames[i + 1]
+    val f = androidx.compose.animation.core.FastOutSlowInEasing.transform(((t - a[0]) / (b[0] - a[0])).coerceIn(0f, 1f))
+    return FloatArray(4) { k -> a[k + 1] + (b[k + 1] - a[k + 1]) * f }
 }

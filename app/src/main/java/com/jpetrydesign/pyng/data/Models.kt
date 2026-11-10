@@ -61,7 +61,11 @@ data class Conv(
     val avatarId get() = if (group) "" else others.firstOrNull()?.id.orEmpty()
     val number get() = others.firstOrNull()?.let { it.formatted.ifBlank { it.number } }.orEmpty()
     val known get() = group || others.any { it.contactId.isNotBlank() }
-    val business get() = !group && others.firstOrNull()?.number?.let { n -> n.filter(Char::isDigit).length in 3..6 } == true
+    /** Short codes (3 to 6 digits) and US toll-free numbers (800, 833, 844, 855, 866, 877, 888) are businesses. */
+    val business get() = !group && others.firstOrNull()?.number?.let { n ->
+        val d = n.filter(Char::isDigit)
+        d.length in 3..6 || d.removePrefix("1").let { it.length == 10 && it.take(3) in TOLL_FREE }
+    } == true
     val read get() = fromMe && lastStatus == "OUTGOING_DISPLAYED"
 
     companion object {
@@ -260,3 +264,5 @@ data class Contact(
 }
 
 data class SimInfo(val name: String, val number: String, val rcs: Boolean)
+
+private val TOLL_FREE = setOf("800", "833", "844", "855", "866", "877", "888")

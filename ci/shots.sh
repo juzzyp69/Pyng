@@ -104,6 +104,25 @@ wait
 adb pull /sdcard/peek.mp4 ci-logs/peek.mp4 > /dev/null 2>&1 || true
 adb exec-out screencap -p > "$OUT/05b-home-peek-held.png" 2>/dev/null || true
 echo "recorded peek"
+# The chat list sheet: a slow partial drag (should snap back), a flick up over the pins, then back down (jelly rise).
+adb shell am force-stop $PKG
+adb shell am start -W -n $PKG/.IconClassic --ez demo true > /dev/null
+sleep 12
+adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS > /dev/null 2>&1
+(adb shell screenrecord --time-limit 16 --bit-rate 8000000 /sdcard/sheet.mp4 || true) &
+sleep 1
+adb shell input swipe 540 1700 540 1560 700
+sleep 3
+adb exec-out screencap -p > "$OUT/05c-sheet-snapback.png"
+adb shell input swipe 540 1900 540 700 250
+sleep 3
+adb exec-out screencap -p > "$OUT/05d-sheet-up.png"
+adb shell input swipe 540 800 540 2000 250
+sleep 4
+adb exec-out screencap -p > "$OUT/05e-sheet-down.png"
+wait
+adb pull /sdcard/sheet.mp4 ci-logs/sheet.mp4 > /dev/null 2>&1 || true
+echo "recorded sheet"
 shot 66-thread-media --es route thread:c9
 WAIT=10 shot 67-thread-viewer --es route thread:c9 --es open viewer
 # Memory after a chat full of photos and the viewer.
