@@ -72,9 +72,9 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     fun toast(text: String, undo: (() -> Unit)? = null) { _toasts.tryEmit(Toast(text, undo)) }
 
     /** A yes/no question shown over everything, e.g. before deleting. */
-    data class Ask(val title: String, val body: String, val action: String, val danger: Boolean = true, val go: () -> Unit)
+    data class Ask(val title: String, val body: String, val action: String, val danger: Boolean = true, val onCancel: (() -> Unit)? = null, val go: () -> Unit)
     var ask by mutableStateOf<Ask?>(null)
-    fun confirm(title: String, body: String, action: String = "Delete", danger: Boolean = true, go: () -> Unit) { ask = Ask(title, body, action, danger, go) }
+    fun confirm(title: String, body: String, action: String = "Delete", danger: Boolean = true, onCancel: (() -> Unit)? = null, go: () -> Unit) { ask = Ask(title, body, action, danger, onCancel, go) }
 
     // Group names and photos you set in Pyng (Google Messages doesn't let linked apps change them).
     private val rawNames = HashMap<String, String>()

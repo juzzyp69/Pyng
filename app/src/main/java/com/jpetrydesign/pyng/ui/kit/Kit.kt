@@ -720,7 +720,7 @@ fun AskDialog(ask: com.jpetrydesign.pyng.data.Repo.Ask?, onClose: () -> Unit) {
                 T(a.body, size = 14.sp, color = t.soft, lineHeight = 20.sp)
                 Spacer(Modifier.height(20.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PillButton("Cancel", onClick = onClose, modifier = Modifier.weight(1f), primary = false, height = 46.dp)
+                    PillButton("Cancel", onClick = { onClose(); a.onCancel?.invoke() }, modifier = Modifier.weight(1f), primary = false, height = 46.dp)
                     PillButton(a.action, onClick = { onClose(); a.go() }, modifier = Modifier.weight(1f), danger = a.danger, height = 46.dp)
                 }
             }

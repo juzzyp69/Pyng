@@ -6,6 +6,8 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.using
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -113,6 +115,13 @@ data class RowCtx(
     val nameColor: Color? = null,
     /** Photos and videos sent together, drawn as one swipeable strip in this row. */
     val bundle: List<Pair<Msg, MediaRef>>? = null,
+    /** The status always shown under your newest message (text, icon, read), and their face for the Face style. */
+    val autoStatus: Triple<String, String, Boolean>? = null,
+    val statusFace: Who? = null,
+    /** Why it didn't send, when there's a clearer reason than "Not sent". */
+    val failLabel: String? = null,
+    /** "Sent as SMS" and the like, for texts that went out (or came in) without RCS in an RCS chat. */
+    val kindTag: String? = null,
 )
 
 class RowActs(
@@ -259,9 +268,18 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
                         Row(Modifier.padding(top = 5.dp, end = 4.dp).clickable(onClick = a.onRetry), verticalAlignment = Alignment.CenterVertically) {
                             Ico(Icons.warn, t.danger, 14.dp, 2f)
                             Spacer(Modifier.width(5.dp))
-                            T("Not sent · Tap to retry", size = 11.5.sp, weight = FontWeight.SemiBold, color = t.danger)
+                            T(x.failLabel ?: "Not sent · Tap to retry", size = 11.5.sp, weight = FontWeight.SemiBold, color = t.danger)
                         }
-                    } else if (x.info != null) {
+                    } else if (x.info == null) {
+                        StatusLine(x.autoStatus, x.statusFace, t)
+                    }
+                    if (x.kindTag != null) {
+                        Row(Modifier.padding(start = 8.dp, end = 8.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Ico(Icons.message, t.soft, 12.dp, 2f); Spacer(Modifier.width(4.dp))
+                            T(x.kindTag, size = 11.sp, weight = FontWeight.Medium, color = t.soft)
+                        }
+                    }
+                    if (!m.failed && x.info != null) {
                         Row(Modifier.padding(start = 8.dp, end = 8.dp, top = 5.dp).fadeUp(), verticalAlignment = Alignment.CenterVertically) {
                             Ico(x.infoIcon, x.infoInk, 14.dp, 2.1f)
                             Spacer(Modifier.width(5.dp))
@@ -722,5 +740,43 @@ private class ScreenGradNode(var top: Color, var bottom: Color) :
     override fun androidx.compose.ui.graphics.drawscope.ContentDrawScope.draw() {
         drawRect(Brush.verticalGradient(listOf(top, bottom), startY = -y, endY = h - y))
         drawContent()
+    }
+}
+
+/**
+ * The status under your newest message. Each change rolls in from below (Sending… to Delivered to Read),
+ * the check turns into two and takes the chat's color when it's read, and it springs in under each new message.
+ */
+@Composable
+private fun StatusLine(st: Triple<String, String, Boolean>?, face: Who?, t: Tok) {
+    var last by remember { mutableStateOf(st) }
+    if (st != null) last = st
+    androidx.compose.animation.AnimatedVisibility(
+        st != null,
+        enter = androidx.compose.animation.fadeIn(tween(200)) + androidx.compose.animation.expandVertically(spring(dampingRatio = 0.85f, stiffness = 420f)) +
+            androidx.compose.animation.scaleIn(spring(dampingRatio = 0.55f, stiffness = 520f), initialScale = 0.8f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 0f)),
+        exit = androidx.compose.animation.fadeOut(tween(140)) + androidx.compose.animation.shrinkVertically(tween(220)),
+    ) {
+        val s = last ?: return@AnimatedVisibility
+        val ink by androidx.compose.animation.animateColorAsState(if (s.third) t.p else t.soft, tween(450), label = "statusInk")
+        androidx.compose.animation.AnimatedContent(
+            targetState = s,
+            transitionSpec = {
+                (androidx.compose.animation.slideInVertically(spring(dampingRatio = 0.7f, stiffness = 500f)) { it } + androidx.compose.animation.fadeIn(tween(180))) togetherWith
+                    (androidx.compose.animation.slideOutVertically(tween(180)) { -it } + androidx.compose.animation.fadeOut(tween(140))) using
+                    androidx.compose.animation.SizeTransform(clip = false)
+            },
+            label = "status",
+            modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 5.dp),
+        ) { v ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (face != null && v.third) { WhoAvatar(face, 15.dp, 6.sp); Spacer(Modifier.width(5.dp)) }
+                else {
+                    val icon = when { v.third -> Icons.read; v.first.startsWith("Sending") -> Icons.clock; else -> Icons.check }
+                    Ico(icon, ink, 14.dp, 2.1f); Spacer(Modifier.width(4.dp))
+                }
+                T(v.first, size = 11.5.sp, weight = if (v.third) FontWeight.SemiBold else FontWeight.Medium, color = ink)
+            }
+        }
     }
 }

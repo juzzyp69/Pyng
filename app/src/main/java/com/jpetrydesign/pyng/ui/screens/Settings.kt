@@ -560,7 +560,10 @@ fun LogScreen(nav: Nav) {
     LaunchedEffect(Unit) {
         val scale = runCatching { SysSettings.Global.getFloat(ctx.contentResolver, SysSettings.Global.ANIMATOR_DURATION_SCALE, 1f) }.getOrDefault(1f)
         val head = "Version ${BuildConfig.VERSION_NAME} · ${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE} · animation scale $scale\n\n"
-        text = head + repo.hub.io { it.readLog(150_000) }.getOrDefault("").ifBlank { "The log is empty." }
+        // Newest first, so the most recent part is always at the top (and survives if anything cuts the end off).
+        val raw = repo.hub.io { it.readLog(400_000) }.getOrDefault("")
+        val lines = raw.lines().drop(1).filter { it.isNotBlank() }.asReversed()
+        text = head + (if (lines.isEmpty()) "The log is empty." else "Newest first\n\n" + lines.joinToString("\n"))
     }
     BackHandler { nav.back() }
     Box(Modifier.fillMaxSize().background(t.bg)) {
@@ -572,12 +575,18 @@ fun LogScreen(nav: Nav) {
                         cm.setPrimaryClip(ClipData.newPlainText("Log", text)); Toast.makeText(ctx, "Copied", Toast.LENGTH_SHORT).show()
                     }.padding(10.dp))
                     T("Share", size = 14.sp, weight = FontWeight.SemiBold, color = t.p, modifier = Modifier.clickable {
-                        ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Share log"))
+                        // Shared as a file, so nothing gets cut off along the way.
+                        runCatching {
+                            val f = java.io.File(ctx.cacheDir, "pyng-debug-log.txt").apply { writeText(text) }
+                            val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
+                            ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_STREAM, uri)
+                                .putExtra(Intent.EXTRA_SUBJECT, "Pyng debug log").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Share log"))
+                        }.onFailure { ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Share log")) }
                     }.padding(10.dp))
                 }
             })
             androidx.compose.material3.Text(
-                text, style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 15.sp, color = t.ink),
+                text.take(80_000), style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 15.sp, color = t.ink),
                 modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState()).padding(12.dp),
             )
         }

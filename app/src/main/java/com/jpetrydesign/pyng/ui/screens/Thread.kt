@@ -270,6 +270,9 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     val matches = if (searching && q.isNotEmpty()) msgs.filter { it.text.lowercase().contains(q) }.map { it.key } else emptyList()
     val curMatch = if (matches.isNotEmpty()) matches[(matches.size - 1 - (matchIdx % matches.size)).coerceIn(0, matches.size - 1)] else null
     val reversed = msgs.asReversed()
+    // Your newest message always shows its status underneath (unless Message status is Off).
+    val newestMine = remember(msgs) { msgs.lastOrNull { it.fromMe && !it.isSys && it.status != "OUTGOING_SCHEDULED" }?.key }
+    val statusStyle = p.opt("statusStyle").ifEmpty { "Icon and text" }
     val rowOf = remember(reversed) { HashMap<String, Int>().also { m -> reversed.forEachIndexed { i, x -> m[x.key] = i } } }
     // A message you send keeps the same row when Google confirms it (its id changes, its temporary
     // id doesn't), so it never disappears and fades back in.
@@ -312,8 +315,18 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     val unknownBanner = conv != null && !conv.known && !conv.group && !conv.business && convId !in p.dismissedUnknown && msgs.any { !it.fromMe }
     val spamWhy = if (conv != null && p.on("spam") && convId !in p.notSpam) spamCheck(conv, msgs.lastOrNull { !it.fromMe }?.text.orEmpty()) else null
 
-    fun send(text: String) {
+    fun send(text: String, bigOk: Boolean = false) {
         if (conv == null) return
+        // Over RCS's size limit: say so before sending, since it will most likely fail and can tip the chat into texting.
+        if (!bigOk && attachments.any { java.io.File(it.path).length() > MAX_RCS_BYTES }) {
+            repo.confirm(
+                "This file is too big for RCS",
+                "RCS chats can send up to 100 MB. Google Messages may try sending it as an MMS instead, but MMS only allows about 1 MB, so it probably won't go through. The chat may also switch to texting for a bit.",
+                action = "Send anyway", danger = false,
+                onCancel = { attachments.removeAll { java.io.File(it.path).length() > MAX_RCS_BYTES } },
+            ) { send(text, bigOk = true) }
+            return
+        }
         val sch = schedule
         if (sch != null && text.isNotBlank()) {
             val item = com.jpetrydesign.pyng.data.Scheduled(java.util.UUID.randomUUID().toString(), convId, text.trim(), sch.first, sch.second)
@@ -431,6 +444,11 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                         isNew = m.ts > openedAt && !sendFx.arrived(m), burst = burst?.takeIf { b -> b.first == m.key || bundle?.any { it.first.key == b.first } == true }?.second, myId = myId,
                                         nameColor = if (conv?.group == true && !m.fromMe) groupNameColor(t, conv.others.indexOfFirst { it.id == m.participantId }) else null,
                                         bundle = bundle,
+                                        autoStatus = if (statusStyle != "Off" && inf == null && last.key == newestMine && !m.failed) infoFor(m, conv, p.on("receipts")) else null,
+                                        statusFace = if (statusStyle == "Face" && conv != null && !conv.group) conv.others.firstOrNull()?.let { whoOf(it) } else null,
+                                        failLabel = if (!m.failed) null else if (m.status == "OUTGOING_FAILED_TOO_LARGE" || (bundle?.map { it.second } ?: m.media).any { it.size > MAX_RCS_BYTES })
+                                            "Not sent · too large to send" else infoFor(m, conv, false).first + " · Tap to retry",
+                                        kindTag = if (conv?.rcs == true && (m.isSms || m.isMms)) (if (m.fromMe) "Sent as " else "Received as ") + (if (m.isMms) "MMS" else "SMS") else null,
                                     )
                                 rowCtxs[m.key] = rc
                                 // Holding one photo in a strip opens the menu for just that photo.
@@ -588,6 +606,9 @@ fun openMedia(ctx: Context, repo: com.jpetrydesign.pyng.data.Repo, nav: Nav, ref
 }
 
 /** The status line shown under a message when you tap beside it: text, icon, and whether it's the "read" accent. */
+/** RCS chats can send files up to about 100 MB. */
+const val MAX_RCS_BYTES = 100L * 1024 * 1024
+
 private fun infoFor(m: Msg, c: Conv?, receipts: Boolean): Triple<String, String, Boolean> = when {
     m.status == "OUTGOING_SCHEDULED" -> Triple("Scheduled for " + m.statusText, Icons.clock, false)
     !m.fromMe -> Triple("Received " + whenText(m.ts), Icons.inbox, false)
