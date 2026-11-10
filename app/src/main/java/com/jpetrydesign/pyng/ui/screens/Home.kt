@@ -897,8 +897,20 @@ private fun PinFace(pin: Pin, av: Dp, iniSize: Float, style: String, badgeH: Dp 
     // The photo is what the badge's frosted glass blurs.
     val badgeHaze = remember { dev.chrisbanes.haze.HazeState() }
     Box(Modifier.size(av)) {
-        Box(if (pin.count > 0 && style != "Rings") Modifier.hazeSource(badgeHaze) else Modifier) {
-            WhoAvatar(pin.who, av, iniSize.sp, halo = if ((style == "Rings" || ringHot) && hot) (t.pal.plus ?: t.p) else null)
+        // While they type, their photo turns into a soft wave that keeps moving (like Google Messages).
+        val wave = if (pin.typing && LocalMotion.current) {
+            val tr = androidx.compose.animation.core.rememberInfiniteTransition(label = "typing")
+            tr.animateFloat(0f, (2 * Math.PI).toFloat(), androidx.compose.animation.core.infiniteRepeatable(tween(2600, easing = LinearEasing)), label = "wave")
+        } else null
+        Box(
+            (if (pin.count > 0 && style != "Rings") Modifier.hazeSource(badgeHaze) else Modifier)
+                .then(if (wave != null) Modifier.graphicsLayer {
+                    val ph = wave.value
+                    shape = WavyShape(ph); clip = true
+                    val k = 1f + 0.03f * kotlin.math.sin(ph * 2f); scaleX = k; scaleY = k
+                } else Modifier),
+        ) {
+            WhoAvatar(pin.who, av, iniSize.sp, halo = if ((style == "Rings" || ringHot) && pin.count > 0) (t.pal.plus ?: t.p) else null)
         }
         if (pin.count > 0 && style != "Rings") {
             val bh = badgeH + 2.dp
@@ -924,7 +936,26 @@ private fun PinFace(pin: Pin, av: Dp, iniSize: Float, style: String, badgeH: Dp 
 private fun PinName(pin: Pin, size: Float, max: Dp) {
     val hot = pin.count > 0 || pin.typing
     val t = LocalTok.current
-    T(pin.c.shortTitle, size = size.sp, weight = if (hot) FontWeight.SemiBold else FontWeight.Medium, color = if (hot) t.ink else t.soft, maxLines = 1, align = TextAlign.Center, modifier = Modifier.widthIn(max = max))
+    if (pin.typing) T("Typing…", size = size.sp, weight = FontWeight.SemiBold, color = t.p, maxLines = 1, align = TextAlign.Center,
+        italic = true, modifier = Modifier.widthIn(max = max))
+    else T(pin.c.shortTitle, size = size.sp, weight = if (hot) FontWeight.SemiBold else FontWeight.Medium, color = if (hot) t.ink else t.soft, maxLines = 1, align = TextAlign.Center, modifier = Modifier.widthIn(max = max))
+}
+
+/** A soft, wavy circle; [phase] moves the waves around. */
+private class WavyShape(private val phase: Float) : androidx.compose.ui.graphics.Shape {
+    override fun createOutline(size: androidx.compose.ui.geometry.Size, layoutDirection: androidx.compose.ui.unit.LayoutDirection, density: androidx.compose.ui.unit.Density): androidx.compose.ui.graphics.Outline {
+        val cx = size.width / 2f; val cy = size.height / 2f; val r = kotlin.math.min(cx, cy)
+        val path = androidx.compose.ui.graphics.Path()
+        val n = 96
+        for (i in 0..n) {
+            val a = i / n.toFloat() * (2 * Math.PI).toFloat()
+            val rr = r * (0.93f + 0.045f * kotlin.math.sin(a * 8f + phase * 2f) + 0.015f * kotlin.math.sin(a * 3f - phase))
+            val x = cx + rr * kotlin.math.cos(a); val y = cy + rr * kotlin.math.sin(a)
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        path.close()
+        return androidx.compose.ui.graphics.Outline.Generic(path)
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)

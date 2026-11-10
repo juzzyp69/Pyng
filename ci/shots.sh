@@ -74,6 +74,8 @@ shot 45-newgroup --es route newgroup
 shot 50-settings --es route settings
 for S in chats notifications chatfeat privacy access storage about; do shot "51-section-$S" --es route "section:$S"; done
 shot 52-appearance --es route appearance
+shot 52b-studio-chat --es route appearance --es open studio:chat
+shot 52c-studio-home --es route appearance --es open studio:home
 for K in pinLayout pinStyle bubble textSize showPhotos density appIcon defWall; do shot "53-pick-$K" --es route appearance --es open "pick:$K"; done
 shot 54-profile --es route profile
 shot 55-react --es route react

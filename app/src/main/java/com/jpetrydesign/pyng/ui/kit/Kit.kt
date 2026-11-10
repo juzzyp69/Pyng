@@ -134,10 +134,12 @@ fun T(
     align: TextAlign? = null,
     lineHeight: TextUnit = TextUnit.Unspecified,
     letterSpacing: TextUnit = TextUnit.Unspecified,
+    italic: Boolean = false,
 ) {
     Text(
         text, modifier = modifier, maxLines = maxLines, overflow = TextOverflow.Ellipsis, textAlign = align,
-        style = TextStyle(fontFamily = Geist, fontSize = size, fontWeight = weight, color = color, lineHeight = lineHeight, letterSpacing = letterSpacing),
+        style = TextStyle(fontFamily = Geist, fontSize = size, fontWeight = weight, color = color, lineHeight = lineHeight, letterSpacing = letterSpacing,
+            fontStyle = if (italic) androidx.compose.ui.text.font.FontStyle.Italic else null),
     )
 }
 

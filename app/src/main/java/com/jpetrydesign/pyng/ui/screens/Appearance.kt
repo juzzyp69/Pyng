@@ -1,5 +1,14 @@
 package com.jpetrydesign.pyng.ui.screens
 
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.statusBarsPadding
+import com.jpetrydesign.pyng.ui.kit.press
+import com.jpetrydesign.pyng.ui.kit.edge
+import com.jpetrydesign.pyng.ui.theme.Tok
+import androidx.compose.animation.fadeIn
 import android.content.ComponentName
 import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
@@ -105,7 +114,9 @@ fun AppearanceScreen(nav: Nav) {
     val repo = LocalRepo.current
     val t = LocalTok.current
     val p = repo.prefs.state
-    var pick by remember { mutableStateOf(repo.demoOpen?.removePrefix("pick:")?.takeIf { repo.demoOpen?.startsWith("pick:") == true }.also { repo.demoOpen = null }) }
+    val demo = remember { repo.demoOpen.also { repo.demoOpen = null } }
+    var pick by remember { mutableStateOf(demo?.removePrefix("pick:")?.takeIf { demo.startsWith("pick:") }) }
+    var studio by remember { mutableStateOf(demo?.removePrefix("studio:")?.takeIf { demo.startsWith("studio:") }) }
     val pal = Palettes.byKey(p.themeKey, p.c1, p.c2)
     Box(Modifier.fillMaxSize()) {
         Page("Appearance", { nav.back() }) {
@@ -149,37 +160,27 @@ fun AppearanceScreen(nav: Nav) {
             }
             SectionLabel("Mode")
             Seg(listOf("Light", "Dark", "Match system"), p.mode, { m -> repo.prefs.edit { it.copy(mode = m) } })
+            // Style studio: open Chat style or Home style to see every choice with a live preview.
+            SectionLabel("Style studio")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                StudioCard("Chat style", listOf(p.bubble, p.opt("photoGroups"), p.opt("statusStyle").let { if (it == "Off") "No status" else it }).joinToString(" · "), Modifier.weight(1f).enter(1)) { studio = "chat" }
+                StudioCard("Home style", listOf(p.pinLayout, p.pinStyle, p.density).joinToString(" · "), Modifier.weight(1f).enter(2)) { studio = "home" }
+            }
             Spacer(Modifier.height(14.dp))
             Card {
-                val rows = listOf(
-                    Triple("pinLayout", "Pinned layout", Icons.pinned) to p.pinLayout,
-                    Triple("pinStyle", "Pinned notifications", Icons.bell) to p.pinStyle,
-                    Triple("bubble", "Bubble shape", Icons.message) to p.bubble,
-                    Triple("gradient", "Bubble gradient", Icons.density) to p.opt("gradient"),
-                    Triple("textSize", "Text size", Icons.textSize) to (TS[p.textSize] ?: p.textSize),
-                    Triple("showPhotos", "Contact photos", Icons.contact) to p.showPhotos,
-                    Triple("density", "List density", Icons.density) to p.density,
-                    Triple("appIcon", "App icon", Icons.appIcon) to p.appIcon,
-                    Triple("defWall", "Default chat wallpaper", Icons.gallery) to (if (p.defWall.startsWith("photo:")) "Your photo" else p.defWall),
-                )
-                rows.forEachIndexed { i, (k, value) ->
-                    if (i > 0) Hairline()
-                    Row(Modifier.enter(i + 1).fillMaxWidth().clickable { pick = k.first }.padding(horizontal = 16.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(40.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(k.third, t.p, 19.dp) }
-                        Spacer(Modifier.width(14.dp))
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                T(k.second, size = 15.5.sp, weight = FontWeight.SemiBold)
-                                Spacer(Modifier.width(4.dp))
-                                Ico(Icons.chev, t.ink, 14.dp, 2.2f)
-                            }
-                            T(value, size = 13.sp, weight = FontWeight.SemiBold, color = t.p)
-                        }
+                Row(Modifier.enter(3).fillMaxWidth().clickable { pick = "appIcon" }.padding(horizontal = 16.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(40.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(Icons.appIcon, t.p, 19.dp) }
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        T("App icon", size = 15.5.sp, weight = FontWeight.SemiBold)
+                        T(p.appIcon, size = 13.sp, weight = FontWeight.SemiBold, color = t.p)
                     }
+                    Ico(Icons.chev, t.faint, 16.dp, 2f)
                 }
             }
         }
         StylePicker(pick) { pick = null }
+        StyleStudio(studio) { studio = null }
     }
 }
 
@@ -222,6 +223,19 @@ private fun StylePicker(key: String?, onDone: () -> Unit) {
             PillButton("Done", onDone, height = 42.dp)
         }
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 8.dp)) {
+            StyleTiles(k) { pickWall.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+        }
+    }
+}
+
+/** The choices for one style as a grid of tiles with little previews. Used by the picker sheet and the style studio. */
+@Composable
+fun StyleTiles(k: String, pickWall: () -> Unit) {
+    val repo = LocalRepo.current
+    val ctx = LocalContext.current
+    val t = LocalTok.current
+    val p = repo.prefs.state
+    Column {
             data class Tile(val name: String, val sub: String?, val on: Boolean, val pick: () -> Unit, val preview: @Composable () -> Unit)
             val AV = t.p.copy(alpha = 0.35f)
             val LN = if (t.dark) Color.White.copy(alpha = 0.18f) else Color(0x1F15171D)
@@ -293,10 +307,16 @@ private fun StylePicker(key: String?, onDone: () -> Unit) {
                         Column(verticalArrangement = Arrangement.spacedBy(if (n == "Compact") 4.dp else 11.dp)) { repeat(if (n == "Compact") 6 else 4) { Box(Modifier.size(104.dp, 8.dp).clip(RoundedCornerShape(4.dp)).background(LN)) } }
                     }
                 }
+                "statusStyle" -> { cols = 3; pvH = 72.dp; tiles = listOf("Icon and text" to "Check, then Read", "Face" to "Their photo", "Off" to "Tap to see").map { (n, sub) ->
+                    Tile(n, sub, p.opt("statusStyle") == n, { repo.prefs.setOpt("statusStyle", n) }) { StatusSample(n, t) }
+                } }
+                "photoGroups" -> { cols = 2; pvH = 92.dp; tiles = listOf("Peek" to "Next photo peeks in", "Stack" to "Swipe to fan out", "Rail" to "Thumbnails beside", "Deck" to "Flick through").map { (n, sub) ->
+                    Tile(n, sub, p.opt("photoGroups") == n, { repo.prefs.setOpt("photoGroups", n) }) { PhotoGroupMini(n, t) }
+                } }
                 "appIcon" -> { cols = 3; pvH = 84.dp; tiles = AppIcons.all.map { ic ->
                     Tile(ic.name, null, p.appIcon == ic.name, { AppIcons.set(ctx, ic.name); repo.prefs.edit { it.copy(appIcon = ic.name) }; repo.toast("${ic.name} icon set on your home screen") }) { AppIconPreview(ic) }
                 } }
-                else -> { cols = 3; pvH = 120.dp; tiles = listOf(Tile("Your photo", null, p.defWall.startsWith("photo:"), { pickWall.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
+                else -> { cols = 3; pvH = 120.dp; tiles = listOf(Tile("Your photo", null, p.defWall.startsWith("photo:"), { pickWall() }) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         if (p.defWall.startsWith("photo:")) Wallpaper(p.defWall, t)
                         Box(Modifier.size(36.dp).clip(CircleShape).background(if (t.dark) Color(0xFF2A2D36) else Color.White), contentAlignment = Alignment.Center) { Ico(Icons.gallery, t.p, 17.dp) }
@@ -322,7 +342,6 @@ private fun StylePicker(key: String?, onDone: () -> Unit) {
                     repeat(cols - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
-        }
     }
 }
 
@@ -573,5 +592,166 @@ private fun LightSlider(value: Hsl, onL: (Float) -> Unit) {
         val frac = ((value.l - 0.06f) / 0.88f).coerceIn(0f, 1f)
         val knob = with(density) { 26.dp.toPx() }
         Box(Modifier.offset { IntOffset(((w - knob) * frac).roundToInt(), 0) }.size(26.dp).shadow(4.dp, CircleShape).clip(CircleShape).background(Color.White))
+    }
+}
+
+// ---------- style studio ----------
+
+/** One of the two studio cards on Appearance: a small live preview, its name and what's picked. */
+@Composable
+private fun StudioCard(title: String, summary: String, modifier: Modifier, onClick: () -> Unit) {
+    val t = LocalTok.current
+    val shape = RoundedCornerShape(24.dp)
+    Column(modifier.clip(shape).background(if (t.dark) t.card else Color.White).press(0.97f, onClick).padding(8.dp)) {
+        Box(Modifier.fillMaxWidth().height(118.dp).clip(RoundedCornerShape(18.dp)).background(if (t.dark) t.surface else t.bg)) {
+            if (title.startsWith("Chat")) ChatStylePreview(compact = true) else HomeStylePreview(compact = true)
+        }
+        Row(Modifier.padding(start = 6.dp, end = 2.dp, top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            T(title, size = 15.sp, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Ico(Icons.chev, t.faint, 14.dp, 2.2f)
+        }
+        T(summary, size = 11.5.sp, color = t.soft, maxLines = 1, modifier = Modifier.padding(start = 6.dp, end = 6.dp, bottom = 4.dp))
+    }
+}
+
+/** Chat style or Home style: a live preview at the top, a tab for each part, and its choices below. */
+@Composable
+private fun StyleStudio(kind: String?, onClose: () -> Unit) {
+    val repo = LocalRepo.current
+    val t = LocalTok.current
+    val scope = rememberCoroutineScope()
+    var last by remember { mutableStateOf(kind) }
+    if (kind != null) last = kind
+    if (kind != null) BackHandler(onBack = onClose)
+    val pickWall = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) scope.launch {
+            val f = repo.importUri(uri) ?: return@launch
+            val dest = repo.keepFile("wall"); java.io.File(f.path).copyTo(dest, overwrite = true)
+            repo.prefs.edit { it.copy(defWall = "photo:" + dest.path) }
+        }
+    }
+    AnimatedVisibility(
+        kind != null, modifier = Modifier.zIndex(12f),
+        enter = slideInHorizontally(spring(dampingRatio = 0.86f, stiffness = 380f)) { it } + fadeIn(tween(160)),
+        exit = slideOutHorizontally(tween(220)) { it } + fadeOut(tween(180)),
+    ) {
+        val k = last ?: return@AnimatedVisibility
+        val chat = k == "chat"
+        val tabs = if (chat) listOf("bubble" to "Bubbles", "gradient" to "Gradient", "statusStyle" to "Status", "photoGroups" to "Photos", "textSize" to "Text", "defWall" to "Wallpaper")
+            else listOf("pinLayout" to "Layout", "pinStyle" to "Badges", "density" to "Density", "showPhotos" to "Faces")
+        var tab by remember(k) { mutableStateOf(tabs.first().first) }
+        Column(Modifier.fillMaxSize().background(t.bg).statusBarsPadding().navigationBarsPadding()) {
+            Row(Modifier.fillMaxWidth().padding(start = 6.dp, end = 16.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                com.jpetrydesign.pyng.ui.kit.CircleButton(Icons.back, "Back", onClose)
+                Column(Modifier.weight(1f).padding(start = 4.dp)) {
+                    T(if (chat) "Chat style" else "Home style", size = 21.sp, weight = FontWeight.Bold, letterSpacing = (-0.3).sp)
+                    T("Pick a tab, then a style. The preview updates as you go.", size = 12.5.sp, color = t.soft)
+                }
+                PillButton("Done", onClose, height = 40.dp)
+            }
+            // Live preview.
+            Box(
+                Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(if (chat) 270.dp else 230.dp)
+                    .edge(RoundedCornerShape(28.dp), elevation = 10.dp).clip(RoundedCornerShape(28.dp)).background(if (t.dark) t.card else Color.White),
+            ) { if (chat) ChatStylePreview(compact = false) else HomeStylePreview(compact = false) }
+            // Tabs.
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                tabs.forEach { (key, label) ->
+                    val on = tab == key
+                    val bg by androidx.compose.animation.animateColorAsState(if (on) t.fill else if (t.dark) t.card else Color.White, tween(200), label = "tab")
+                    Box(Modifier.height(38.dp).clip(RoundedCornerShape(19.dp)).background(bg).clickable { tab = key }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                        T(label, size = 13.5.sp, weight = FontWeight.SemiBold, color = if (on) t.onFill else t.soft)
+                    }
+                }
+            }
+            androidx.compose.animation.AnimatedContent(tab, label = "studioTab", modifier = Modifier.weight(1f),
+                transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) }) { key ->
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 20.dp)) {
+                    StyleTiles(key) { pickWall.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+                }
+            }
+        }
+    }
+}
+
+/** A small chat drawn with your current choices: bubble shape, gradient, photos, status, text size and wallpaper. */
+@Composable
+fun ChatStylePreview(compact: Boolean) {
+    val repo = LocalRepo.current
+    val t = LocalTok.current
+    val p = repo.prefs.state
+    val (big, small) = when (p.bubble) { "Soft" -> 14.dp to 4.dp; "Pill" -> 22.dp to 22.dp; else -> 20.dp to 6.dp }
+    val fs = (when (p.textSize) { "S" -> 13f; "L" -> 16.5f; "XL" -> 18.5f; else -> 14.5f }) * (if (compact) 0.72f else 1f)
+    val pad = if (compact) 8.dp else 14.dp
+    val gm = p.opt("gradient")
+    val mid = androidx.compose.ui.graphics.lerp(t.outTop, t.outBottom, 0.5f)
+    fun outFill(i: Int): Brush = when (gm) {
+        "Off" -> Brush.linearGradient(listOf(t.outFlat, t.outFlat))
+        "Each bubble" -> Brush.verticalGradient(listOf(t.outTop, t.outBottom))
+        else -> if (i == 0) Brush.verticalGradient(listOf(t.outTop, mid)) else Brush.verticalGradient(listOf(mid, t.outBottom))
+    }
+    Box(Modifier.fillMaxSize()) {
+        if (!compact) Wallpaper(p.defWall, t)
+        Column(Modifier.fillMaxSize().padding(pad), verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 5.dp)) {
+            Box(Modifier.clip(com.jpetrydesign.pyng.ui.screens.bubbleShape(false, false, false, big * (if (compact) 0.7f else 1f), small)).background(t.inBg).padding(horizontal = if (compact) 9.dp else 13.dp, vertical = if (compact) 5.dp else 8.dp)) {
+                T("Back from the trip!!", size = fs.sp, color = t.inInk, maxLines = 1)
+            }
+            if (!compact) { PhotoGroupMini(p.opt("photoGroups"), t, 1.15f); Spacer(Modifier.height(2.dp)) }
+            Spacer(Modifier.weight(1f))
+            listOf("Ok these are so good", "How was the drive?").forEachIndexed { i, txt ->
+                Box(Modifier.align(Alignment.End).clip(com.jpetrydesign.pyng.ui.screens.bubbleShape(true, i == 1, i == 0, big * (if (compact) 0.7f else 1f), small)).background(outFill(i))
+                    .padding(horizontal = if (compact) 9.dp else 13.dp, vertical = if (compact) 5.dp else 8.dp)) {
+                    T(txt, size = fs.sp, color = t.outInk, maxLines = 1)
+                }
+            }
+            if (p.opt("statusStyle") != "Off") Box(Modifier.align(Alignment.End)) { StatusSample(p.opt("statusStyle"), t, compact) }
+        }
+    }
+}
+
+/** A small home screen drawn with your current choices: pinned layout, badges, density and photos. */
+@Composable
+fun HomeStylePreview(compact: Boolean) {
+    val repo = LocalRepo.current
+    val t = LocalTok.current
+    val p = repo.prefs.state
+    val AV = t.p.copy(alpha = 0.35f)
+    val LN = if (t.dark) Color.White.copy(alpha = 0.18f) else Color(0x1F15171D)
+    Column(Modifier.fillMaxSize().padding(if (compact) 8.dp else 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.graphicsLayer { val s = if (compact) 0.78f else 1.1f; scaleX = s; scaleY = s }.padding(vertical = if (compact) 0.dp else 8.dp)) {
+            PinMini(p.pinLayout, AV, LN)
+            if (p.pinStyle == "Badges") Box(Modifier.align(Alignment.TopEnd).offset(4.dp, (-4).dp).size(12.dp).clip(CircleShape).background(t.badgeBg))
+        }
+        Spacer(Modifier.height(if (compact) 4.dp else 12.dp))
+        Column(
+            Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)).background(if (t.dark) t.surface else t.bg).padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(if (p.density == "Compact") 4.dp else 8.dp),
+        ) {
+            repeat(if (compact) 3 else 5) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (p.showPhotos == "Show") { Box(Modifier.size(if (compact) 12.dp else 22.dp).clip(CircleShape).background(AV)); Spacer(Modifier.width(8.dp)) }
+                    Box(Modifier.weight(1f).height(if (compact) 6.dp else 9.dp).clip(RoundedCornerShape(4.dp)).background(LN))
+                }
+            }
+        }
+    }
+}
+
+/** What the status under your newest message looks like in each style. */
+@Composable
+fun StatusSample(style: String, t: Tok, compact: Boolean = false) {
+    val fs = if (compact) 9.sp else 11.5.sp
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        when (style) {
+            "Off" -> T("Tap a message to see", size = fs, color = t.faint)
+            "Face" -> {
+                Box(Modifier.size(if (compact) 10.dp else 15.dp).clip(CircleShape).background(t.p.copy(alpha = 0.45f)))
+                Spacer(Modifier.width(4.dp)); T("Read", size = fs, weight = FontWeight.Medium, color = t.soft)
+            }
+            else -> {
+                Ico(Icons.read, t.p, if (compact) 10.dp else 14.dp, 2.1f); Spacer(Modifier.width(3.dp))
+                T(if (compact) "Read" else "Read 3:02 PM", size = fs, weight = FontWeight.SemiBold, color = t.p)
+            }
+        }
     }
 }
