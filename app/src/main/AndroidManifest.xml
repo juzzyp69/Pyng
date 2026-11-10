@@ -21,6 +21,11 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
+    <!-- To open a chat in Google Messages from the contact page. -->
+    <queries>
+        <package android:name="com.google.android.apps.messaging" />
+    </queries>
+
     <application
         android:name=".PyngApp"
         android:allowBackup="false"

@@ -338,7 +338,7 @@ fun ContactScreen(nav: Nav, convId: String) {
             }
             com.jpetrydesign.pyng.ui.kit.StatusScrim(Modifier.align(Alignment.TopCenter))
             RenameSheet(renaming, c.title, { renaming = false }) { repo.setGroupName(convId, it) }
-            SmsOnlySheet(smsInfo, c.smsOnly) { smsInfo = false }
+            SmsOnlySheet(smsInfo, c.smsOnly, c.others.firstOrNull()?.number.orEmpty()) { smsInfo = false }
             ForwardSheet(forward) { target, m ->
                 forward = null
                 if (target != null) {
@@ -563,25 +563,53 @@ fun WallTile(name: String, wall: String?, on: Boolean, t: com.jpetrydesign.pyng.
 
 /**
  * Google Messages keeps "Only send SMS & MMS messages" on the phone and doesn't let linked apps change
- * it, so Pyng shows it and explains where to switch it.
+ * it, so Pyng shows it, explains why, and opens this chat in Google Messages to change it there.
  */
 @Composable
-private fun SmsOnlySheet(visible: Boolean, on: Boolean, onDismiss: () -> Unit) {
+private fun SmsOnlySheet(visible: Boolean, on: Boolean, number: String, onDismiss: () -> Unit) {
     val t = LocalTok.current
     val ctx = LocalContext.current
-    val gm = remember { ctx.packageManager.getLaunchIntentForPackage("com.google.android.apps.messaging") }
+    val gmPkg = "com.google.android.apps.messaging"
+    val gm = remember { ctx.packageManager.getLaunchIntentForPackage(gmPkg) }
     com.jpetrydesign.pyng.ui.kit.Sheet(visible, onDismiss) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-            T("Only send SMS & MMS", size = 18.sp, weight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(44.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(Icons.message, t.p, 20.dp) }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    T("Change this in Google Messages", size = 18.sp, weight = FontWeight.Bold)
+                    T(if (on) "On for this chat" else "Off for this chat", size = 13.sp, weight = FontWeight.SemiBold, color = t.p)
+                }
+            }
             T(
-                (if (on) "It's on for this chat, so messages go out as regular texts. " else "It's off, so this chat uses RCS when both phones can. ") +
-                    "Google Messages only lets you change this on the phone itself: open the chat there, tap the name at the top, then switch Only send SMS & MMS messages. Pyng picks it up right away.",
-                size = 13.5.sp, color = t.soft, lineHeight = 19.sp, modifier = Modifier.padding(top = 6.dp),
+                "Pyng is linked to Google Messages, and Google only lets you change this setting in Google Messages itself. Pyng shows the setting here and picks up any change right away.",
+                size = 13.5.sp, color = t.soft, lineHeight = 19.sp, modifier = Modifier.padding(top = 12.dp),
             )
+            // The three steps, in a small card.
+            Column(
+                Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(t.tone).padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf("Open the chat in Google Messages", "Tap the name at the top", "Switch Only send SMS & MMS messages").forEachIndexed { i, step ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(22.dp).clip(CircleShape).background(t.sheet), contentAlignment = Alignment.Center) { T("${i + 1}", size = 11.5.sp, weight = FontWeight.Bold, color = t.p) }
+                        Spacer(Modifier.width(10.dp))
+                        T(step, size = 13.5.sp, weight = FontWeight.Medium, color = t.ink)
+                    }
+                }
+            }
+            if (gm == null) T("Google Messages isn't on this phone, so do this on the phone it runs on.", size = 12.5.sp, color = t.soft, lineHeight = 17.sp, modifier = Modifier.padding(top = 10.dp))
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PillButton("Got it", onClick = onDismiss, modifier = Modifier.weight(1f), primary = gm == null)
-                if (gm != null) PillButton("Open Google Messages", onClick = { onDismiss(); runCatching { ctx.startActivity(gm) } }, modifier = Modifier.weight(1.4f))
+                if (gm != null) PillButton("Open Google Messages", onClick = {
+                    onDismiss()
+                    // Straight to this chat when there's a number to open; otherwise just the app.
+                    val chat = number.takeIf { it.isNotBlank() }?.let {
+                        android.content.Intent(android.content.Intent.ACTION_SENDTO, android.net.Uri.parse("smsto:" + android.net.Uri.encode(it))).setPackage(gmPkg)
+                    }
+                    runCatching { ctx.startActivity(chat ?: gm) }.onFailure { runCatching { ctx.startActivity(gm) } }
+                }, modifier = Modifier.weight(1.4f))
             }
             Spacer(Modifier.height(10.dp))
         }
