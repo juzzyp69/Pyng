@@ -389,10 +389,13 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                         // Held in place while the sheet scrolls over it, dimming slightly as it's covered.
                         Box(
                             Modifier.fillMaxWidth().onSizeChanged { pinsH = it.height }.graphicsLayer {
-                                val off = if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset.toFloat() else 0f
-                                val pr = if (pinsH > 0) (off / pinsH).coerceIn(0f, 1f) else 0f
+                                // Once the sheet is all the way up the pins stay hidden, so they never drift up behind the top bar.
+                                val covered = listState.firstVisibleItemIndex != 0
+                                val off = if (!covered) listState.firstVisibleItemScrollOffset.toFloat() else pinsH.toFloat()
+                                val pr = if (covered) 1f else if (pinsH > 0) (off / pinsH).coerceIn(0f, 1f) else 0f
+                                val tail = ((pr - 0.75f) / 0.25f).coerceIn(0f, 1f)
                                 translationY = off
-                                alpha = 1f - 0.35f * pr
+                                alpha = (1f - 0.35f * pr) * (1f - tail * tail * (3f - 2f * tail))
                                 scaleX = 1f - 0.04f * pr
                                 scaleY = 1f - 0.04f * pr
                                 transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
