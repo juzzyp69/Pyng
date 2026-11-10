@@ -107,7 +107,7 @@ fun tok(P: Pal, dark: Boolean, solid: Boolean = false, highContrast: Boolean = f
         cardEdge = if (dark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.7f),
         surface = if (dark) Color.White.copy(alpha = 0.05f) else inkL.copy(alpha = 0.035f),
         // Received bubbles in light mode: nearly white with just a hint of the theme color.
-        inBg = if (dark) Color.White.copy(alpha = 0.10f) else (if (P.bg != null) Color.White.copy(alpha = 0.9f) else androidx.compose.ui.graphics.lerp(Color.White, p, 0.045f)),
+        inBg = if (dark) Color.White.copy(alpha = 0.10f) else (if (P.bg != null) Color.White.copy(alpha = 0.9f) else androidx.compose.ui.graphics.lerp(androidx.compose.ui.graphics.lerp(Color.White, p, 0.07f), Color.Black, 0.025f)),
         inInk = if (dark) inkD else inkL,
         outBg = outBrush, outFlat = fill, outInk = onFill,
         badgeBg = fill.a(0xD9), badgeInk = onFill,

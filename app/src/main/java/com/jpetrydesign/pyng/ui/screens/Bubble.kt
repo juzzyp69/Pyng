@@ -385,6 +385,8 @@ private fun BubbleBody(m: Msg, x: RowCtx, shape: RoundedCornerShape, jumbo: Int,
                     .clip(shape)
                     .then(if (acrossScreen) Modifier.screenGradient(t.outTop, t.outBottom) else Modifier.background(bg))
                     .padding(horizontal = 16.dp, vertical = 11.dp).widthIn(min = 24.dp),
+                // A short word ("Ok", "...") sits centered in its pill instead of hugging the left edge.
+                horizontalAlignment = if (x.quote == null) Alignment.CenterHorizontally else Alignment.Start,
             ) {
                 if (x.quote != null) {
                     Column(Modifier.padding(top = 1.dp, bottom = 7.dp).clip(RoundedCornerShape(12.dp)).background(quoteBg).padding(horizontal = 10.dp, vertical = 6.dp)) {
