@@ -68,6 +68,7 @@ import com.jpetrydesign.pyng.ui.kit.Icons
 import com.jpetrydesign.pyng.ui.kit.LocalMotion
 import com.jpetrydesign.pyng.ui.kit.LocalRepo
 import androidx.compose.ui.node.invalidateDraw
+import androidx.compose.ui.layout.findRootCoordinates
 import com.jpetrydesign.pyng.ui.kit.T
 import com.jpetrydesign.pyng.ui.kit.swipeDir
 import com.jpetrydesign.pyng.ui.theme.LocalTok
