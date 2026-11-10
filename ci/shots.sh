@@ -15,6 +15,8 @@ adb shell settings put global animator_duration_scale 1
 # Keep the emulator's own launcher and its "isn't responding" dialogs out of the way.
 adb shell settings put global hide_error_dialogs 1
 adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher > /dev/null 2>&1 || true
+# Turning the launcher off restarts the system UI; let it settle before the first screenshot.
+sleep 15
 
 shot() {
   local name="$1"; shift
@@ -97,7 +99,7 @@ adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS > /dev/null
 adb shell dumpsys meminfo $PKG > ci-logs/meminfo-home.txt 2>&1
 (adb shell screenrecord --time-limit 7 --bit-rate 8000000 /sdcard/peek.mp4 || true) &
 sleep 1
-adb shell input swipe 300 1500 300 1500 900
+adb shell input swipe 300 1140 300 1140 900
 wait
 adb pull /sdcard/peek.mp4 ci-logs/peek.mp4 > /dev/null 2>&1 || true
 adb exec-out screencap -p > "$OUT/05b-home-peek-held.png" 2>/dev/null || true
