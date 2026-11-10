@@ -359,8 +359,9 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                 if (y != last) { dir = if (y > last) 1 else -1; last = y }
                 val pr = y.toFloat() / h
                 // Once the pins were covered, uncovering them plays the jelly rise.
-                if (pr > 0.85f) armed = true
-                if (armed && pr < 0.7f) { armed = false; revealTick++ }
+                // Covered: the pins hide (a negative tick), so they stay hidden until they pop back in.
+                if (pr > 0.85f && !armed) { armed = true; revealTick = -(kotlin.math.abs(revealTick) + 1) }
+                if (armed && pr < 0.7f) { armed = false; revealTick = kotlin.math.abs(revealTick) + 1 }
                 if (!moving && idx == 0 && off in 1 until h) {
                     val collapse = when { pr > 0.85f -> true; pr < 0.15f -> false; else -> dir > 0 }
                     if (collapse && !listState.canScrollForward) return@collect
@@ -1328,11 +1329,12 @@ object SeenRows {
 @Composable
 private fun Modifier.jellyRise(tick: Int, index: Int, cols: Int, rows: Int, name: Boolean = false): Modifier {
     val motion = LocalMotion.current
-    val prog = remember { Animatable(1f) }
+    val prog = remember { Animatable(if (tick < 0) 0f else 1f) }
     val row = index / cols
     val col = index % cols
     val amp = intArrayOf(1, 2, 0, 1, 2, 0, 1, 2)[index % 8]
     LaunchedEffect(tick) {
+        if (tick < 0) { prog.snapTo(0f); return@LaunchedEffect }
         if (tick == 0 || !motion) { prog.snapTo(1f); return@LaunchedEffect }
         val order = (rows - 1 - row) * cols + col
         val jitter = intArrayOf(0, 35, -15, 20, 10, -20, 30, 0)[index % 8]
