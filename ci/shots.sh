@@ -133,6 +133,7 @@ WAIT=10 shot 67-thread-viewer --es route thread:c9 --es open viewer
 adb shell dumpsys meminfo $PKG > ci-logs/meminfo-media.txt 2>&1
 WAIT=10 shot 67b-thread-viewer-video --es route thread:c9 --es open viewer-video
 WAIT=10 shot 67c-thread-viewer-strip --es route thread:c9 --es open viewer-strip
+shot 59-version-history --es route section:versions
 WAIT=10 shot 68-chat-search --es route thread:c9 --es open search
 WAIT=10 shot 68b-chat-search-results --es route thread:c1 --es open search-q
 WAIT=10 shot 67d-thread-menu-strip --es route thread:c9 --es open menu-strip

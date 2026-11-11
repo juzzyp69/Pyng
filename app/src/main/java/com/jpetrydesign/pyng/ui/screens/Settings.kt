@@ -196,9 +196,10 @@ fun SectionScreen(nav: Nav, key: String) {
     val p = repo.prefs.state
     val conn by repo.hub.connection.collectAsState()
     val app = ctx.applicationContext as PyngApp
-    val title = mapOf("chats" to "Chats", "notifications" to "Notifications", "chatfeat" to "Chat features", "privacy" to "Privacy & safety", "access" to "Accessibility", "storage" to "Storage", "about" to "Help & about")[key] ?: "Settings"
+    val title = mapOf("chats" to "Chats", "notifications" to "Notifications", "chatfeat" to "Chat features", "privacy" to "Privacy & safety", "access" to "Accessibility", "storage" to "Storage", "about" to "Help & about", "versions" to "Version history")[key] ?: "Settings"
     Page(title, { nav.back() }) {
         when (key) {
+            "versions" -> VersionHistory()
             "chats" -> {
                 Group("Conversation") {
                     TogRow("Smart replies", "smart", "Suggestions above the keyboard"); Hairline()
@@ -345,7 +346,7 @@ fun SectionScreen(nav: Nav, key: String) {
             }
             else -> {
                 Group(null) {
-                    ListRow("Version", BuildConfig.VERSION_NAME, trailing = null); Hairline()
+                    ListRow("Version", BuildConfig.VERSION_NAME + " · See what's new", onClick = { nav.go(Route.Section("versions")) }); Hairline()
                     ListRow("Debug log", "Share this if something isn't working", onClick = { nav.go(Route.Log) }); Hairline()
                     ListRow("Replay setup", "See the welcome screens again", onClick = { nav.replace(Route.Setup(0)) }); Hairline()
                     ListRow("Open-source licenses", "libgm (AGPL-3.0) · Google Sans Flex and Geist fonts (OFL)", onClick = {
