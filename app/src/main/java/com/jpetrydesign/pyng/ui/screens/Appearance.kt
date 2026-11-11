@@ -210,6 +210,7 @@ private fun StylePicker(key: String?, onDone: () -> Unit) {
             "bubble" -> "Bubble shape" to "Tap a style to preview it live"
             "gradient" -> "Bubble gradient" to "How color flows through the bubbles you send"
             "textSize" -> "Text size" to "Messages and your conversation list"
+            "font" -> "Font" to "Used everywhere in Pyng"
             "showPhotos" -> "Contact photos" to "Tap a style to preview it live"
             "density" -> "List density" to "Tap a style to preview it live"
             "appIcon" -> "App icon" to "Changes the icon on your home screen"
@@ -274,6 +275,14 @@ fun StyleTiles(k: String, pickWall: () -> Unit) {
                 }
                 "textSize" -> { cols = 4; pvH = 72.dp; tiles = listOf("S" to 14, "M" to 17, "L" to 21, "XL" to 26).map { (n, fs) ->
                     Tile(TS[n]!!, null, p.textSize == n, { repo.prefs.edit { it.copy(textSize = n) } }) { T("Aa", size = fs.sp, weight = FontWeight.SemiBold) }
+                } }
+                "font" -> { cols = 2; pvH = 72.dp; tiles = listOf(
+                    Triple("Phone", "Your phone's font", androidx.compose.ui.text.font.FontFamily.Default),
+                    Triple("Pyng", "Pyng's own (Geist)", com.jpetrydesign.pyng.ui.theme.PyngFont),
+                ).map { (n, label, fam) ->
+                    Tile(label, null, p.opt("font") == n, { repo.prefs.setOpt("font", n) }) {
+                        androidx.compose.material3.Text("Aa", style = androidx.compose.ui.text.TextStyle(fontFamily = fam, fontSize = 28.sp, fontWeight = FontWeight.SemiBold, color = t.ink))
+                    }
                 } }
                 "showPhotos" -> tiles = listOf("Show" to "Photos next to names", "Hide" to "Initials only, cleaner list").map { (n, s) ->
                     Tile(n, s, p.showPhotos == n, { repo.prefs.edit { it.copy(showPhotos = n) } }) {
@@ -637,7 +646,7 @@ private fun StyleStudio(kind: String?, onClose: () -> Unit) {
     ) {
         val k = last ?: return@AnimatedVisibility
         val chat = k == "chat"
-        val tabs = if (chat) listOf("bubble" to "Bubbles", "gradient" to "Gradient", "statusStyle" to "Status", "photoGroups" to "Photos", "textSize" to "Text", "defWall" to "Wallpaper")
+        val tabs = if (chat) listOf("bubble" to "Bubbles", "gradient" to "Gradient", "statusStyle" to "Status", "photoGroups" to "Photos", "textSize" to "Text", "font" to "Font", "defWall" to "Wallpaper")
             else listOf("pinLayout" to "Layout", "pinStyle" to "Badges", "density" to "Density", "showPhotos" to "Faces")
         var tab by remember(k) { mutableStateOf(tabs.first().first) }
         Column(Modifier.fillMaxSize().background(t.bg).statusBarsPadding().navigationBarsPadding()) {

@@ -1,6 +1,8 @@
 package com.jpetrydesign.pyng.ui.theme
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -11,12 +13,21 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import com.jpetrydesign.pyng.R
 
-val Geist = FontFamily(
+/** Pyng's own typeface. */
+val PyngFont = FontFamily(
     Font(R.font.geist_regular, FontWeight.Normal),
     Font(R.font.geist_medium, FontWeight.Medium),
     Font(R.font.geist_semibold, FontWeight.SemiBold),
     Font(R.font.geist_bold, FontWeight.Bold),
 )
+
+/** Which typeface the app uses: your phone's (the default) or Pyng's own. Set from Appearance. */
+object AppFont {
+    var system by androidx.compose.runtime.mutableStateOf(true)
+}
+
+/** The font everything is drawn with. Follows the phone's font unless you pick Pyng's in Appearance. */
+val Geist: FontFamily get() = if (AppFont.system) FontFamily.Default else PyngFont
 
 /** Every color the UI uses, derived from a palette the same way the prototype does. */
 @Immutable
