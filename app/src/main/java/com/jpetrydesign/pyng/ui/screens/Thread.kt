@@ -185,6 +185,8 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     var fx by remember { mutableStateOf<String?>(null) }
     var tsShift by remember { mutableStateOf(0f) }
     var bottomH by remember { mutableStateOf(0) }
+    var headH by remember { mutableStateOf(0) }
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     var schedule by remember(convId) { mutableStateOf<Pair<Long, String>?>(null) }
     val openedAt = remember(convId) { System.currentTimeMillis() }
     var callSheet by remember { mutableStateOf(false) }
@@ -213,6 +215,8 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
         val list = repo.msgs[convId].orEmpty()
         when (demoOpen) {
             "menu" -> if (menuFor == null) list.lastOrNull { !it.fromMe }?.let { delay(600); openMenu(it) }
+            "search" -> searching = true
+            "search-q" -> { searching = true; delay(600); query = "the" }
             "menu-strip" -> if (menuFor == null) list.lastOrNull { mediaBundles(list).of.containsKey(it.key) }?.let { delay(900); openMenu(it) }
             "menu-link" -> if (menuFor == null) list.lastOrNull { linksIn(it.text).isNotEmpty() }?.let { delay(900); openMenu(it) }
             "info" -> info = list.lastOrNull { it.fromMe }?.key
@@ -273,6 +277,16 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     LaunchedEffect(burst) { if (burst != null) { delay(900); burst = null } }
 
     val q = query.trim().lowercase()
+    // Search shows its own page (shortcuts, then a list of matches) until you pick a match; then
+    // the chat shows with that message highlighted and the arrows step through the rest.
+    var showResults by remember(convId) { mutableStateOf(true) }
+    val panelOn = searching && (q.isEmpty() || showResults)
+    var olderPages by remember(convId) { mutableStateOf(0) }
+    val pageCap = if (q.isNotEmpty()) 40 else 8
+    val lookingFurther = searching && repo.hasMore[convId] == true && olderPages < pageCap
+    LaunchedEffect(searching, q.isNotEmpty(), msgs.size) {
+        if (lookingFurther) { delay(250); olderPages++; repo.loadMessages(convId, older = true) }
+    }
     val matches = if (searching && q.isNotEmpty()) msgs.filter { it.text.lowercase().contains(q) }.map { it.key } else emptyList()
     val curMatch = if (matches.isNotEmpty()) matches[(matches.size - 1 - (matchIdx % matches.size)).coerceIn(0, matches.size - 1)] else null
     val reversed = msgs.asReversed()
@@ -528,8 +542,25 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                     }
                 }
 
+                // Search page, under the header
+                androidx.compose.animation.AnimatedVisibility(panelOn, enter = fadeIn(), exit = fadeOut()) {
+                    ChatSearchPanel(
+                        t, conv, msgs, query, lookingFurther,
+                        onFill = { query = it; matchIdx = 0; showResults = true },
+                        onJump = { m ->
+                            rememberSearch(repo, query)
+                            val i = matches.indexOf(m.key)
+                            matchIdx = if (i >= 0) matches.size - 1 - i else 0
+                            showResults = false
+                            focusManager.clearFocus()
+                        },
+                        onOpen = { m, ref -> view(m, ref) },
+                        modifier = Modifier.padding(top = with(density) { headH.toDp() }),
+                    )
+                }
+
                 // Header
-                Box(Modifier.align(Alignment.TopCenter).fillMaxWidth()) {
+                Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().onSizeChanged { headH = it.height }) {
                     when {
                         selecting -> SelectHeader(t, selected.size,
                             onClose = { selected.clear() },
@@ -541,14 +572,14 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                     repo.deleteMessages(del); repo.toast(if (del.size > 1) "${del.size} messages deleted" else "Message deleted"); selected.clear()
                                 }
                             })
-                        searching -> SearchHeader(t, query, { query = it; matchIdx = 0 }, matches.size, matchIdx, { matchIdx++ }, { matchIdx = (matchIdx - 1 + maxOf(1, matches.size)) % maxOf(1, matches.size) }) { searching = false; query = "" }
+                        searching -> SearchHeader(t, query, { query = it; matchIdx = 0; showResults = true }, if (panelOn) -1 else matches.size, matchIdx, { matchIdx++ }, { matchIdx = (matchIdx - 1 + maxOf(1, matches.size)) % maxOf(1, matches.size) }) { searching = false; query = "" }
                         else -> ThreadHeader(t, conv, typing, wide, onBack = { nav.back() }, onContact = { nav.go(Route.Contact(convId)) }, onCall = { callSheet = true })
                     }
                 }
 
                 // Composer and everything above it. Measured with the keyboard included, so when the
                 // keyboard opens the newest messages ride up with it instead of hiding behind it.
-                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { bottomH = it.height }.imePadding()) {
+                if (!panelOn) Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { bottomH = it.height }.imePadding()) {
                     Composer(
                         t = t, conv = conv, draft = draft, onDraft = { draft = it; if (it.isNotEmpty()) repo.typingPing(convId) },
                         replyTo = replyTo, onCancelReply = { replyTo = null }, attachments = attachments, schedule = schedule,
@@ -618,7 +649,14 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
         }
         }
     }
-    BackHandler(enabled = selecting || searching) { if (selecting) selected.clear() else { searching = false; query = "" } }
+    BackHandler(enabled = selecting || searching) {
+        when {
+            selecting -> selected.clear()
+            // Stepping through matches in the chat: back returns to the list of matches.
+            !showResults && query.isNotBlank() -> showResults = true
+            else -> { searching = false; query = "" }
+        }
+    }
 }
 
 private fun dayOf(ms: Long) = ms / 86_400_000L + (java.util.TimeZone.getDefault().getOffset(ms) / 86_400_000L)
@@ -744,9 +782,14 @@ private fun SearchHeader(t: Tok, q: String, onQ: (String) -> Unit, count: Int, i
             if (q.isEmpty()) T("Search this chat", size = 15.sp, color = t.soft)
             BasicTextField(q, onQ, singleLine = true, cursorBrush = SolidColor(t.p), textStyle = TextStyle(fontFamily = Geist, fontSize = 15.sp, color = t.ink), modifier = Modifier.fillMaxWidth().focusRequester(focus))
         }
-        T(if (q.isBlank()) "" else if (count == 0) "0" else "${(idx % count) + 1}/$count", size = 12.5.sp, color = t.soft, modifier = Modifier.padding(horizontal = 8.dp))
-        CircleButton("M6 15l6-6 6 6", "Older", onUp, size = 38.dp, iconSize = 18.dp)
-        CircleButton("M6 9l6 6 6-6", "Newer", onDown, size = 38.dp, iconSize = 18.dp)
+        // count < 0: the search page is showing, so the arrows aren't needed yet.
+        if (count >= 0) {
+            T(if (q.isBlank()) "" else if (count == 0) "0" else "${(idx % count) + 1}/$count", size = 12.5.sp, color = t.soft, modifier = Modifier.padding(horizontal = 8.dp))
+            CircleButton("M6 15l6-6 6 6", "Older", onUp, size = 38.dp, iconSize = 18.dp)
+            CircleButton("M6 9l6 6 6-6", "Newer", onDown, size = 38.dp, iconSize = 18.dp)
+        } else if (q.isNotEmpty()) {
+            CircleButton(Icons.close, "Clear", { onQ("") }, size = 38.dp, iconSize = 16.dp, tint = t.soft)
+        } else Spacer(Modifier.width(8.dp))
     }
 }
 
