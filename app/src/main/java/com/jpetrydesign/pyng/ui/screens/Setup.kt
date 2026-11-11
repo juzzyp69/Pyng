@@ -100,26 +100,28 @@ fun SetupScreen(startStep: Int, onDone: () -> Unit, onLog: () -> Unit) {
     var emoji by remember { mutableStateOf("") }
     var qr by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var waitMsg by remember { mutableStateOf("Contacting Google Messages…") }
 
     LaunchedEffect(Unit) {
         repo.hub.events.collect { e ->
             when (e.kind) {
                 "paired" -> { link = "done"; error = null }
                 "pair_error" -> { link = "idle"; error = e.data.optString("error").replaceFirstChar { it.uppercase() } }
+                "pair_retry" -> waitMsg = "Your phone is slow to answer. Trying again (${e.data.optInt("attempt") + 1} of 4)…"
             }
         }
     }
 
     when (link) {
         "signin" -> { SignInWeb(onBack = { link = "idle" }) { cookies ->
-            link = "waiting"
+            link = "waiting"; waitMsg = "Contacting Google Messages…"
             scope.launch {
                 repo.hub.io { it.startGooglePairing(cookies) }
                     .onSuccess { emoji = it; link = "emoji" }
                     .onFailure { error = it.message?.replaceFirstChar { c -> c.uppercase() }; link = "idle" }
             }
         }; return }
-        "waiting" -> { Waiting("Contacting Google Messages…"); return }
+        "waiting" -> { Waiting(waitMsg); return }
         "emoji" -> { EmojiConfirm(emoji) { scope.launch { repo.hub.io { it.cancelPairing() } }; link = "idle" }; return }
         "qr" -> { QrPair(qr) { scope.launch { repo.hub.io { it.cancelPairing() } }; link = "idle" }; return }
     }

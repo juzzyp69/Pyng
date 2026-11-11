@@ -227,7 +227,9 @@ func (m *Messenger) StartGooglePairing(cookiesJSON string) (emoji string, err er
 	)
 	// An account that has used Google Messages on more than one phone lists all of them. If the
 	// newest one doesn't answer, try the next, the way the Google Messages bridge lets you retry.
-	for attempt := 0; attempt < 3; attempt++ {
+	// A phone that's asleep often misses the first knock but wakes for the next, so a plain
+	// "didn't answer" is retried too.
+	for attempt := 0; attempt < 4; attempt++ {
 		cli = m.newClient(ad)
 		cli.GaiaHackyDeviceSwitcher = attempt
 		ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
@@ -245,10 +247,15 @@ func (m *Messenger) StartGooglePairing(cookiesJSON string) (emoji string, err er
 		m.log.Err(err).Int("attempt", attempt).Msg("StartGaiaPairing failed")
 		bgCancel()
 		cli.Disconnect()
-		if !errors.Is(err, libgm.ErrHadMultipleDevices) || attempt == 2 {
+		if !errors.Is(err, libgm.ErrPairingInitTimeout) || attempt == 3 {
 			return "", friendlyPairError(err)
 		}
-		m.log.Info().Msg("Trying the next phone listed on this Google account")
+		if errors.Is(err, libgm.ErrHadMultipleDevices) {
+			m.log.Info().Msg("Trying the next phone listed on this Google account")
+		} else {
+			m.log.Info().Int("attempt", attempt+1).Msg("Phone didn't answer, knocking again")
+		}
+		m.emit("pair_retry", map[string]any{"attempt": attempt + 1})
 	}
 	m.mu.Lock()
 	m.pairing = bgCancel
