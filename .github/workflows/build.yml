@@ -2,7 +2,7 @@ name: Build
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch:
 
 permissions:
@@ -99,6 +99,8 @@ jobs:
           head -c 1500 ci-logs/klipy.txt
 
       - name: Publish test build
+        # Only main publishes. The dev branch is a quiet check build: it compiles and runs the screens, nothing goes out.
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: test-${{ github.run_number }}
