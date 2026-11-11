@@ -40,6 +40,12 @@ func folderOf(name string) gmproto.ListConversationsRequest_Folder {
 // ListConversations returns up to count conversations from a folder ("inbox",
 // "archive" or "spam") as a JSON array.
 func (m *Messenger) ListConversations(folder string, count int) (res string, err error) {
+	return m.ListConversationsBefore(folder, count, "", 0)
+}
+
+// ListConversationsBefore pages back through a folder: pass the id and timestamp (ms) of the
+// oldest conversation already shown to get the ones before it.
+func (m *Messenger) ListConversationsBefore(folder string, count int, beforeID string, beforeTs int64) (res string, err error) {
 	defer m.guard("ListConversations", &err)
 	cli, err := m.ready()
 	if err != nil {
@@ -47,10 +53,14 @@ func (m *Messenger) ListConversations(folder string, count int) (res string, err
 	}
 	ctx, cancel := ctx20()
 	defer cancel()
-	resp, err := cli.ListConversations(ctx, &gmproto.ListConversationsRequest{
+	req := &gmproto.ListConversationsRequest{
 		Count:  int64(count),
 		Folder: folderOf(folder),
-	})
+	}
+	if beforeID != "" {
+		req.Cursor = &gmproto.Cursor{LastItemID: beforeID, LastItemTimestamp: beforeTs * 1000}
+	}
+	resp, err := cli.ListConversations(ctx, req)
 	if err != nil {
 		return "", err
 	}

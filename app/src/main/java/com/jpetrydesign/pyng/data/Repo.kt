@@ -303,9 +303,13 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
                 }
                 if (r.isSuccess) {
                     val (inbox, arch, spam) = r.getOrThrow()
-                    val all = Conv.list(inbox) + (arch?.let { Conv.list(it) } ?: emptyList()) + (spam?.let { Conv.list(it) } ?: emptyList())
+                    val inboxList = Conv.list(inbox)
+                    val all = inboxList + (arch?.let { Conv.list(it) } ?: emptyList()) + (spam?.let { Conv.list(it) } ?: emptyList())
                     val ids = all.map { it.id }.toSet()
-                    convs.keys.filter { it !in ids }.forEach { convs.remove(it) }
+                    // Chats older than this first page were loaded by scrolling down; keep them.
+                    val cutoff = if (inboxList.size >= 120) inboxList.minOfOrNull { it.ts } ?: 0L else 0L
+                    convs.keys.filter { it !in ids && (convs[it]?.ts ?: 0L) >= cutoff }.forEach { convs.remove(it) }
+                    if (moreConvs == null) moreConvs = inboxList.size >= 120
                     all.distinctBy { it.id }.forEach { putConv(it) }
                     ensureAvatars(convs.values.flatMap { c -> c.others.map { it.id } }.distinct())
                     loadError = null
@@ -317,6 +321,28 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
                 delay(1500L * tries)
             }
             loading = false
+        }
+    }
+
+    /** Whether there are older chats to load by scrolling to the bottom of the list (null until known). */
+    var moreConvs by mutableStateOf<Boolean?>(null)
+    private var loadingConvs = false
+
+    /** Loads the next 60 older chats in your inbox. */
+    fun loadOlderConvs() {
+        if (demo || loadingConvs || moreConvs != true) return
+        val oldest = convs.values.filter { it.status == "active" && it.ts > 0 }.minByOrNull { it.ts } ?: return
+        loadingConvs = true
+        scope.launch {
+            hub.io { it.listConversationsBefore("inbox", 60, oldest.id, oldest.ts) }
+                .onSuccess { json ->
+                    val got = Conv.list(json).filter { it.id != oldest.id }
+                    got.forEach { putConv(it) }
+                    ensureAvatars(got.flatMap { c -> c.others.map { it.id } }.distinct())
+                    moreConvs = got.isNotEmpty()
+                }
+                .onFailure { toast("Couldn't load older chats") }
+            loadingConvs = false
         }
     }
 

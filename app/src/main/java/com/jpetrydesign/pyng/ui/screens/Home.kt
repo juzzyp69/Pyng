@@ -451,6 +451,13 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                         onSwipe = { side -> swipeAct(repo, c, if (side > 0) p.opt("swipeR") else p.opt("swipe")) },
                     ) }
                 }
+                // Older chats load as you reach the bottom of the list.
+                if (repo.moreConvs == true && !editPins) item("older") {
+                    LaunchedEffect(rows.size) { repo.loadOlderConvs() }
+                    Box(onSheet.fillMaxWidth().padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
+                        androidx.compose.material3.CircularProgressIndicator(color = t.soft, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                    }
+                }
                 if (archCount > 0) item("arch") { Box(onSheet) { FolderRow(Icons.archive, "Archived · $archCount") { nav.go(Route.Lists("archived")) } } }
                 if (spamCount > 0) item("spam") { Box(onSheet) { FolderRow(Icons.shield, "Spam & blocked · $spamCount") { nav.go(Route.Lists("spam")) } } }
                 item("hint") { Box(if (sheetMode) onSheet.heightIn(min = 400.dp) else Modifier.fillMaxWidth()) {
