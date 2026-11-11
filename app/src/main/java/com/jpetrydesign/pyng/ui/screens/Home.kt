@@ -1385,6 +1385,9 @@ private fun Modifier.jellyRise(tick: Int, index: Int, cols: Int, rows: Int, name
     return graphicsLayer {
         val f = prog.value
         if (f >= 1f) return@graphicsLayer
+        // Fade each draw directly instead of through an offscreen layer the size of the photo, which
+        // would cut off the unread ring and badge that sit just outside it.
+        compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
         if (name) {
             val k = jellyFrames(f, NAME_FRAMES)
             translationY = k[0] * density
