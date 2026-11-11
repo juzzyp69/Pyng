@@ -169,11 +169,11 @@ fun AppearanceScreen(nav: Nav) {
             Spacer(Modifier.height(14.dp))
             Card {
                 Row(Modifier.enter(3).fillMaxWidth().clickable { pick = "appIcon" }.padding(horizontal = 16.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(40.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(Icons.appIcon, t.p, 19.dp) }
+                    AppIconPreview(AppIcons.key(p.appIcon, AppIcons.colorFor(p, p.appIcon)), 40.dp)
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
                         T("App icon", size = 15.5.sp, weight = FontWeight.SemiBold)
-                        T(p.appIcon, size = 13.sp, weight = FontWeight.SemiBold, color = t.p)
+                        T(p.appIcon + (AppIcons.colorFor(p, p.appIcon)?.let { " · $it" } ?: ""), size = 13.sp, weight = FontWeight.SemiBold, color = t.p)
                     }
                     Ico(Icons.chev, t.faint, 16.dp, 2f)
                 }
@@ -323,8 +323,12 @@ fun StyleTiles(k: String, pickWall: () -> Unit) {
                 "photoGroups" -> { cols = 2; pvH = 92.dp; tiles = listOf("Peek" to "Next photo peeks in", "Stack" to "Swipe to fan out", "Rail" to "Thumbnails beside", "Deck" to "Flick through").map { (n, sub) ->
                     Tile(n, sub, p.opt("photoGroups") == n, { repo.prefs.setOpt("photoGroups", n) }) { PhotoGroupMini(n, t) }
                 } }
-                "appIcon" -> { cols = 3; pvH = 84.dp; tiles = AppIcons.all.map { ic ->
-                    Tile(ic.name, null, p.appIcon == ic.name, { AppIcons.set(ctx, ic.name); repo.prefs.edit { it.copy(appIcon = ic.name) }; repo.toast("${ic.name} icon set on your home screen") }) { AppIconPreview(ic) }
+                "appIcon" -> { cols = 3; pvH = 84.dp; tiles = AppIcons.styles.map { st ->
+                    val color = AppIcons.colorFor(p, st)
+                    Tile(st, null, p.appIcon == st, {
+                        AppIcons.set(ctx, st, color); repo.prefs.edit { it.copy(appIcon = st) }
+                        repo.toast("$st icon set on your home screen")
+                    }) { AppIconPreview(AppIcons.key(st, color)) }
                 } }
                 else -> { cols = 3; pvH = 120.dp; tiles = listOf(Tile("Your photo", null, p.defWall.startsWith("photo:"), { pickWall() }) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -350,6 +354,24 @@ fun StyleTiles(k: String, pickWall: () -> Unit) {
                         }
                     }
                     repeat(cols - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+            // Soft and Duotone come in colors: a row of swatches under the grid.
+            if (k == "appIcon") AppIcons.colors[p.appIcon]?.let { list ->
+                val cur = AppIcons.colorFor(p, p.appIcon)
+                Row(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    list.forEach { c ->
+                        val on = c.name == cur
+                        Box(
+                            Modifier.size(34.dp).then(if (on) Modifier.border(2.dp, t.p, CircleShape).padding(4.dp) else Modifier).clip(CircleShape)
+                                .background(Brush.linearGradient(0.5f to c.a, 0.5f to c.b, start = androidx.compose.ui.geometry.Offset.Zero, end = androidx.compose.ui.geometry.Offset.Infinite))
+                                .clickable {
+                                    repo.prefs.setOpt("iconColor:" + p.appIcon, c.name)
+                                    AppIcons.set(ctx, p.appIcon, c.name)
+                                    repo.toast("${p.appIcon} · ${c.name} icon set")
+                                },
+                        )
+                    }
                 }
             }
     }
@@ -388,24 +410,59 @@ private fun PinMini(n: String, AV: Color, LN: Color) {
 // ---------- app icons ----------
 
 object AppIcons {
-    class Ic(val name: String, val alias: String, val bg: Brush, val fg: Color, val dot: Color?)
-    val all = listOf(
-        // "Frost" lives on the original default slot, so updating never moves the icon on your home screen.
-        Ic("Frost", ".IconClassic", Brush.linearGradient(listOf(hex("#FFFFFF"), hex("#EEF3FF"))), hex("#2A5AE8"), null),
-        Ic("Frost dark", ".IconFrostDark", Brush.linearGradient(listOf(hex("#1A2756"), hex("#0A1230"))), Color.White, null),
-        Ic("Duotone", ".IconDuotone", Brush.linearGradient(listOf(hex("#1E5FD1"), hex("#1E5FD1"))), hex("#F2B33D"), null),
-        Ic("Soft", ".IconSoft", Brush.linearGradient(listOf(hex("#E3ECFB"), hex("#E3ECFB"))), hex("#1E5FD1"), null),
-        Ic("Mono", ".IconMono", Brush.linearGradient(listOf(hex("#15171D"), hex("#15171D"))), Color.White, null),
-        Ic("Glass", ".IconGlass", Brush.linearGradient(listOf(hex("#1E5FD1"), hex("#8CB8F0"))), Color.White, null),
+    /** A color choice for Soft or Duotone, with the two colors its swatch shows. */
+    class Color2(val name: String, val a: Color, val b: Color)
+
+    val styles = listOf("Frost", "Frost dark", "Glass", "Soft", "Duotone", "Mono")
+    val colors = mapOf(
+        "Soft" to listOf(
+            Color2("Blue", hex("#D6E3FF"), hex("#4A86FF")), Color2("Rose", hex("#FFD9E5"), hex("#F0679A")),
+            Color2("Peach", hex("#FFDCC8"), hex("#FF9161")), Color2("Mint", hex("#CFF1E2"), hex("#2FBF8A")),
+            Color2("Lilac", hex("#E1D6FF"), hex("#8C6CF0")), Color2("Lemon", hex("#FFF0B8"), hex("#F2B92B")),
+            Color2("Sky", hex("#CDEEFF"), hex("#2BA8E8")), Color2("Slate", hex("#DDE2EA"), hex("#5E6B82")),
+        ),
+        "Duotone" to listOf(
+            Color2("Midnight", hex("#1C2B66"), hex("#7FB0FF")), Color2("Plum", hex("#4A1D4F"), hex("#FF8FC8")),
+            Color2("Forest", hex("#123F33"), hex("#7CE3B5")), Color2("Ember", hex("#4F1E0C"), hex("#FFB27A")),
+            Color2("Ocean", hex("#0E3A52"), hex("#7EE0FF")), Color2("Wine", hex("#5A1424"), hex("#FF8E9E")),
+            Color2("Cocoa", hex("#3E2A1F"), hex("#F1C99B")), Color2("Graphite", hex("#2B2F38"), hex("#D7DEEA")),
+        ),
     )
 
-    fun set(ctx: android.content.Context, name: String) {
+    fun colorFor(p: com.jpetrydesign.pyng.data.AppPrefs, style: String): String? =
+        colors[style]?.let { list -> p.opt("iconColor:$style").takeIf { c -> list.any { it.name == c } } ?: list.first().name }
+
+    /** The artwork name, e.g. "frost", "soft_rose", "duo_plum". */
+    fun key(style: String, color: String?): String = when (style) {
+        "Frost" -> "frost"
+        "Frost dark" -> "frost_dark"
+        "Glass" -> "glass"
+        "Mono" -> "mono"
+        "Soft" -> "soft_" + (color ?: "Blue").lowercase()
+        else -> "duo_" + (color ?: "Midnight").lowercase()
+    }
+
+    /** Launcher entries. The first color of Soft and Duotone keep their original names, so updates never move your icon. */
+    private fun alias(style: String, color: String?): String = when (style) {
+        "Frost" -> ".IconClassic"
+        "Frost dark" -> ".IconFrostDark"
+        "Glass" -> ".IconGlass"
+        "Mono" -> ".IconMono"
+        "Soft" -> if (color == null || color == "Blue") ".IconSoft" else ".IconSoft$color"
+        else -> if (color == null || color == "Midnight") ".IconDuotone" else ".IconDuo$color"
+    }
+
+    private val allAliases: List<String> get() = styles.flatMap { st -> colors[st]?.map { alias(st, it.name) } ?: listOf(alias(st, null)) }
+
+    fun set(ctx: android.content.Context, style: String, color: String? = null) {
         val pm = ctx.packageManager
-        all.forEach { ic ->
+        val want = alias(style, color)
+        // Turn the new one on first, so there's never a moment with no icon at all.
+        (listOf(want) + allAliases.filter { it != want }).forEach { a ->
             runCatching {
                 pm.setComponentEnabledSetting(
-                    ComponentName(ctx.packageName, ctx.packageName + ic.alias),
-                    if (ic.name == name) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    ComponentName(ctx.packageName, ctx.packageName + a),
+                    if (a == want) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
                     PackageManager.DONT_KILL_APP,
                 )
             }
@@ -414,14 +471,15 @@ object AppIcons {
 }
 
 @Composable
-private fun AppIconPreview(ic: AppIcons.Ic) {
+private fun AppIconPreview(key: String, size: Dp = 58.dp) {
     // The real launcher artwork, drawn the way a round icon mask shows it.
-    val key = ic.alias.removePrefix(".Icon").lowercase()
-    val bgRes = when (key) { "frostdark" -> com.jpetrydesign.pyng.R.drawable.icon_frost_dark_bg; "classic" -> com.jpetrydesign.pyng.R.drawable.icon_frost_bg; "duotone" -> com.jpetrydesign.pyng.R.drawable.icon_duotone_bg; "soft" -> com.jpetrydesign.pyng.R.drawable.icon_soft_bg; "mono" -> com.jpetrydesign.pyng.R.drawable.icon_mono_bg; "glass" -> com.jpetrydesign.pyng.R.drawable.icon_glass_bg; else -> com.jpetrydesign.pyng.R.drawable.icon_classic_bg }
-    val fgRes = when (key) { "frostdark" -> com.jpetrydesign.pyng.R.mipmap.icon_frost_dark_fg; "classic" -> com.jpetrydesign.pyng.R.mipmap.icon_frost_fg; "duotone" -> com.jpetrydesign.pyng.R.drawable.icon_duotone_fg; "soft" -> com.jpetrydesign.pyng.R.drawable.icon_soft_fg; "mono" -> com.jpetrydesign.pyng.R.drawable.icon_mono_fg; "glass" -> com.jpetrydesign.pyng.R.drawable.icon_glass_fg; else -> com.jpetrydesign.pyng.R.drawable.icon_classic_fg }
-    Box(Modifier.size(58.dp).shadow(6.dp, CircleShape).clip(CircleShape), contentAlignment = Alignment.Center) {
-        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(bgRes), null, modifier = Modifier.requiredSize(58.dp * 1.5f))
-        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(fgRes), null, modifier = Modifier.requiredSize(58.dp * 1.5f))
+    val ctx = LocalContext.current
+    val res = ctx.resources
+    val bg = remember(key) { res.getIdentifier("icon_${key}_bg", "drawable", ctx.packageName) }
+    val fg = remember(key) { res.getIdentifier("icon_${key}_fg", "mipmap", ctx.packageName) }
+    Box(Modifier.size(size).shadow(if (size > 48.dp) 6.dp else 3.dp, CircleShape).clip(CircleShape), contentAlignment = Alignment.Center) {
+        if (bg != 0) androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(bg), null, modifier = Modifier.requiredSize(size * 1.5f))
+        if (fg != 0) androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(fg), null, modifier = Modifier.requiredSize(size * 1.5f))
     }
 }
 

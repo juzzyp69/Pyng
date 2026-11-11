@@ -40,9 +40,11 @@ val RELEASES = listOf(
             "Copy Button for Codes\nVerification code notifications now show a Copy button next to Reply",
             "Automatic Code Copying\nNew codes are copied as they arrive, so your keyboard can suggest them. Turn it off in Settings",
             "Version History Added\nTap Version in Help & about to see what changed in each update",
+            "New App Icons\nEvery icon uses the main Pyng logo, with 8 colors each for Soft and Duotone and a frostier Glass",
         ),
         fixed = listOf(
             "Chat Search Names\nItems under Latest shared now show who sent them",
+            "App Color Done Button\nDone now takes you back to Appearance instead of your chat list",
         ),
     ),
     Release(
