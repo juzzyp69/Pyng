@@ -166,49 +166,19 @@ fun SetupScreen(startStep: Int, onDone: () -> Unit, onLog: () -> Unit) {
                     if (link == "done") StatusCard(true, "Chat features connected", "RCS through Google Messages")
                     else if (error != null) StatusCard(false, "Couldn't link", error!!)
                 }
-                3 -> ColorsStep { step = 4 }
-                // A short, honest note about how AI helped make Pyng. Learn more, or read it later in Help & about.
-                4 -> SetupPage(
-                    Icons.info, "A Note on AI", AI_NOTE_SHORT,
-                    "Learn more", { step = 5 },
-                    secondary = "Read later", onSecondary = finish,
-                ) {
-                    T("It's always in Settings › Help & about.", size = 13.sp, color = LocalTok.current.faint, align = TextAlign.Center)
-                }
-                else -> AiNotePage(onBack = { step = 4 }, onDone = finish)
+                else -> ColorsStep { finish() }
             }
         }
-        if (step in 1..3 && !(step == 2 && link != "done")) {
+        if (step in 1..2 && !(step == 2 && link != "done")) {
             T(
                 "Skip", size = 14.sp, weight = FontWeight.SemiBold, color = LocalTok.current.soft,
                 modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 18.dp, end = 26.dp)
                     .clickable { step += 1 },
             )
         }
-        if (step <= 4) Dots(step, 5, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 14.dp))
+        Dots(step, 4, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 14.dp))
     }
     BackHandler(enabled = step > 0) { step -= 1 }
-}
-
-/** The full AI note inside the welcome screens, with a way to start using the app. */
-@Composable
-private fun AiNotePage(onBack: () -> Unit, onDone: () -> Unit) {
-    Column(Modifier.fillMaxSize().systemBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Column(
-            Modifier.weight(1f).widthIn(max = 520.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp),
-        ) {
-            Spacer(Modifier.height(18.dp))
-            CircleButton(Icons.back, "Back", onBack, modifier = Modifier.padding(start = 0.dp))
-            Spacer(Modifier.height(10.dp))
-            T("AI in Pyng", size = 30.sp, weight = FontWeight.Bold, letterSpacing = (-0.8).sp, lineHeight = 35.sp)
-            Spacer(Modifier.height(20.dp))
-            AiNoteBody()
-            Spacer(Modifier.height(24.dp))
-        }
-        Column(Modifier.widthIn(max = 460.dp).fillMaxWidth().padding(horizontal = 28.dp).padding(bottom = 40.dp)) {
-            PillButton("Start messaging", onDone, Modifier.fillMaxWidth().edge(RoundedCornerShape(29.dp), primary = true), height = 58.dp)
-        }
-    }
 }
 
 @Composable
@@ -353,7 +323,7 @@ private fun ColorsStep(onDone: () -> Unit) {
     val repo = LocalRepo.current
     val t = LocalTok.current
     val p = repo.prefs.state
-    SetupPage(Icons.palette, "Pick Your Colors", "Change this any time, or make your own with the color wheel in Appearance.", "Continue", onDone) {
+    SetupPage(Icons.palette, "Pick Your Colors", "Change this any time, or make your own with the color wheel in Appearance.", "Start messaging", onDone) {
         Box(Modifier.enter(3)) {
             WhiteCard {
                 Column(Modifier.padding(18.dp)) {

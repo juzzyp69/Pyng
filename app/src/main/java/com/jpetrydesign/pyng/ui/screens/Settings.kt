@@ -196,7 +196,7 @@ fun SectionScreen(nav: Nav, key: String) {
     val p = repo.prefs.state
     val conn by repo.hub.connection.collectAsState()
     val app = ctx.applicationContext as PyngApp
-    val title = mapOf("chats" to "Chats", "notifications" to "Notifications", "chatfeat" to "Chat features", "privacy" to "Privacy & safety", "access" to "Accessibility", "storage" to "Storage", "about" to "Help & about", "ai" to "AI in Pyng")[key] ?: "Settings"
+    val title = mapOf("chats" to "Chats", "notifications" to "Notifications", "chatfeat" to "Chat features", "privacy" to "Privacy & safety", "access" to "Accessibility", "storage" to "Storage", "about" to "Help & about")[key] ?: "Settings"
     Page(title, { nav.back() }) {
         when (key) {
             "chats" -> {
@@ -342,11 +342,9 @@ fun SectionScreen(nav: Nav, key: String) {
                 }
                 Note("Your messages and media are kept and backed up by Google Messages with your Google account. This app only keeps its own settings and a cache.")
             }
-            "ai" -> AiNoteBody(Modifier.padding(horizontal = 6.dp, vertical = 8.dp))
             else -> {
                 Group(null) {
                     ListRow("Version", BuildConfig.VERSION_NAME, trailing = null); Hairline()
-                    ListRow("AI in Pyng", "How AI helped build Pyng, and where I stand", onClick = { nav.go(Route.Section("ai")) }); Hairline()
                     ListRow("Debug log", "Share this if something isn't working", onClick = { nav.go(Route.Log) }); Hairline()
                     ListRow("Replay setup", "See the welcome screens again", onClick = { nav.replace(Route.Setup(0)) }); Hairline()
                     ListRow("Open-source licenses", "libgm (AGPL-3.0) · Geist font (OFL)", onClick = {
