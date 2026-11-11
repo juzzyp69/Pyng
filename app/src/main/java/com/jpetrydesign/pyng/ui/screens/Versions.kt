@@ -189,7 +189,12 @@ private fun Section(icon: String, title: String, items: List<String>, bg: androi
                 Spacer(Modifier.width(10.dp))
                 Column {
                     T(main, size = 14.5.sp, lineHeight = 20.sp, weight = FontWeight.SemiBold)
-                    if (extra.isNotEmpty()) T(extra, size = 13.sp, lineHeight = 18.sp, color = t.soft, modifier = Modifier.padding(top = 1.dp))
+                    // The detail sits one step further in, with its own dash, like a nested bullet.
+                    if (extra.isNotEmpty()) Row(Modifier.padding(start = 14.dp, top = 2.dp), verticalAlignment = Alignment.Top) {
+                        T("–", size = 13.sp, lineHeight = 18.sp, color = t.faint)
+                        Spacer(Modifier.width(8.dp))
+                        T(extra, size = 13.sp, lineHeight = 18.sp, color = t.soft)
+                    }
                 }
             }
         }
