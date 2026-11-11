@@ -79,6 +79,24 @@ jobs:
           cp app/build/outputs/apk/release/app-x86_64-release.apk "pyng-0.6.6-emulator.apk"
           ls -la pyng-0.6.6*.apk
 
+      - name: GIF service check
+        if: always()
+        continue-on-error: true
+        shell: bash
+        env:
+          KLIPY_KEY: ${{ secrets.KLIPY_KEY }}
+        run: |
+          mkdir -p ci-logs
+          {
+            echo "key length: ${#KLIPY_KEY}"
+            for k in gifs stickers; do
+              echo "== $k trending"
+              curl -sS -m 20 -w "\nHTTP %{http_code}\n" "https://api.klipy.com/api/v1/$KLIPY_KEY/$k/trending?per_page=2&page=1&customer_id=ci-check&locale=en_US" | head -c 3000
+              echo
+            done
+          } 2>&1 | sed "s/$KLIPY_KEY/<key>/g" > ci-logs/klipy.txt
+          head -c 1500 ci-logs/klipy.txt
+
       - name: Publish test build
         uses: softprops/action-gh-release@v2
         with:

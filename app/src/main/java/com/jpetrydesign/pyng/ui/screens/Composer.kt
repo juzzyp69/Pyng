@@ -564,7 +564,10 @@ private fun KlipyTab(t: Tok, kind: String, onGif: (Pending) -> Unit, onMake: (()
             val url = base + "?per_page=30&page=$p&customer_id=$cid&locale=en_US&content_filter=$filter" +
                 (if (term.isEmpty()) "" else "&q=" + URLEncoder.encode(term, "UTF-8"))
             val c = (URL(url).openConnection() as java.net.HttpURLConnection).apply { connectTimeout = 10_000; readTimeout = 15_000; setRequestProperty("Accept", "application/json") }
-            parseKlips(kind, c.inputStream.bufferedReader().use { it.readText() })
+            val body = c.inputStream.bufferedReader().use { it.readText() }
+            val r = parseKlips(kind, body)
+            if (r.first.isEmpty()) android.util.Log.w("Pyng", "KLIPY $kind gave nothing (HTTP ${c.responseCode}): " + body.take(300))
+            r
         }.getOrNull()
     }
     LaunchedEffect(kind, term, filter) {
