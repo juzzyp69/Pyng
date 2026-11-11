@@ -550,7 +550,7 @@ private fun KlipyTab(t: Tok, kind: String, onGif: (Pending) -> Unit, onMake: (()
     var items by remember(kind) { mutableStateOf<List<Klip>>(emptyList()) }
     var page by remember(kind) { mutableStateOf(1) }
     var more by remember(kind) { mutableStateOf(false) }
-    var loading by remember(kind) { mutableStateOf(false) }
+    var loading by remember(kind) { mutableStateOf(true) }
     var failed by remember(kind) { mutableStateOf(false) }
     var sending by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()

@@ -89,9 +89,10 @@ jobs:
           mkdir -p ci-logs
           {
             echo "key length: ${#KLIPY_KEY}"
-            for k in gifs stickers; do
+            for k in stickers clips memes; do
               echo "== $k trending"
-              curl -sS -m 20 -w "\nHTTP %{http_code}\n" "https://api.klipy.com/api/v1/$KLIPY_KEY/$k/trending?per_page=2&page=1&customer_id=ci-check&locale=en_US" | head -c 3000
+              curl -sS -m 20 -o /tmp/k.json -w "HTTP %{http_code}\n" "https://api.klipy.com/api/v1/$KLIPY_KEY/$k/trending?per_page=2&page=1&customer_id=ci-check&locale=en_US&content_filter=medium" || true
+              head -c 1800 /tmp/k.json || true
               echo
             done
           } 2>&1 | sed "s/$KLIPY_KEY/<key>/g" > ci-logs/klipy.txt
