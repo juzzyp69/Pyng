@@ -188,30 +188,43 @@ fun InAppBanner(item: Pair<Conv, Msg>?, onOpen: (String) -> Unit, onClose: () ->
     }
 }
 
-/** Launcher shortcuts: New message plus your top pinned chats (hold the app icon). */
+/**
+ * Shortcuts for your chats: New message plus your pinned chats, then your most recent ones. They
+ * show when you hold the app icon, and Android also offers them at the top of the share sheet.
+ */
 fun updateShortcuts(ctx: Context, repo: Repo) {
     runCatching {
         val p = repo.prefs.state
+        val max = runCatching { ShortcutManagerCompat.getMaxShortcutCountPerActivity(ctx) }.getOrDefault(5).coerceIn(4, 8)
         val list = mutableListOf<ShortcutInfoCompat>()
         list += ShortcutInfoCompat.Builder(ctx, "new")
             .setShortLabel("New message")
             .setIcon(IconCompat.createWithResource(ctx, com.jpetrydesign.pyng.R.drawable.ic_shortcut_new))
             .setIntent(Intent(ctx, MainActivity::class.java).setAction("new"))
             .build()
-        p.pinned.mapNotNull { repo.convs[it] }.filter { it.status == "active" }.take(3).forEachIndexed { i, c ->
+        val pinned = p.pinned.mapNotNull { repo.convs[it] }.filter { it.status == "active" }
+        val recent = repo.convs.values.filter { it.status == "active" && !it.readOnly && it.id !in p.pinned }.sortedByDescending { it.ts }
+        (pinned + recent).take(max - 1).forEachIndexed { i, c ->
             val path = repo.avatars[c.avatarId].orEmpty()
             val bmp = Notifier.circle(if (path.isNotEmpty()) BitmapFactory.decodeFile(path) else null) ?: initialsBitmap(initialsOf(c.title))
-            list += ShortcutInfoCompat.Builder(ctx, "chat-" + c.id)
+            val person = androidx.core.app.Person.Builder().setName(c.title).setKey(c.id).setIcon(IconCompat.createWithBitmap(bmp)).build()
+            // Same id as the chat's notification shortcut, so Android treats them as one conversation.
+            list += ShortcutInfoCompat.Builder(ctx, c.id)
                 .setShortLabel(c.shortTitle.ifBlank { c.title })
                 .setLongLabel(c.title)
                 .setRank(i + 1)
                 .setIcon(IconCompat.createWithBitmap(bmp))
                 .setIntent(Intent(ctx, MainActivity::class.java).setAction("open").putExtra("chat", c.id))
+                .setLongLived(true).setPerson(person)
+                .setCategories(setOf(SHARE_CATEGORY, "android.shortcut.conversation"))
                 .build()
         }
         ShortcutManagerCompat.setDynamicShortcuts(ctx, list)
     }
 }
+
+/** Matches the share-target in res/xml/shortcuts.xml. */
+const val SHARE_CATEGORY = "com.jpetrydesign.pyng.SHARE_TARGET"
 
 private fun initialsBitmap(ini: String): Bitmap {
     val size = 192

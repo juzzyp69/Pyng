@@ -250,6 +250,16 @@ fun SectionScreen(nav: Nav, key: String) {
                     Hairline()
                     TogRow("Hide Google Messages' alerts", "hideGmAlerts", "Clears Google Messages' copy so you only see Pyng's. Codes and other texts Android hides are always left alone")
                     Hairline()
+                    TogRow("Offer Pyng for text links", "smsLinks", "Tapping a text link or a Text button in another app asks whether to open Google Messages or Pyng") { on ->
+                        runCatching {
+                            ctx.packageManager.setComponentEnabledSetting(
+                                android.content.ComponentName(ctx, "com.jpetrydesign.pyng.SmsLinks"),
+                                if (on) android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED else android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                                android.content.pm.PackageManager.DONT_KILL_APP,
+                            )
+                        }
+                    }
+                    Hairline()
                     ListRow("Silence Google Messages", "Set its notifications to Silent (not off) so you only hear Pyng", onClick = {
                         runCatching { ctx.startActivity(Intent(SysSettings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(SysSettings.EXTRA_APP_PACKAGE, com.jpetrydesign.pyng.data.GmListener.GM)) }
                     })

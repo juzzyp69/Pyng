@@ -167,7 +167,7 @@ fun PyngRoot(repo: Repo, nav: Nav) {
     var banner by remember { mutableStateOf<Pair<com.jpetrydesign.pyng.data.Conv, com.jpetrydesign.pyng.data.Msg>?>(null) }
     LaunchedEffect(Unit) { repo.banners.collect { banner = it } }
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    LaunchedEffect(repo.prefs.state.pinned, repo.convs.size) { com.jpetrydesign.pyng.ui.screens.updateShortcuts(ctx, repo) }
+    LaunchedEffect(repo.prefs.state.pinned, repo.convs.size, repo.convs.values.maxOfOrNull { it.ts }) { com.jpetrydesign.pyng.ui.screens.updateShortcuts(ctx, repo) }
     LaunchedEffect(Unit) {
         repo.toasts.collect {
             toast = it

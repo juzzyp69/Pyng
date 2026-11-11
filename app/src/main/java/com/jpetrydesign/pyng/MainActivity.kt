@@ -153,7 +153,29 @@ class MainActivity : FragmentActivity() {
                 val files = uris.take(10).mapNotNull { u -> repo.importUri(u) }
                 if (text.isBlank() && files.isEmpty()) { repo.toast("Nothing to share"); return@launch }
                 repo.pendingShare = com.jpetrydesign.pyng.data.Repo.Shared(text, files)
-                nav.home(); nav.go(Route.Share)
+                // Picked a chat right in the share sheet: open it with this in the box, ready to send.
+                val direct = i.getStringExtra(androidx.core.content.pm.ShortcutManagerCompat.EXTRA_SHORTCUT_ID)?.takeIf { repo.convs.containsKey(it) }
+                if (direct != null) { nav.home(); nav.openChat(direct) } else { nav.home(); nav.go(Route.Share) }
+            }
+            return
+        }
+        // A text link from another app (sms:, smsto:): open that person's chat with any message filled in.
+        val scheme = i?.data?.scheme?.lowercase()
+        if ((i?.action == Intent.ACTION_SENDTO || i?.action == Intent.ACTION_VIEW) && scheme in setOf("sms", "smsto", "mms", "mmsto")) {
+            val repo = app.repo
+            if (!repo.paired) { repo.toast("Sign in to Pyng first"); return }
+            val raw = i?.data?.schemeSpecificPart.orEmpty()
+            val numbers = raw.substringBefore('?').split(',', ';').map { android.net.Uri.decode(it).trim() }.filter { n -> n.any(Char::isDigit) }
+            val body = i?.getStringExtra("sms_body") ?: i?.getStringExtra(Intent.EXTRA_TEXT)
+                ?: raw.substringAfter('?', "").split('&').firstOrNull { it.startsWith("body=") }?.substringAfter('=')?.let(android.net.Uri::decode).orEmpty()
+            if (numbers.isEmpty()) { nav.home(); nav.go(Route.NewChat()); return }
+            lifecycleScope.launch {
+                fun key(n: String) = n.filter(Char::isDigit).takeLast(10)
+                val want = numbers.map(::key).toSet()
+                val have = repo.convs.values.firstOrNull { c -> c.others.map { key(it.number) }.toSet() == want }
+                val conv = have ?: repo.startChat(numbers).getOrElse { repo.toast(it.message ?: "Couldn't open that chat"); return@launch }
+                if (body.isNotBlank()) repo.pendingShare = com.jpetrydesign.pyng.data.Repo.Shared(body, emptyList())
+                nav.home(); nav.openChat(conv.id)
             }
             return
         }

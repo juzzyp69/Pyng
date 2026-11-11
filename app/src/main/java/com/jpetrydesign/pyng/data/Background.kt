@@ -184,7 +184,7 @@ object Notifier {
                 .setIcon(if (icon != null) IconCompat.createWithAdaptiveBitmap(icon) else IconCompat.createWithResource(ctx, R.drawable.ic_shortcut_new))
                 .setIntent(Intent(ctx, MainActivity::class.java).setAction("open").putExtra("chat", conv.id))
                 .setLongLived(true).setPerson(person)
-                .setCategories(setOf("android.shortcut.conversation"))
+                .setCategories(setOf(com.jpetrydesign.pyng.ui.screens.SHARE_CATEGORY, "android.shortcut.conversation"))
                 .build()
             androidx.core.content.pm.ShortcutManagerCompat.pushDynamicShortcut(ctx, sc)
         }

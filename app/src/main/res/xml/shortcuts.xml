@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lets Android put your recent and pinned chats right in the share sheet. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <share-target android:targetClass="com.jpetrydesign.pyng.ShareTarget">
+        <data android:mimeType="text/*" />
+        <data android:mimeType="image/*" />
+        <data android:mimeType="video/*" />
+        <data android:mimeType="audio/*" />
+        <data android:mimeType="application/*" />
+        <category android:name="com.jpetrydesign.pyng.SHARE_TARGET" />
+    </share-target>
+</shortcuts>
