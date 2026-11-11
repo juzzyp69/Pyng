@@ -408,3 +408,59 @@ class GmListener : android.service.notification.NotificationListenerService() {
 
     companion object { const val GM = "com.google.android.apps.messaging" }
 }
+
+/** "Remind me" on a message: a notification later that opens the chat right at that message. */
+class ReminderWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
+    override suspend fun doWork(): Result {
+        val ctx = applicationContext
+        val conv = inputData.getString("conv") ?: return Result.failure()
+        val msg = inputData.getString("msg").orEmpty()
+        val title = inputData.getString("title").orEmpty().ifBlank { "A message" }
+        val text = inputData.getString("text").orEmpty()
+        Notifier.channels(ctx)
+        val open = PendingIntent.getActivity(
+            ctx, ("remind" + conv + msg).hashCode(),
+            Intent(ctx, MainActivity::class.java).setAction("open").putExtra("chat", conv).putExtra("msg", msg).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val n = NotificationCompat.Builder(ctx, Notifier.CH_MESSAGES)
+            .setSmallIcon(R.drawable.ic_stat_message)
+            .setContentTitle("Reminder · $title")
+            .setContentText(text.ifBlank { "Tap to see the message" })
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text.ifBlank { "Tap to see the message" }))
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .build()
+        runCatching { NotificationManagerCompat.from(ctx).notify("remind:$conv:$msg", 7, n) }
+        return Result.success()
+    }
+
+    companion object {
+        fun plan(ctx: Context, convId: String, msgId: String, title: String, text: String, at: Long) {
+            val req = OneTimeWorkRequestBuilder<ReminderWorker>()
+                .setInitialDelay((at - System.currentTimeMillis()).coerceAtLeast(0), TimeUnit.MILLISECONDS)
+                .setInputData(workDataOf("conv" to convId, "msg" to msgId, "title" to title, "text" to text.take(300)))
+                .addTag("remind-$convId-$msgId")
+                .build()
+            WorkManager.getInstance(ctx).enqueueUniqueWork("remind-$convId-$msgId", androidx.work.ExistingWorkPolicy.REPLACE, req)
+        }
+
+        /** The three choices, as (label, time): an hour from now, tonight at 8, tomorrow at 9. */
+        fun choices(now: Long = System.currentTimeMillis()): List<Pair<String, Long>> {
+            val cal = java.util.Calendar.getInstance()
+            fun at(daysAhead: Int, hour: Int): Long {
+                cal.timeInMillis = now
+                cal.add(java.util.Calendar.DAY_OF_YEAR, daysAhead)
+                cal.set(java.util.Calendar.HOUR_OF_DAY, hour); cal.set(java.util.Calendar.MINUTE, 0); cal.set(java.util.Calendar.SECOND, 0); cal.set(java.util.Calendar.MILLISECOND, 0)
+                return cal.timeInMillis
+            }
+            val tonight = at(0, 20)
+            return listOfNotNull(
+                "In 1 hour" to now + 60 * 60_000L,
+                ("Tonight at 8 PM" to tonight).takeIf { tonight - now > 90 * 60_000L },
+                "Tomorrow at 9 AM" to at(1, 9),
+            )
+        }
+    }
+}

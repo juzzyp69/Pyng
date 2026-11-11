@@ -180,7 +180,7 @@ class MainActivity : FragmentActivity() {
             return
         }
         val chat = i?.getStringExtra("chat") ?: return
-        if (app.repo.paired && app.repo.prefs.state.setupDone) nav.openChat(chat)
+        if (app.repo.paired && app.repo.prefs.state.setupDone) nav.openChat(chat, i?.getStringExtra("msg")?.takeIf { it.isNotEmpty() })
     }
 
     override fun onStart() {

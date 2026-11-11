@@ -96,6 +96,7 @@ fun MessageMenu(
     var lastGroup by remember { mutableStateOf(group) }
     if (m != null) { last = m; lastAnchor = anchor; lastRow = rowCtx; lastGroup = group?.takeIf { it.size > 1 } }
     var more by remember(m) { mutableStateOf(false) }
+    var reminding by remember(m) { mutableStateOf(false) }
     if (m != null) androidx.activity.compose.BackHandler { if (more) more = false else onDismiss() }
     val k = remember { androidx.compose.animation.core.Animatable(0f) }
     androidx.compose.runtime.LaunchedEffect(m != null) {
@@ -210,6 +211,28 @@ fun MessageMenu(
                 if (cur.text.isNotEmpty()) item(if (links.isNotEmpty() && cur.text.trim() != links.first()) "Copy text" else if (links.isNotEmpty()) "Copy all" else "Copy", Icons.copy) { onCopy(cur) }
                 if (cur.text.length > 1) item("Select text", Icons.select) { onSelectText(cur) }
                 item(if (p.isStarred(cur.key)) "Unstar" else "Star", Icons.star) { onStar(cur) }
+                // Remind me: opens up into three times right here in the menu.
+                if (conv != null && cur.id.isNotEmpty()) {
+                    Row(
+                        Modifier.enter(i++).fillMaxWidth().clickable { reminding = !reminding }.padding(horizontal = 18.dp, vertical = 13.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Ico(Icons.bell, t.ink, 21.dp)
+                        Spacer(Modifier.width(16.dp))
+                        T("Remind me", size = 15.5.sp, weight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                        Ico(if (reminding) "M6 15l6-6 6 6" else "M6 9l6 6 6-6", t.soft, 16.dp, 2.2f)
+                    }
+                    if (reminding) com.jpetrydesign.pyng.data.ReminderWorker.choices().forEach { (label, at) ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable {
+                                val who = if (cur.fromMe) "You" else conv.people.firstOrNull { it.id == cur.participantId }?.short ?: conv.shortTitle
+                                com.jpetrydesign.pyng.data.ReminderWorker.plan(ctx, conv.id, cur.id, conv.title, (if (conv.group || cur.fromMe) "$who: " else "") + cur.text.ifBlank { cur.summary }, at)
+                                repo.toast("Reminder set for " + (if (label == "In 1 hour") clock(at) else label.substringAfter(" at ").let { l -> if (label.startsWith("Tomorrow")) "tomorrow at $l" else "tonight at $l" }))
+                                close()
+                            }.padding(start = 55.dp, end = 18.dp, top = 11.dp, bottom = 11.dp),
+                        ) { T(label, size = 14.5.sp, color = t.p, weight = FontWeight.Medium) }
+                    }
+                }
                 if (p.on("readAloud") && cur.text.isNotEmpty()) item("Read aloud", Icons.volume) { Speaker.say(ctx, cur.text) }
                 item("Delete", Icons.trash, danger = true) { onDelete(cur) }
                 item("Select more", Icons.select) { onSelect(cur) }

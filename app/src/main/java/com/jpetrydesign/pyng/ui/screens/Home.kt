@@ -1277,7 +1277,8 @@ private fun PeekBody(cur: Conv, repo: com.jpetrydesign.pyng.data.Repo, t: com.jp
     val unread = cur.unread || cur.id in p.markedUnread
     val newCount = if (unread) all.orEmpty().filter { it.visible && !it.isSys }.takeLastWhile { !it.fromMe }.size.coerceAtLeast(1) else 0
     // Only what's new: their latest message. With nothing new, just a way into the chat.
-    val latest = if (newCount > 0) all.orEmpty().lastOrNull { !it.fromMe && it.visible && !it.isSys } else null
+    // Nothing new: the last message either way, so you can still reply right here.
+    val latest = if (newCount > 0) all.orEmpty().lastOrNull { !it.fromMe && it.visible && !it.isSys } else all.orEmpty().lastOrNull { it.visible && !it.isSys }
     var reply by remember(cur.id) { mutableStateOf("") }
     // Fully opaque cards: the blurred screen behind should never show through the text.
     val card = if (t.dark) Color(0xFF1B1E26) else Color.White
@@ -1333,9 +1334,9 @@ private fun PeekBody(cur: Conv, repo: com.jpetrydesign.pyng.data.Repo, t: com.jp
                     if (latest.text.isNotBlank() || pic == null) {
                         Box(
                             Modifier.widthIn(max = 320.dp).clip(RoundedCornerShape(21.dp)).background(t.inBg).clickable(onClick = open).padding(horizontal = 15.dp, vertical = 10.dp),
-                        ) { T(latest.text.ifBlank { latest.summary }, size = 15.sp, color = t.inInk, maxLines = 5, lineHeight = 21.sp) }
+                        ) { T((if (latest.fromMe) "You: " else "") + latest.text.ifBlank { latest.summary }, size = 15.sp, color = t.inInk, maxLines = 5, lineHeight = 21.sp) }
                     }
-                    T("Received " + clock(latest.ts), size = 12.sp, color = t.soft, modifier = Modifier.padding(start = 4.dp))
+                    T((if (latest.fromMe) "Sent " else "Received ") + listTime(latest.ts).ifEmpty { clock(latest.ts) }.let { if (it == clock(latest.ts)) it else "$it · " + clock(latest.ts) }, size = 12.sp, color = t.soft, modifier = Modifier.padding(start = 4.dp))
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(Modifier.weight(1f).heightIn(min = 46.dp).clip(RoundedCornerShape(23.dp)).background(t.field).padding(horizontal = 18.dp, vertical = 12.dp), contentAlignment = Alignment.CenterStart) {
