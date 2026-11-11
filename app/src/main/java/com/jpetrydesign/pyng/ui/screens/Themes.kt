@@ -94,7 +94,7 @@ fun MyThemes(lib: ThemeLibrary, isOn: (SavedTheme) -> Boolean, onPick: (SavedThe
     if (all.isEmpty() && onSave == null) return
     val sort = p.opt("themeSort").ifEmpty { "Recent" }
     Column(modifier) {
-        Row(Modifier.fillMaxWidth().padding(start = side, end = side - 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(start = side, end = (side - 6.dp).coerceAtLeast(0.dp)), verticalAlignment = Alignment.CenterVertically) {
             T("My themes", size = 13.sp, weight = FontWeight.SemiBold, color = t.soft, modifier = Modifier.weight(1f))
             if (all.size > 1) {
                 // Tap to cycle how they're ordered.
