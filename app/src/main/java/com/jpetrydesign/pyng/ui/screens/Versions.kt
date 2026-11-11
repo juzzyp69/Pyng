@@ -30,118 +30,117 @@ import com.jpetrydesign.pyng.ui.kit.T
 data class Release(val version: String, val date: String, val added: List<String>, val fixed: List<String> = emptyList())
 
 /**
- * Every Pyng update, newest first. Each line reads "Added…" or "Fixed…"; anything after a line
- * break is a short bit of extra context shown underneath.
+ * Every Pyng update, newest first. Each line is a short headline; anything after a line break is
+ * a sentence of detail shown underneath.
  */
 val RELEASES = listOf(
     Release(
         "0.8", "Nov 11, 2026",
         added = listOf(
-            "Added a Copy button for verification codes\nWhen a code arrives, its notification shows a Copy button next to Reply",
-            "Added automatic code copying\nNew codes are copied as soon as they arrive, so your keyboard suggests them in the code box. You can turn this off in Settings",
-            "Added version history\nTap Version in Help & about to see what changed in each update",
+            "Copy Button for Codes\nVerification code notifications now show a Copy button next to Reply",
+            "Automatic Code Copying\nNew codes are copied as they arrive, so your keyboard can suggest them. Turn it off in Settings",
+            "Version History Added\nTap Version in Help & about to see what changed in each update",
         ),
         fixed = listOf(
-            "Fixed missing names in chat search\nItems under Latest shared now show who sent them",
+            "Chat Search Names\nItems under Latest shared now show who sent them",
         ),
     ),
     Release(
         "0.7", "Nov 11, 2026",
         added = listOf(
-            "Added ability to load all previous messages\nWhen scrolling up through a message thread, Pyng automatically loads earlier messages",
-            "Added ability to load older chats\nScroll to the bottom of your chat list and older conversations load in",
-            "Added search inside a chat\nShortcuts for photos, videos, links and files, the latest things shared, and your recent searches",
-            "Added Google Sans as the app font\nYou can switch to your phone's font or Geist in Style studio",
-            "Made the emoji, GIF and sticker panel taller",
+            "Full Message History\nScrolling up in a chat automatically loads earlier messages",
+            "Older Chats Load In\nScrolling to the bottom of your chat list loads older conversations",
+            "Search Inside a Chat\nShortcuts for photos, videos, links and files, plus your recent searches",
+            "New Font Options Added\nDefaulted font to Google Sans, with your phone's font and Geist as alternative options",
+            "Taller GIF Panel\nThe emoji, GIF and sticker panel now takes about half the screen",
         ),
         fixed = listOf(
-            "Fixed unread rings and badges getting cut off\nThis happened for a moment while pinned chats animated back in",
+            "Pinned Chat Badges\nUnread rings and badges no longer get cut off while pins animate in",
         ),
     ),
     Release(
         "0.6", "Nov 10, 2026",
         added = listOf(
-            "Added Style studio\nPreview and change your chat and home styles in one place",
-            "Added styles for photo groups\nPhotos sent together can show as Peek, Stack, Rail or Deck",
-            "Added message status under your newest message\nShows Sent, Delivered or Read, and animates as it changes",
-            "Added a typing wave to pinned chats",
-            "Added a swipeable, frosted in-app banner\nReply, react or mark as read right from the banner",
-            "Added a new way to start conversations\nAdd people to the To field, then name your group and pick its photo",
-            "Added save, share and forward for links, photos, videos and files\nHold any of them to see the options. Photos sent together can be saved all at once",
-            "Added GIFs, stickers, clips and memes",
-            "Added a warning before sending large files\nFiles too big for chat features may send as a regular text instead",
-            "Made the app much smaller\nAbout 35 MB, down from 140 MB",
+            "Style Studio Added\nPreview and change your chat and home styles in one place",
+            "Photo Group Styles\nPhotos sent together can show as Peek, Stack, Rail or Deck",
+            "Message Status\nSent, Delivered and Read show under your newest message",
+            "Typing Wave\nPinned chats wiggle when someone is typing",
+            "New In-App Banner\nFrosted and swipeable, with reply, reactions and mark as read",
+            "New Conversation Flow\nAdd people to the To field, then name your group and pick its photo",
+            "Save, Share and Forward\nHold links, photos, videos and files for options, including Save all for photo groups",
+            "GIFs, Stickers, Clips and Memes",
+            "Large File Warning\nPyng warns you before sending a file too big for chat features",
+            "Smaller App\nAbout 35 MB, down from 140 MB",
         ),
         fixed = listOf(
-            "Fixed Google Messages notifications getting hidden\nPyng no longer hides them unless you turn that on, and never hides verification codes",
-            "Fixed sign-in failing on slow phones\nPyng now tries a few times before giving up",
-            "Fixed a crash in the chat color picker",
-            "Fixed group chats not being created",
-            "Fixed chats getting stuck loading\nPyng now nudges Google Messages, and offers a button to wake it if it's asleep",
-            "Fixed pinned chats popping in before their animation",
+            "Google Messages Notifications\nNo longer hidden unless you turn that on, and codes are never touched",
+            "Sign-In on Slow Phones\nPyng now tries a few times before giving up",
+            "Chat Color Picker Crash",
+            "Group Chat Creation\nNew groups now go through, with or without a name",
+            "Chats Stuck Loading\nPyng nudges Google Messages and offers a button to wake it",
+            "Pinned Chat Animation\nPins no longer pop in before their animation",
         ),
     ),
     Release(
         "0.5", "Nov 10, 2026",
         added = listOf(
-            "Added a chat list that slides over your pinned chats",
-            "Added photo strips and a new photo viewer",
-            "Added saved themes\nSave a color combination and reuse it in any chat",
-            "Added encryption status and an SMS-only setting to contact pages",
-            "Added group photo stacks and an App theme card",
+            "Sliding Chat List\nYour chat list now sits on a sheet that slides over pinned chats",
+            "New Photo Viewer\nWith photo strips for pictures sent together",
+            "Saved Themes\nSave a color combination and reuse it in any chat",
+            "Contact Page Additions\nEncryption status and an SMS-only setting",
+            "Group Photo Stacks\nGroups show their members' photos, plus a new App theme card",
         ),
         fixed = listOf(
-            "Fixed photos not sending",
-            "Fixed photos sending after their text\nPhotos now go first, then the message",
-            "Fixed message bubbles not fitting their text",
-            "Fixed pinned chats drifting behind the top bar",
+            "Photo Sending\nPhotos send reliably, and go out before the text that goes with them",
+            "Bubble Sizing\nMessage bubbles now fit their text",
+            "Pinned Chats Drifting\nPins no longer slide behind the top bar",
         ),
     ),
     Release(
         "0.4", "Nov 8, 2026",
         added = listOf(
-            "Added peek\nHold a chat to see its recent messages without opening it",
-            "Added ability to select part of a message to copy",
-            "Added your phone contacts when starting a chat",
-            "Added video playback inside the app",
+            "Peek at Chats\nHold a chat to see recent messages without opening it",
+            "Select Text\nCopy just part of a message",
+            "Phone Contacts\nYour contacts show up when starting a chat",
+            "Video Playback\nVideos play right inside the app",
         ),
         fixed = listOf(
-            "Fixed photos not loading at full size",
-            "Fixed sent messages flickering when delivered",
-            "Fixed sign-in when more than one phone is on the account",
+            "Photo Quality\nPhotos now load at full size",
+            "Sent Message Flicker\nMessages no longer flicker when they're delivered",
+            "Sign-In with Multiple Phones\nWorks when more than one phone is on the account",
         ),
     ),
     Release(
         "0.3", "Nov 7, 2026",
         added = listOf(
-            "Added a photo viewer",
-            "Added a voice message player",
-            "Added contact cards and better link previews",
-            "Added a glide animation when sending",
+            "Photo Viewer",
+            "Voice Message Player",
+            "Contact Cards and Link Previews",
+            "Glide Send Animation",
         ),
-        fixed = listOf("Fixed choppy scrolling\nBlur effects are lighter now"),
+        fixed = listOf("Smoother Scrolling\nBlur effects are lighter now"),
     ),
     Release(
         "0.2", "Nov 7, 2026",
         added = listOf(
-            "Added message previews to the chat list",
-            "Added keyboard lift\nThe newest messages move up with the keyboard instead of hiding behind it",
-            "Added a drip and bounce animation when sending",
-            "Added a frosted icon set",
+            "Message Previews\nYour chat list shows the latest message in each chat",
+            "Keyboard Lift\nThe newest messages move up with the keyboard",
+            "Send Animation\nA drip and bounce when you send",
+            "Frosted Icon Set",
         ),
-        fixed = listOf("Fixed photos not coming through"),
+        fixed = listOf("Photo Delivery\nPhotos now always come through"),
     ),
     Release(
         "0.1", "Nov 6, 2026",
         added = listOf(
-            "First release\nSign in with Google Messages and text from Pyng",
-            "Added pinned chats, themes, widgets and a sticker maker",
-            "Added translation, scheduled messages and smart replies",
-            "Added pinch to zoom in chats and app-wide text size",
+            "First Release\nSign in with Google Messages and text from Pyng",
+            "Pinned Chats, Themes and Widgets\nPlus a sticker maker",
+            "Translation, Scheduling and Smart Replies",
+            "Text Size and Pinch to Zoom",
         ),
         fixed = listOf(
-            "Fixed hard-to-read text colors",
-            "Fixed duplicate messages and chats",
+            "Text Colors\nText is easier to read",
+            "Duplicate Messages\nMessages and chats no longer show up twice",
         ),
     ),
 )
@@ -189,7 +188,7 @@ private fun Section(icon: String, title: String, items: List<String>, bg: androi
                 Box(Modifier.padding(top = 8.dp).size(5.dp).clip(CircleShape).background(accent))
                 Spacer(Modifier.width(10.dp))
                 Column {
-                    T(main, size = 14.5.sp, lineHeight = 20.sp)
+                    T(main, size = 14.5.sp, lineHeight = 20.sp, weight = FontWeight.SemiBold)
                     if (extra.isNotEmpty()) T(extra, size = 13.sp, lineHeight = 18.sp, color = t.soft, modifier = Modifier.padding(top = 1.dp))
                 }
             }
