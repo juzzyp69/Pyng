@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jpetrydesign.pyng.BuildConfig
 import com.jpetrydesign.pyng.ui.theme.LocalTok
+import com.jpetrydesign.pyng.ui.kit.Ico
+import com.jpetrydesign.pyng.ui.kit.Icons
 import com.jpetrydesign.pyng.ui.kit.T
 
 /** One update: its version, when it went out, what's new and what got fixed. */
@@ -32,16 +34,16 @@ val RELEASES = listOf(
     Release(
         "0.8", "Nov 11, 2026",
         added = listOf(
-            "Copy button for verification codes in notifications",
-            "New codes are copied for you, so your keyboard can suggest them",
-            "Version history (this page)",
+            "Copy button for verification codes in notifications\nRight next to Reply and Mark as read",
+            "New codes are copied for you\nTap the code box and your keyboard suggests it. Turn it off in Settings",
+            "Version history\nTap Version in Help & about to see this page",
         ),
     ),
     Release(
         "0.7", "Nov 11, 2026",
         added = listOf(
-            "Google Sans font, with a choice of font in Appearance",
-            "Search inside a chat, with photo, video, link and file shortcuts",
+            "Google Sans font\nOr pick your phone's font or Geist in Style studio",
+            "Search inside a chat\nShortcuts for photos, videos, links and files, plus your recent searches",
             "Your full message history as you scroll up",
             "Older chats load as you scroll down the list",
             "Taller emoji, GIF and sticker panel",
@@ -54,22 +56,22 @@ val RELEASES = listOf(
         "0.6", "Nov 10, 2026",
         added = listOf(
             "Style studio for chat and home styles",
-            "Four looks for photo groups: Peek, Stack, Rail and Deck",
+            "Photo groups\nFour looks to pick from: Peek, Stack, Rail and Deck",
             "Delivered and Read under your newest message",
             "Typing wave on pinned chats",
             "Swipeable, frosted in-app banner",
             "New conversation flow with group name and photo",
             "Hold links, photos, videos and files to save, share or forward",
-            "GIFs, stickers, clips and memes",
+            "GIFs, stickers, clips and memes\nSearch and trending in one panel",
             "Warning before sending a file too big for chat features",
-            "App is a quarter of its old size",
+            "App is a quarter of its old size\nAbout 35 MB, down from 140 MB",
         ),
         fixed = listOf(
-            "Google Messages notifications no longer hidden",
+            "Google Messages notifications getting hidden\nNow off by default, and codes are never touched",
             "Sign-in gives up too soon on a slow phone",
             "Crash in the chat color picker",
             "Creating a group",
-            "Chats stuck loading when the phone is asleep",
+            "Chats stuck loading when the phone is asleep\nPyng now nudges Google Messages and offers a button to wake it",
             "Pinned chats popping in before their animation",
         ),
     ),
@@ -138,42 +140,53 @@ val RELEASES = listOf(
     ),
 )
 
-/** The version history page: newest update first, current one marked. */
+/** The version history page: one card per update, newest first, the one you have marked. */
 @Composable
 fun VersionHistory() {
     val t = LocalTok.current
     val current = BuildConfig.VERSION_NAME.split('.').take(2).joinToString(".")
-    Column(Modifier.fillMaxWidth().padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxWidth().padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         RELEASES.forEach { r ->
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(t.card).padding(horizontal = 18.dp, vertical = 16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    T("Pyng ${r.version}", size = 18.sp, weight = FontWeight.Bold, letterSpacing = (-0.3).sp)
-                    if (r.version == current) {
-                        Spacer(Modifier.width(8.dp))
-                        Box(Modifier.clip(RoundedCornerShape(10.dp)).background(t.tone).padding(horizontal = 8.dp, vertical = 2.dp)) {
-                            T("You have this", size = 11.5.sp, weight = FontWeight.SemiBold, color = t.p)
-                        }
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(t.card).padding(14.dp)) {
+                Row(Modifier.padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        T("Pyng ${r.version}", size = 19.sp, weight = FontWeight.Bold, letterSpacing = (-0.4).sp)
+                        T(r.date, size = 12.5.sp, color = t.soft)
                     }
-                    Spacer(Modifier.weight(1f))
-                    T(r.date, size = 12.5.sp, color = t.soft)
+                    if (r.version == current) Box(Modifier.clip(RoundedCornerShape(12.dp)).background(t.fill).padding(horizontal = 10.dp, vertical = 4.dp)) {
+                        T("You have this", size = 11.5.sp, weight = FontWeight.SemiBold, color = t.onFill)
+                    }
                 }
-                if (r.added.isNotEmpty()) Lines("New", r.added)
-                if (r.fixed.isNotEmpty()) Lines("Fixed", r.fixed)
+                if (r.added.isNotEmpty()) Section(Icons.spark, "What's New", r.added, t.tone, t.p)
+                if (r.added.isNotEmpty() && r.fixed.isNotEmpty()) Spacer(Modifier.height(8.dp))
+                if (r.fixed.isNotEmpty()) Section(Icons.check, "What's Fixed", r.fixed, t.neutral, t.soft)
             }
         }
         Spacer(Modifier.height(8.dp))
     }
 }
 
+/** A tinted panel with a heading and bullets. A line can carry extra context after a line break. */
 @Composable
-private fun Lines(label: String, items: List<String>) {
+private fun Section(icon: String, title: String, items: List<String>, bg: androidx.compose.ui.graphics.Color, accent: androidx.compose.ui.graphics.Color) {
     val t = LocalTok.current
-    T(label.uppercase(), size = 11.sp, weight = FontWeight.SemiBold, color = t.faint, letterSpacing = 0.8.sp, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp))
-    items.forEach { line ->
-        Row(Modifier.padding(vertical = 3.dp), verticalAlignment = Alignment.Top) {
-            Box(Modifier.padding(top = 8.dp).size(5.dp).clip(CircleShape).background(if (label == "New") t.p else t.faint))
-            Spacer(Modifier.width(10.dp))
-            T(line, size = 14.5.sp, lineHeight = 20.sp)
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(bg).padding(horizontal = 14.dp, vertical = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 6.dp)) {
+            Ico(icon, accent, 15.dp, 2.2f)
+            Spacer(Modifier.width(6.dp))
+            T(title, size = 13.5.sp, weight = FontWeight.Bold, color = accent)
+        }
+        items.forEach { raw ->
+            val main = raw.substringBefore('\n')
+            val extra = raw.substringAfter('\n', "")
+            Row(Modifier.padding(vertical = 3.dp), verticalAlignment = Alignment.Top) {
+                Box(Modifier.padding(top = 8.dp).size(5.dp).clip(CircleShape).background(accent))
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    T(main, size = 14.5.sp, lineHeight = 20.sp)
+                    if (extra.isNotEmpty()) T(extra, size = 13.sp, lineHeight = 18.sp, color = t.soft, modifier = Modifier.padding(top = 1.dp))
+                }
+            }
         }
     }
 }
