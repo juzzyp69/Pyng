@@ -1,6 +1,8 @@
 package com.jpetrydesign.pyng.ui.kit
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -267,7 +269,7 @@ fun Avatar(
         // The ring follows the photo's shape, a little outside it.
         val g = 3.5.dp.toPx()
         val o = shape.createOutline(androidx.compose.ui.geometry.Size(this.size.width + 2 * g, this.size.height + 2 * g), layoutDirection, this)
-        androidx.compose.ui.graphics.drawscope.translate(-g, -g) { drawOutline(o, halo, style = Stroke(2.dp.toPx())) }
+        translate(-g, -g) { drawOutline(o, halo, style = Stroke(2.dp.toPx())) }
     }
     Box(m.clip(shape).background(bg), contentAlignment = Alignment.Center) {
         if (!photo.isNullOrEmpty()) {

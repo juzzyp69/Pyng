@@ -1,6 +1,8 @@
 package com.jpetrydesign.pyng.ui.screens
 
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.graphics.graphicsLayer
@@ -872,7 +874,7 @@ fun PinSample(look: PinLook, big: Boolean = false) {
                     if (hot && look.sign == "Rings") m = m.drawBehind {
                         val g = 3.dp.toPx()
                         val o = shape.createOutline(androidx.compose.ui.geometry.Size(size.width + 2 * g, size.height + 2 * g), layoutDirection, this)
-                        androidx.compose.ui.graphics.drawscope.translate(-g, -g) { drawOutline(o, accent, style = androidx.compose.ui.graphics.drawscope.Stroke(1.6.dp.toPx())) }
+                        translate(-g, -g) { drawOutline(o, accent, style = androidx.compose.ui.graphics.drawscope.Stroke(1.6.dp.toPx())) }
                     }
                     if (look.shape == "Framed") m = m.shadow(3.dp, CircleShape).border(2.dp, if (t.dark) Color(0xFF2A2F3B) else Color.White, CircleShape)
                     Box(m.clip(shape).background(tone), contentAlignment = Alignment.BottomCenter) {

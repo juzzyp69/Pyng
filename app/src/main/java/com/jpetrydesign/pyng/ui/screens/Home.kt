@@ -944,7 +944,7 @@ private fun PinFace(pin: Pin, av: Dp, iniSize: Float, style: String, badgeH: Dp 
             tr.animateFloat(0f, (2 * Math.PI).toFloat(), androidx.compose.animation.core.infiniteRepeatable(tween(2600, easing = LinearEasing)), label = "wave")
         } else null
         val look = LocalPinLook.current
-        val shape = pinShapeOf(look.shape)
+        val faceShape = pinShapeOf(look.shape)
         val accent = t.pal.plus ?: t.p
         // Glow: a soft colored light behind the photo.
         if (style == "Glow" && pin.count > 0) Box(Modifier.size(av).drawBehind {
@@ -959,9 +959,9 @@ private fun PinFace(pin: Pin, av: Dp, iniSize: Float, style: String, badgeH: Dp 
                     val k = 1f + 0.03f * kotlin.math.sin(ph * 2f); scaleX = k; scaleY = k
                 } else Modifier),
         ) {
-            WhoAvatar(pin.who, av, iniSize.sp, halo = if ((style == "Rings" || (ringHot && style == "Badges")) && pin.count > 0) accent else null, shape = shape)
+            WhoAvatar(pin.who, av, iniSize.sp, halo = if ((style == "Rings" || (ringHot && style == "Badges")) && pin.count > 0) accent else null, shape = faceShape)
             // Names on the photo: a soft shade at the bottom with the name over it.
-            if (look.names == "Over" && av >= 56.dp) Box(Modifier.size(av).clip(shape).background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.5f))), contentAlignment = Alignment.BottomCenter) {
+            if (look.names == "Over" && av >= 56.dp) Box(Modifier.size(av).clip(faceShape).background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.5f))), contentAlignment = Alignment.BottomCenter) {
                 T(if (pin.typing) "Typing…" else pin.c.shortTitle, size = (av.value / 7f).coerceIn(10f, 14f).sp, weight = FontWeight.SemiBold, color = Color.White, maxLines = 1,
                     modifier = Modifier.padding(bottom = av * 0.16f, start = 6.dp, end = 6.dp))
             }
