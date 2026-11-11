@@ -768,7 +768,10 @@ func (m *Messenger) handleEvent(evt any) {
 		}
 		m.emit("settings", map[string]any{"sims": sims})
 	case *events.ClientReady:
+		m.lastActive.Store(time.Now().UnixMilli())
 		m.emit("connection", map[string]any{"state": "ready"})
+	case *events.NoDataReceived:
+		go m.nudge("no data")
 	case *events.AuthTokenRefreshed:
 		m.saveSession()
 	case *events.PairSuccessful:
@@ -796,6 +799,17 @@ func (m *Messenger) handleEvent(evt any) {
 		_ = os.Remove(m.sessionPath())
 		m.emit("unpaired", map[string]any{"reason": "signed out on the phone"})
 	case *gmproto.UserAlertEvent:
+		switch e.GetAlertType() {
+		case gmproto.AlertType_BROWSER_ACTIVE:
+			m.lastActive.Store(time.Now().UnixMilli())
+			m.emit("connection", map[string]any{"state": "ready"})
+		case gmproto.AlertType_BROWSER_INACTIVE, gmproto.AlertType_BROWSER_INACTIVE_FROM_TIMEOUT, gmproto.AlertType_BROWSER_INACTIVE_FROM_INACTIVITY:
+			// Another session (like Messages for web) took over, or the phone timed Pyng out.
+			// Take it back while Pyng is on screen.
+			if m.fg.Load() {
+				go func() { time.Sleep(2 * time.Second); m.nudge("inactive: " + e.GetAlertType().String()) }()
+			}
+		}
 		m.emit("alert", map[string]any{"type": e.GetAlertType().String()})
 	default:
 		m.log.Debug().Type("type", evt).Msg("Unhandled event")

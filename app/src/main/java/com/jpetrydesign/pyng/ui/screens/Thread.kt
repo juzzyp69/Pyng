@@ -489,8 +489,23 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                 onSpam = { repo.setBlocked(convId, true, true); repo.toast("Reported and blocked"); nav.back() })
                             if (loaded && msgs.isEmpty() && conv != null) EmptyThread(conv, t) { send("👋") }
                             if (repo.hasMore[convId] == true) LaunchedEffect(Unit) { repo.loadMessages(convId, older = true) }
-                            if (!loaded) Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
+                            if (!loaded) Column(Modifier.fillMaxWidth().padding(40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                 androidx.compose.material3.CircularProgressIndicator(color = t.p, strokeWidth = 2.dp, modifier = Modifier.size(26.dp))
+                                // Still waiting after a while: Google Messages on the phone is probably asleep.
+                                var slow by remember(convId) { mutableStateOf(false) }
+                                LaunchedEffect(convId) { delay(7_000); slow = true }
+                                androidx.compose.animation.AnimatedVisibility(slow) {
+                                    Column(Modifier.padding(top = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                        T("Waiting on Google Messages on your phone", size = 14.sp, weight = FontWeight.SemiBold, align = androidx.compose.ui.text.style.TextAlign.Center)
+                                        T("It may be asleep. Opening it wakes it up, then come back here.", size = 13.sp, color = t.soft, align = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
+                                        Spacer(Modifier.height(12.dp))
+                                        T("Open Google Messages", size = 14.sp, weight = FontWeight.SemiBold, color = t.onFill,
+                                            modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(t.fill).clickable {
+                                                runCatching { ctx.startActivity(ctx.packageManager.getLaunchIntentForPackage(com.jpetrydesign.pyng.data.GmListener.GM)!!.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                                                    .onFailure { repo.toast("Couldn't open Google Messages") }
+                                            }.padding(horizontal = 18.dp, vertical = 10.dp))
+                                    }
+                                }
                             }
                         }
                     }

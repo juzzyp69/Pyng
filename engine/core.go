@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -43,6 +44,11 @@ type Messenger struct {
 	convs     map[string]*gmproto.Conversation
 	sims      []*gmproto.SIMCard
 	pairing   context.CancelFunc
+
+	// Keeping Pyng the active session with Google Messages on the phone.
+	fg         atomic.Bool  // the app is on screen
+	lastActive atomic.Int64 // when the phone last said this session is the active one (unix ms)
+	nudging    atomic.Bool
 }
 
 // NewMessenger creates the engine. dataDir is a private app folder where the
@@ -175,6 +181,9 @@ func (m *Messenger) Start() (err error) {
 	cli := m.client
 	m.mu.Unlock()
 	if cli.IsConnected() {
+		if m.fg.Load() {
+			go m.nudge("opened while connected")
+		}
 		return nil
 	}
 	m.emit("connection", map[string]any{"state": "connecting"})
@@ -403,4 +412,57 @@ func ctx60() (context.Context, context.CancelFunc) {
 
 func ctx120() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), 120*time.Second)
+}
+
+// SetForeground tells the engine whether the app is on screen. Coming back on screen makes sure
+// Google Messages on the phone is talking to Pyng (it only serves one web session at a time).
+func (m *Messenger) SetForeground(on bool) {
+	m.fg.Store(on)
+}
+
+// nudge asks the phone to treat Pyng as the active session. If the phone doesn't confirm within a
+// few seconds it asks again, then reconnects, the way Google Messages for web recovers.
+func (m *Messenger) nudge(why string) {
+	defer m.guard("nudge", nil)
+	if !m.nudging.CompareAndSwap(false, true) {
+		return
+	}
+	defer m.nudging.Store(false)
+	for attempt := 0; attempt < 3; attempt++ {
+		m.mu.Lock()
+		cli := m.client
+		m.mu.Unlock()
+		if cli == nil || !cli.IsConnected() {
+			return
+		}
+		mark := time.Now().UnixMilli()
+		if attempt < 2 {
+			m.log.Info().Str("why", why).Int("attempt", attempt).Msg("Asking the phone to make this the active session")
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			err := cli.SetActiveSession(ctx)
+			cancel()
+			if err != nil {
+				m.log.Warn().Err(err).Msg("Set active session failed")
+			}
+		} else {
+			m.log.Warn().Str("why", why).Msg("Phone still quiet, reconnecting")
+			m.emit("connection", map[string]any{"state": "reconnecting"})
+			m.connectMu.Lock()
+			err := cli.Reconnect(context.Background())
+			m.connectMu.Unlock()
+			if err != nil {
+				m.log.Err(err).Msg("Reconnect failed")
+			}
+			return
+		}
+		for i := 0; i < 16; i++ {
+			time.Sleep(500 * time.Millisecond)
+			if m.lastActive.Load() >= mark {
+				return
+			}
+		}
+		if !m.fg.Load() && why != "no data" {
+			return
+		}
+	}
 }

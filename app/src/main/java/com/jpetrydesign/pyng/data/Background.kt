@@ -302,11 +302,12 @@ object Link {
 
     fun foreground(app: PyngApp) {
         sleepJob?.cancel()
-        app.appScope.launch { app.hub.io { if (it.isPaired) it.start() } }
+        app.appScope.launch { app.hub.io { it.setForeground(true); if (it.isPaired) it.start() } }
         LinkService.start(app)
     }
 
     fun background(app: PyngApp) {
+        app.appScope.launch { app.hub.io { it.setForeground(false) } }
         if (app.repo.prefs.state.on("alwaysOn")) return
         sleepLater(app)
     }
