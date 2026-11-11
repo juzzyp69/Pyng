@@ -152,6 +152,21 @@ shot 72-fold-settings --es route settings
 adb shell wm size reset
 adb shell wm density reset
 
+# Flip phone cover screen (about the size of a Razr Ultra's outside screen)
+adb shell wm size 1080x1272
+adb shell wm density 400
+shot 75-cover-home --es route home
+shot 76-cover-thread --es route thread:c1
+shot 77-cover-thread-keyboard --es route thread:c3 --es open expr
+shot 78-cover-share --es route share
+shot 79-cover-settings --es route settings
+adb shell wm size reset
+adb shell wm density reset
+
+# New in 0.9
+WAIT=8 shot 80-thread-unread-pill --es route thread:c2
+shot 82-section-starred-empty --es route lists:starred
+
 adb logcat -d -s AndroidRuntime:E > ci-logs/runtime-errors.txt 2>&1
 adb logcat -d | grep -E "Choreographer|pyng|Pyng" | tail -400 > ci-logs/logcat-app.txt 2>&1
 (command -v mogrify >/dev/null && mogrify -resize 50% "$OUT"/*.png) || true
