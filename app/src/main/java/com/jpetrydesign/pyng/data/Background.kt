@@ -89,8 +89,21 @@ object Notifier {
         else -> ""
     }
 
+    /** Puts a verification code on the clipboard, marked sensitive so it isn't shown in previews. */
+    fun copyCode(ctx: Context, code: String) {
+        runCatching {
+            val cm = ctx.getSystemService(android.content.ClipboardManager::class.java)
+            val clip = android.content.ClipData.newPlainText("Verification code", code)
+            clip.description.extras = android.os.PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
+            cm.setPrimaryClip(clip)
+        }
+    }
+
     fun show(ctx: Context, repo: Repo, conv: Conv, m: Msg) {
         val p = repo.prefs.state
+        // A new code goes straight to the clipboard if you turned that on, so the keyboard can offer it.
+        val otp = if (!m.fromMe) com.jpetrydesign.pyng.ui.screens.detect(m.text).code else null
+        if (otp != null && p.on("otpAuto")) copyCode(ctx, otp)
         if (!p.on("notif") || conv.id in p.muted || !canPost(ctx)) return
         // Already shown from Google Messages' notification a moment ago? Update quietly.
         val prev = lastAlert[conv.id]
@@ -143,6 +156,13 @@ object Notifier {
             .setOnlyAlertOnce(dupe)
             .setSilent(dupe)
         if (!p.on("vibrate") || alerts?.vibrate == "Off") b.setVibrate(longArrayOf(0L))
+        if (otp != null && !placeholder) {
+            val copyPi = PendingIntent.getBroadcast(
+                ctx, code + 3, Intent(ctx, NotifyReceiver::class.java).setAction("copy").putExtra("chat", conv.id).putExtra("code", otp),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            b.addAction(NotificationCompat.Action.Builder(R.drawable.ic_stat_check, "Copy $otp", copyPi).setShowsUserInterface(false).build())
+        }
         if (p.on("quick") && !placeholder) {
             val replyPi = PendingIntent.getBroadcast(
                 ctx, code + 1, Intent(ctx, NotifyReceiver::class.java).setAction("reply").putExtra("chat", conv.id),
@@ -213,6 +233,13 @@ class NotifyReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         val app = ctx.applicationContext as PyngApp
         val chat = intent.getStringExtra("chat") ?: return
+        if (intent.action == "copy") {
+            val c = intent.getStringExtra("code") ?: return
+            Notifier.copyCode(ctx, c)
+            // Android 13 and up confirms copies itself.
+            if (Build.VERSION.SDK_INT < 33) android.widget.Toast.makeText(ctx, "Copied $c", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
         val text = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(Notifier.KEY_REPLY)?.toString().orEmpty()
         Notifier.cancel(ctx, chat)
         if (chat.startsWith("gm:")) { Link.openFallback(ctx); return }

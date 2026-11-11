@@ -296,7 +296,8 @@ fun SectionScreen(nav: Nav, key: String) {
                 Group("Protection") {
                     TogRow("Spam protection", "spam", "Checks unknown senders and their links on this phone"); Hairline()
                     ListRow("Spam & blocked", "Chats Google Messages marked as spam, and numbers you blocked", onClick = { nav.go(Route.Lists("spam")) }); Hairline()
-                    TogRow("Copy buttons for codes", "otpChip", "Shows a Copy button for verification codes in your list")
+                    TogRow("Copy buttons for codes", "otpChip", "Shows a Copy button for verification codes in your list"); Hairline()
+                    TogRow("Copy codes automatically", "otpAuto", "New verification codes go straight to your clipboard, so your keyboard can suggest them")
                 }
                 Group("App lock") {
                     TogRow("Lock with fingerprint", "bioLock", "Require your fingerprint or face to open Messages"); Hairline()
