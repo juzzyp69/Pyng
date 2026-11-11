@@ -173,6 +173,8 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     var menuFor by remember(convId) { mutableStateOf<Msg?>(null) }
     var detailsFor by remember(convId) { mutableStateOf<Msg?>(null) }
     var forward by remember(convId) { mutableStateOf<Msg?>(null) }
+    // Forward all: the whole set of photos sent together (the sheet shows the first).
+    var forwardAll by remember(convId) { mutableStateOf<List<Msg>?>(null) }
     var selectTextFor by remember(convId) { mutableStateOf<Msg?>(null) }
     val selected = remember(convId) { mutableStateListOf<String>() }
     var searching by remember(convId) { mutableStateOf(startSearch) }
@@ -211,6 +213,8 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
         val list = repo.msgs[convId].orEmpty()
         when (demoOpen) {
             "menu" -> if (menuFor == null) list.lastOrNull { !it.fromMe }?.let { delay(600); openMenu(it) }
+            "menu-strip" -> if (menuFor == null) list.lastOrNull { mediaBundles(list).of.containsKey(it.key) }?.let { delay(900); openMenu(it) }
+            "menu-link" -> if (menuFor == null) list.lastOrNull { linksIn(it.text).isNotEmpty() }?.let { delay(900); openMenu(it) }
             "info" -> info = list.lastOrNull { it.fromMe }?.key
             "ts" -> tsShift = -with(density) { 76.dp.toPx() }
             "reply" -> replyTo = list.lastOrNull { !it.fromMe }
@@ -538,9 +542,17 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                 onReact = { m, e -> repo.react(m, e); burst = m.key to e },
                 onReply = { replyTo = it }, onCopy = { copy(ctx, it.text); repo.toast("Copied") },
                 onForward = { forward = it }, onStar = { star(repo, listOf(it)) },
-                onSelect = { selected.add(it.key) }, onDetails = { detailsFor = it }, onSelectText = { selectTextFor = it },
+                onSelect = { m -> (bundles.of[m.key]?.map { it.first.key }?.distinct() ?: listOf(m.key)).forEach { k -> if (k !in selected) selected.add(k) } },
+                onDetails = { detailsFor = it }, onSelectText = { selectTextFor = it },
+                group = menuFor?.let { bundles.of[it.key] },
+                onSave = { refs -> scope.launch { saveFiles(ctx, repo.filesFor(refs)) } },
+                onShare = { refs -> scope.launch { shareFiles(ctx, repo.filesFor(refs)) } },
+                onForwardAll = { list -> forwardAll = list; forward = list.firstOrNull() },
                 onDelete = {
-                    if (it.tmpId.startsWith("sched-")) {
+                    val grp = bundles.of[it.key]?.map { p -> p.first }?.distinctBy { p -> p.key }?.takeIf { g -> g.size > 1 }
+                    if (grp != null) {
+                        repo.confirm("Delete ${grp.size} messages?", "They'll be deleted from Google Messages on your phone too. The other person still has their copy.") { repo.deleteMessages(grp); repo.toast("Deleted") }
+                    } else if (it.tmpId.startsWith("sched-")) {
                         val id = it.tmpId.removePrefix("sched-")
                         com.jpetrydesign.pyng.data.ScheduleWorker.cancel(ctx, id)
                         repo.prefs.edit { pr -> pr.copy(scheduled = pr.scheduled.filter { s -> s.id != id }) }
@@ -554,14 +566,19 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
             SelectTextSheet(selectTextFor) { selectTextFor = null }
             ForwardSheet(forward) { target, m ->
                 forward = null
+                val all = forwardAll
+                forwardAll = null
                 if (target != null) {
-                    if (m.text.isNotEmpty() && m.media.isEmpty()) repo.send(target, m.text)
-                    else {
-                        val f = m.media.firstOrNull()?.let { ref -> ref.localPath.ifEmpty { repo.media[ref.id].orEmpty() } to ref }
-                        if (f != null && f.first.isNotEmpty()) repo.send(target, m.text, attachments = listOf(Pending(f.first, f.second.mime, f.second.name)))
-                        else repo.toast("Open the photo once to download it, then forward")
+                    val list = all ?: listOf(m)
+                    val refs = list.flatMap { it.media }
+                    val text = if (all == null) m.text else ""
+                    if (refs.isEmpty()) { repo.send(target, text); repo.toast("Forwarded") }
+                    else scope.launch {
+                        val files = repo.filesFor(refs)
+                        if (files.isEmpty()) { repo.toast("Couldn't download it to forward"); return@launch }
+                        repo.send(target, text, attachments = files.map { (p, r) -> Pending(p, r.mime, r.name) })
+                        repo.toast(if (files.size < refs.size) "Forwarded ${files.size} of ${refs.size}" else "Forwarded")
                     }
-                    repo.toast("Forwarded")
                 }
             }
             CallSheet(callSheet, conv) { callSheet = false }

@@ -12,6 +12,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.composed
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -422,7 +424,7 @@ private fun BubbleBody(m: Msg, x: RowCtx, shape: RoundedCornerShape, jumbo: Int,
         }
         if (url != null) {
             Spacer(Modifier.height(4.dp))
-            LinkCard(url, me)
+            LinkCard(url, me, onLong = a.onLong)
         }
     }
 }
@@ -473,7 +475,7 @@ private fun MediaView(m: Msg, ref: MediaRef, shape: RoundedCornerShape, me: Bool
             val clear = ref.isImage && (ref.mime.contains("png") || ref.mime.contains("gif") || ref.mime.contains("webp"))
             Box(
                 Modifier.size(w, h).clip(shape).then(if (show.isEmpty() || !clear) Modifier.background(if (show.isEmpty()) t.tone else Color.Transparent) else Modifier)
-                    .clickable { if (ref.isImage && full.isEmpty() && show.isEmpty()) repo.ensureMedia(ref, manual = true) else a.onOpenMedia(ref) },
+                    .holdable(a.onLong) { if (ref.isImage && full.isEmpty() && show.isEmpty()) repo.ensureMedia(ref, manual = true) else a.onOpenMedia(ref) },
                 contentAlignment = Alignment.Center,
             ) {
                 if (show.isNotEmpty()) AsyncImage(model = File(show), contentDescription = if (ref.isVideo) "Video" else "Photo", contentScale = if (clear) ContentScale.Fit else ContentScale.Crop, modifier = Modifier.fillMaxSize())
@@ -495,10 +497,10 @@ private fun MediaView(m: Msg, ref: MediaRef, shape: RoundedCornerShape, me: Bool
             }
         }
         ref.isAudio -> VoicePlayer(m, ref, full, busy, shape, bg, fg, sub, me)
-        ref.isContact -> ContactCard(ref, full, busy, me)
+        ref.isContact -> ContactCard(ref, full, busy, me, a.onLong)
         else -> {
             Row(
-                Modifier.clip(shape).background(bg).clickable { a.onOpenMedia(ref) }.padding(10.dp).widthIn(min = 180.dp, max = 260.dp),
+                Modifier.clip(shape).background(bg).holdable(a.onLong) { a.onOpenMedia(ref) }.padding(10.dp).widthIn(min = 180.dp, max = 260.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(if (me) Color.White.copy(alpha = 0.2f) else t.tone), contentAlignment = Alignment.Center) {
@@ -625,7 +627,7 @@ object Links {
 
 /** A link preview card: picture, title, a line of description and the site with its icon. */
 @Composable
-fun LinkCard(url: String, me: Boolean, modifier: Modifier = Modifier) {
+fun LinkCard(url: String, me: Boolean, modifier: Modifier = Modifier, onLong: (() -> Unit)? = null) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val t = LocalTok.current
     LaunchedEffect(url) { Links.init(ctx); Links.load(url) }
@@ -635,7 +637,7 @@ fun LinkCard(url: String, me: Boolean, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(18.dp)
     Column(
         modifier.widthIn(max = 300.dp).fillMaxWidth().edge(shape, elevation = 2.dp).clip(shape).background(if (t.dark) t.neutral else Color.White)
-            .clickable { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) } },
+            .holdable(onLong) { runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) } },
     ) {
         if (meta?.image != null && !imgFailed) {
             val req = remember(meta.image) {
@@ -777,4 +779,15 @@ private fun StatusLine(st: Triple<String, String, Boolean>?, face: Who?, t: Tok)
             }
         }
     }
+}
+
+
+/** Tap to open, hold for the message menu (with the usual buzz), so links, photos and files never swallow a hold. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+fun Modifier.holdable(onLong: (() -> Unit)?, onClick: () -> Unit): Modifier = composed {
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    this.combinedClickable(
+        onClick = onClick,
+        onLongClick = onLong?.let { l -> { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); l() } },
+    )
 }

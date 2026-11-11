@@ -448,7 +448,7 @@ object ContactPeek { var card by mutableStateOf<VCard?>(null) }
 
 /** A shared contact, shown like a contact card: photo, name, and View contact. */
 @Composable
-fun ContactCard(ref: MediaRef, path: String, busy: Boolean, me: Boolean) {
+fun ContactCard(ref: MediaRef, path: String, busy: Boolean, me: Boolean, onLong: (() -> Unit)? = null) {
     val repo = LocalRepo.current
     val t = LocalTok.current
     val ctx = LocalContext.current
@@ -459,7 +459,7 @@ fun ContactCard(ref: MediaRef, path: String, busy: Boolean, me: Boolean) {
     val c = card
     val name = c?.name ?: ref.name.removeSuffix(".vcf").ifBlank { "Contact" }
     Column(
-        Modifier.width(240.dp).clip(shape).background(if (t.dark) t.neutral else t.card).clickable {
+        Modifier.width(240.dp).clip(shape).background(if (t.dark) t.neutral else t.card).holdable(onLong) {
             if (c != null) ContactPeek.card = c else repo.ensureMedia(ref, manual = true)
         },
     ) {

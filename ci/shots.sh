@@ -71,6 +71,8 @@ shot 42-chat-theme --es route theme:c1
 shot 43-search --es route search
 shot 44-new --es route new
 shot 45-newgroup --es route newgroup
+WAIT=8 shot 45b-newchat-picked --es route new --es open group-pick
+WAIT=8 shot 45c-newgroup-name --es route new --es open group-name
 shot 50-settings --es route settings
 for S in chats notifications chatfeat privacy access storage about; do shot "51-section-$S" --es route "section:$S"; done
 shot 52-appearance --es route appearance
@@ -132,6 +134,8 @@ WAIT=10 shot 67-thread-viewer --es route thread:c9 --es open viewer
 adb shell dumpsys meminfo $PKG > ci-logs/meminfo-media.txt 2>&1
 WAIT=10 shot 67b-thread-viewer-video --es route thread:c9 --es open viewer-video
 WAIT=10 shot 67c-thread-viewer-strip --es route thread:c9 --es open viewer-strip
+WAIT=10 shot 67d-thread-menu-strip --es route thread:c9 --es open menu-strip
+WAIT=10 shot 67e-thread-menu-link --es route thread:c1 --es open menu-link
 shot 40b-contact-media --es route contact:c9
 shot 68-section-chats-top --es route section:chats
 

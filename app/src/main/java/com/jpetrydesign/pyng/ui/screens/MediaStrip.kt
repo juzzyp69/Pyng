@@ -458,3 +458,48 @@ fun PhotoGroupMini(style: String, t: Tok, scale: Float = 1f) {
         }
     }
 }
+
+
+/**
+ * Holding a photo in a group: the photos slide together into one fanned stack, so the menu below
+ * clearly acts on all of them. The one you held sits on top.
+ */
+@Composable
+fun GatherStack(group: List<Pair<Msg, MediaRef>>, heldKey: String, t: Tok) {
+    val repo = LocalRepo.current
+    val ordered = group.sortedBy { if (it.first.key == heldKey) 1 else 0 }.takeLast(4)
+    val n = ordered.size
+    val gather = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) { gather.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 240f)) }
+    val cardW = 158.dp; val cardH = 192.dp
+    val tilts = listOf(0f, -7f, 6.5f, -3.5f)
+    Box(Modifier.width(cardW + 56.dp).height(cardH + 44.dp), contentAlignment = Alignment.Center) {
+        ordered.forEachIndexed { i, (_, ref) ->
+            val depth = n - 1 - i
+            val spread = (i - (n - 1) / 2f) * 64f
+            Box(
+                Modifier.size(cardW, cardH)
+                    .graphicsLayer {
+                        val g = gather.value
+                        translationX = spread * density * (1f - g)
+                        rotationZ = tilts[depth] * g
+                        val s = 1f - depth * 0.045f * g
+                        scaleX = s; scaleY = s
+                    }
+                    .shadow(if (depth == 0) 10.dp else 4.dp, RoundedCornerShape(18.dp))
+                    .clip(RoundedCornerShape(18.dp)).background(t.tone),
+                contentAlignment = Alignment.Center,
+            ) {
+                val path = repo.pathOf(ref).ifEmpty { repo.media[ref.thumbId].orEmpty() }.ifEmpty { ref.previewPath }
+                if (path.isNotEmpty()) AsyncImage(File(path), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                if (ref.isVideo) Box(Modifier.size(40.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
+                    Ico(Icons.play, Color.White, 18.dp, 1f, fill = Color.White)
+                }
+            }
+        }
+        Box(
+            Modifier.align(Alignment.BottomCenter).graphicsLayer { alpha = gather.value.coerceIn(0f, 1f) }
+                .clip(RoundedCornerShape(14.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 12.dp, vertical = 5.dp),
+        ) { T("${group.size} " + if (group.all { it.second.isVideo }) "videos" else if (group.any { it.second.isVideo }) "items" else "photos", size = 12.5.sp, weight = FontWeight.SemiBold, color = Color.White) }
+    }
+}

@@ -81,6 +81,11 @@ fun MessageMenu(
     onDetails: (Msg) -> Unit,
     onDelete: (Msg) -> Unit,
     onSelectText: (Msg) -> Unit = {},
+    /** The photos sent together with this one, if it's part of a group. */
+    group: List<Pair<Msg, com.jpetrydesign.pyng.data.MediaRef>>? = null,
+    onSave: (List<com.jpetrydesign.pyng.data.MediaRef>) -> Unit = {},
+    onShare: (List<com.jpetrydesign.pyng.data.MediaRef>) -> Unit = {},
+    onForwardAll: (List<Msg>) -> Unit = {},
 ) {
     val repo = LocalRepo.current
     val ctx = LocalContext.current
@@ -88,7 +93,8 @@ fun MessageMenu(
     var last by remember { mutableStateOf(m) }
     var lastAnchor by remember { mutableStateOf(anchor) }
     var lastRow by remember { mutableStateOf(rowCtx) }
-    if (m != null) { last = m; lastAnchor = anchor; lastRow = rowCtx }
+    var lastGroup by remember { mutableStateOf(group) }
+    if (m != null) { last = m; lastAnchor = anchor; lastRow = rowCtx; lastGroup = group?.takeIf { it.size > 1 } }
     var more by remember(m) { mutableStateOf(false) }
     if (m != null) androidx.activity.compose.BackHandler { if (more) more = false else onDismiss() }
     val k = remember { androidx.compose.animation.core.Animatable(0f) }
@@ -155,14 +161,17 @@ fun MessageMenu(
                     .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {},
                 contentAlignment = if (me) Alignment.TopEnd else Alignment.TopStart,
             ) {
-                if (rc != null) MenuBubble(cur, rc)
+                val g = lastGroup
+                if (g != null) GatherStack(g, cur.key, t)
+                else if (rc != null) MenuBubble(cur, rc)
                 else T(msgPreview(cur), size = 15.sp, color = if (me) t.outInk else t.inInk, modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(t.inBg).padding(horizontal = 16.dp, vertical = 10.dp))
             }
         }
         val actions: @Composable () -> Unit = {
             Column(
-                Modifier.width(232.dp).shadow(12.dp, RoundedCornerShape(24.dp)).clip(RoundedCornerShape(24.dp)).background(t.sheet)
+                Modifier.width(232.dp).heightIn(max = 430.dp).shadow(12.dp, RoundedCornerShape(24.dp)).clip(RoundedCornerShape(24.dp)).background(t.sheet)
                     .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState())
                     .padding(vertical = 6.dp),
             ) {
                 var i = 0
@@ -176,9 +185,29 @@ fun MessageMenu(
                         T(label, size = 15.5.sp, weight = FontWeight.Medium, color = if (danger) t.danger else t.ink)
                     }
                 }
+                val g = lastGroup
+                val files = cur.media.filter { !it.isContact }
+                val links = linksIn(cur.text)
                 if (cur.id.isNotEmpty()) item("Reply", Icons.reply) { onReply(cur) }
-                item("Forward", Icons.forward) { onForward(cur) }
-                if (cur.text.isNotEmpty()) item("Copy", Icons.copy) { onCopy(cur) }
+                if (g != null) {
+                    val kind = if (g.all { it.second.isVideo }) "videos" else if (g.any { it.second.isVideo }) "items" else "photos"
+                    item("Save all ${g.size} $kind", Icons.download) { onSave(g.map { it.second }) }
+                    item("Share all", Icons.share) { onShare(g.map { it.second }) }
+                    item("Forward all", Icons.forward) { onForwardAll(g.map { it.first }.distinctBy { it.key }) }
+                } else {
+                    item("Forward", Icons.forward) { onForward(cur) }
+                    if (files.isNotEmpty()) {
+                        item("Save", Icons.download) { onSave(files) }
+                        item("Share", Icons.share) { onShare(files) }
+                    }
+                }
+                if (links.isNotEmpty()) {
+                    item(if (links.size > 1) "Copy first link" else "Copy link", Icons.link) { copy(ctx, links.first()); repo.toast("Link copied") }
+                    item("Share link", Icons.share) {
+                        runCatching { ctx.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, links.first()), "Share link")) }
+                    }
+                }
+                if (cur.text.isNotEmpty()) item(if (links.isNotEmpty() && cur.text.trim() != links.first()) "Copy text" else if (links.isNotEmpty()) "Copy all" else "Copy", Icons.copy) { onCopy(cur) }
                 if (cur.text.length > 1) item("Select text", Icons.select) { onSelectText(cur) }
                 item(if (p.isStarred(cur.key)) "Unstar" else "Star", Icons.star) { onStar(cur) }
                 if (p.on("readAloud") && cur.text.isNotEmpty()) item("Read aloud", Icons.volume) { Speaker.say(ctx, cur.text) }

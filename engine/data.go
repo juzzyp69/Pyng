@@ -418,8 +418,18 @@ func (m *Messenger) StartChat(numbersJSON string, groupName string) (res string,
 	if err != nil {
 		return "", err
 	}
-	if resp.GetStatus() == gmproto.GetOrCreateConversationResponse_CREATE_RCS && groupName == "" && len(numbers) > 1 {
-		return "", errors.New("Google Messages needs a name for this group")
+	// For a new chat-features group, Google Messages first answers "this would be a new group" and
+	// waits to be told to go ahead. Confirm it (a name is optional).
+	if resp.GetStatus() == gmproto.GetOrCreateConversationResponse_CREATE_RCS {
+		if req.RCSGroupName == nil {
+			empty := ""
+			req.RCSGroupName = &empty
+		}
+		yes := true
+		req.CreateRCSGroup = &yes
+		if resp, err = cli.GetOrCreateConversation(ctx, req); err != nil {
+			return "", err
+		}
 	}
 	conv := resp.GetConversation()
 	if conv == nil {

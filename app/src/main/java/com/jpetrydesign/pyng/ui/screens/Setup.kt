@@ -416,6 +416,7 @@ private fun SignInWeb(onBack: () -> Unit, onCookies: (String) -> Unit) {
     }
     Column(Modifier.fillMaxSize().background(LocalTok.current.bg)) {
         PageTop("Sign in with Google", onBack, sub = "Use the account Google Messages uses")
+        Spacer(Modifier.height(12.dp))
         AndroidView(
             modifier = Modifier.fillMaxSize().navigationBarsPadding(),
             factory = { ctx ->

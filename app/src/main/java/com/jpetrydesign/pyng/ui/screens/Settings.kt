@@ -407,6 +407,7 @@ fun ReactPickScreen(nav: Nav) {
         Glow()
         Column(Modifier.fillMaxSize()) {
             com.jpetrydesign.pyng.ui.kit.PageTop("Quick reactions", { nav.back() }, sub = "Tap a slot, then pick an emoji")
+            Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(28.dp)).background(t.surface).padding(8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 p.quickReacts.forEachIndexed { i, e ->
                     Box(
