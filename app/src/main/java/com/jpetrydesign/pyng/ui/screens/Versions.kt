@@ -48,6 +48,7 @@ val RELEASES = listOf(
         fixed = listOf(
             "Chat Search Names\nItems under Latest shared now show who sent them",
             "App Color Done Button\nDone now takes you back to Appearance instead of your chat list",
+            "App Icon Row\nThe App icon row in Appearance shows your real icon instead of a blank square",
         ),
     ),
     Release(
@@ -61,6 +62,8 @@ val RELEASES = listOf(
         ),
         fixed = listOf(
             "Pinned Chat Badges\nUnread rings and badges no longer get cut off while pins animate in",
+            "Missing Message History\nChats only showed texts from after Pyng was set up. Older messages now load",
+            "Long Chat Lists\nYour chat list no longer stops at your 120 most recent conversations",
         ),
     ),
     Release(
@@ -80,10 +83,16 @@ val RELEASES = listOf(
         fixed = listOf(
             "Google Messages Notifications\nNo longer hidden unless you turn that on, and codes are never touched",
             "Sign-In on Slow Phones\nPyng now tries a few times before giving up",
-            "Chat Color Picker Crash",
+            "Chat Color Picker Crash\nOpening the color wheel in a chat's theme no longer closes the app",
             "Group Chat Creation\nNew groups now go through, with or without a name",
             "Chats Stuck Loading\nPyng nudges Google Messages and offers a button to wake it",
             "Pinned Chat Animation\nPins no longer pop in before their animation",
+            "Pins Behind the Top Bar\nPinned chats stay hidden while covered instead of peeking out",
+            "Links and Media Ignoring a Hold\nLink cards, photos, videos and files now open the message menu when held",
+            "Empty GIF Tab Flash\nThe GIF panel shows a spinner while it loads instead of saying nothing was found",
+            "Memes Tab Empty\nMemes now load",
+            "Send Failures Explained\nFailed messages now say why, like a file that's too large",
+            "Debug Log Cut Off\nThe debug log is now shared as a full file",
         ),
     ),
     Release(
@@ -97,8 +106,11 @@ val RELEASES = listOf(
         ),
         fixed = listOf(
             "Photo Sending\nPhotos send reliably, and go out before the text that goes with them",
-            "Bubble Sizing\nMessage bubbles now fit their text",
+            "Bubble Sizing\nMessage bubbles now fit their text, and short messages get even padding",
             "Pinned Chats Drifting\nPins no longer slide behind the top bar",
+            "Received Bubble Contrast\nMessages from others are easier to read",
+            "Toll-Free Numbers\n800 and similar numbers now show as businesses",
+            "Startup and Memory\nPyng opens faster and uses less memory",
         ),
     ),
     Release(
@@ -110,9 +122,12 @@ val RELEASES = listOf(
             "Video Playback\nVideos play right inside the app",
         ),
         fixed = listOf(
-            "Photo Quality\nPhotos now load at full size",
-            "Sent Message Flicker\nMessages no longer flicker when they're delivered",
+            "Photo Quality\nPhotos now load at full size instead of a blurry preview",
+            "Sent Message Flicker\nMessages no longer flicker or fade in twice when they're delivered",
             "Sign-In with Multiple Phones\nWorks when more than one phone is on the account",
+            "Select Text Scrolling\nSelecting part of a message no longer jumps around",
+            "Blurry Video Previews\nVideo thumbnails are sharp",
+            "Loading States\nPhotos show when they're still downloading instead of a blank box",
         ),
     ),
     Release(
@@ -123,7 +138,11 @@ val RELEASES = listOf(
             "Contact Cards and Link Previews",
             "Glide Send Animation",
         ),
-        fixed = listOf("Smoother Scrolling\nBlur effects are lighter now"),
+        fixed = listOf(
+            "Smoother Scrolling\nBlur effects are lighter now",
+            "Media Downloads\nPhotos and videos download more reliably",
+            "Wide Screens\nFixed the layout on unfolded and wide screens",
+        ),
     ),
     Release(
         "0.2", "Nov 7, 2026",
@@ -133,7 +152,9 @@ val RELEASES = listOf(
             "Send Animation\nA drip and bounce when you send",
             "Frosted Icon Set",
         ),
-        fixed = listOf("Photo Delivery\nPhotos now always come through"),
+        fixed = listOf(
+            "Photo Delivery\nPhotos now always come through",
+        ),
     ),
     Release(
         "0.1", "Nov 6, 2026",
@@ -146,6 +167,12 @@ val RELEASES = listOf(
         fixed = listOf(
             "Text Colors\nText is easier to read",
             "Duplicate Messages\nMessages and chats no longer show up twice",
+            "Sign-In Reliability\nPairing with Google Messages is more dependable",
+            "Pinned Chat Dragging\nDragging pins to rearrange them works smoothly",
+            "Animations Replaying\nEntrance animations no longer replay every time you scroll",
+            "Chats Opening Mid-Thread\nChats now open at the newest message",
+            "Color Wheel\nPicking a custom color works again",
+            "Battery Use\nPyng wakes for new texts instead of running all the time",
         ),
     ),
 )
@@ -164,7 +191,7 @@ fun VersionHistory() {
                         T(r.date, size = 12.5.sp, color = t.soft)
                     }
                     if (r.version == current) Box(Modifier.clip(RoundedCornerShape(12.dp)).background(t.fill).padding(horizontal = 10.dp, vertical = 4.dp)) {
-                        T("You have this", size = 11.5.sp, weight = FontWeight.SemiBold, color = t.onFill)
+                        T("Latest version", size = 11.5.sp, weight = FontWeight.SemiBold, color = t.onFill)
                     }
                 }
                 if (r.added.isNotEmpty()) Section(Icons.spark, "What's New", r.added, t.tone, t.p)
