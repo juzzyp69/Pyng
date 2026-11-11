@@ -366,7 +366,10 @@ fun Composer(
         ) {
             var last by remember { mutableStateOf(panel ?: "plus") }
             if (panel != null) last = panel!!
-            Column(Modifier.fillMaxWidth().height(when (last) { "expr" -> 380.dp; "plus" -> 270.dp; else -> 310.dp }).background(t.sheet).navigationBarsPadding().padding(horizontal = 14.dp, vertical = 14.dp)) {
+            // Emoji, GIFs and stickers get about half the screen so there's room to browse.
+            val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
+            val exprH = (screenH * 0.5f).coerceIn(380f, 560f).dp
+            Column(Modifier.fillMaxWidth().height(when (last) { "expr", "gifs", "stickers" -> exprH; "plus" -> 270.dp; else -> 310.dp }).background(t.sheet).navigationBarsPadding().padding(horizontal = 14.dp, vertical = 14.dp)) {
                 when (last) {
                     "plus" -> PlusGrid(t, translating = conv != null && repo.prefs.state.opt("tr:" + conv.id) == "1") { what ->
                         when (what) {
