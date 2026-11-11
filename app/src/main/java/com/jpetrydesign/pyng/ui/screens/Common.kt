@@ -101,14 +101,14 @@ fun toneOf(number: String, fallback: String): Pair<Color, Color> = LocalTok.curr
  * businesses, or up to three overlapping member circles for a group without a photo.
  */
 @Composable
-fun WhoAvatar(w: Who, size: Dp, fontSize: TextUnit = (size.value / 3.1f).sp, halo: Color? = null, ring: Color = LocalTok.current.bg) {
+fun WhoAvatar(w: Who, size: Dp, fontSize: TextUnit = (size.value / 3.1f).sp, halo: Color? = null, ring: Color = LocalTok.current.bg, shape: androidx.compose.ui.graphics.Shape = CircleShape) {
     when {
         w.photo == null && w.stack.size >= 2 -> GroupStack(w.stack, size, ring, halo)
         w.photo == null && w.business -> Box(
-            Modifier.size(size).clip(CircleShape).background(w.bg),
+            Modifier.size(size).clip(shape).background(w.bg),
             contentAlignment = Alignment.Center,
         ) { Ico(Icons.building, w.ink, size * 0.44f, 1.9f) }
-        else -> Avatar(w.photo, w.ini, size, w.bg, w.ink, fontSize, halo)
+        else -> Avatar(w.photo, w.ini, size, w.bg, w.ink, fontSize, halo, shape = shape)
     }
 }
 

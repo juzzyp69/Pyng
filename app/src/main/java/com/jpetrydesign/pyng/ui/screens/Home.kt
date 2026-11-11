@@ -839,6 +839,40 @@ private class PinCtl(
 /** Set while editing pins: each pinned avatar shows a minus that unpins it. */
 private val LocalPinMinus = androidx.compose.runtime.compositionLocalOf<(() -> Unit)?> { null }
 
+/** How pinned chats look: photo shape, new-message sign, names and what sits behind them. Set in Style studio. */
+data class PinLook(val shape: String = "Circle", val sign: String = "Badges", val names: String = "Below", val back: String = "None")
+val LocalPinLook = androidx.compose.runtime.staticCompositionLocalOf { PinLook() }
+
+fun pinLookOf(p: com.jpetrydesign.pyng.data.AppPrefs) = PinLook(
+    shape = p.opt("pinShape").ifEmpty { "Circle" }, sign = p.pinStyle, names = p.opt("pinNames").ifEmpty { "Below" }, back = p.opt("pinBack").ifEmpty { "None" },
+)
+
+/** The photo shape for pinned chats. */
+fun pinShapeOf(name: String): androidx.compose.ui.graphics.Shape = when (name) {
+    "Squircle" -> RoundedCornerShape(34)
+    "Rounded" -> RoundedCornerShape(22)
+    "Bubble" -> BubbleShape
+    else -> CircleShape
+}
+
+/** A chat bubble with its tail at the bottom left, so a photo can sit inside the Pyng bubble. */
+object BubbleShape : androidx.compose.ui.graphics.Shape {
+    override fun createOutline(size: androidx.compose.ui.geometry.Size, layoutDirection: androidx.compose.ui.unit.LayoutDirection, density: androidx.compose.ui.unit.Density): androidx.compose.ui.graphics.Outline {
+        val sx = size.width / 100f; val sy = size.height / 100f
+        val p = androidx.compose.ui.graphics.Path().apply {
+            moveTo(50 * sx, 4 * sy)
+            cubicTo(24 * sx, 4 * sy, 4 * sx, 22 * sy, 4 * sx, 46 * sy)
+            cubicTo(4 * sx, 59 * sy, 10 * sx, 70 * sy, 20 * sx, 78 * sy)
+            lineTo(16 * sx, 94 * sy); lineTo(33 * sx, 85 * sy)
+            cubicTo(38 * sx, 87 * sy, 44 * sx, 88 * sy, 50 * sx, 88 * sy)
+            cubicTo(76 * sx, 88 * sy, 96 * sx, 70 * sy, 96 * sx, 46 * sy)
+            cubicTo(96 * sx, 22 * sy, 76 * sx, 4 * sy, 50 * sx, 4 * sy)
+            close()
+        }
+        return androidx.compose.ui.graphics.Outline.Generic(p)
+    }
+}
+
 /** Wraps one pinned slot: records where it sits, opens on tap, lifts on long-press, and glides when the order changes. */
 @Composable
 private fun PinItem(pin: Pin, index: Int, ctl: PinCtl, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
@@ -909,17 +943,34 @@ private fun PinFace(pin: Pin, av: Dp, iniSize: Float, style: String, badgeH: Dp 
             val tr = androidx.compose.animation.core.rememberInfiniteTransition(label = "typing")
             tr.animateFloat(0f, (2 * Math.PI).toFloat(), androidx.compose.animation.core.infiniteRepeatable(tween(2600, easing = LinearEasing)), label = "wave")
         } else null
+        val look = LocalPinLook.current
+        val shape = pinShapeOf(look.shape)
+        val accent = t.pal.plus ?: t.p
+        // Glow: a soft colored light behind the photo.
+        if (style == "Glow" && pin.count > 0) Box(Modifier.size(av).drawBehind {
+            drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = 0.55f), accent.copy(alpha = 0f)), center = center, radius = this.size.minDimension * 0.78f), radius = this.size.minDimension * 0.78f)
+        })
         Box(
-            (if (pin.count > 0 && style != "Rings") Modifier.hazeSource(badgeHaze) else Modifier)
+            (if (pin.count > 0 && style == "Badges") Modifier.hazeSource(badgeHaze) else Modifier)
+                .then(if (look.shape == "Framed") Modifier.shadow(6.dp, CircleShape).border(3.dp, if (t.dark) Color(0xFF2A2F3B) else Color.White, CircleShape) else Modifier)
                 .then(if (wave != null) Modifier.graphicsLayer {
                     val ph = wave.value
                     shape = WavyShape(ph); clip = true
                     val k = 1f + 0.03f * kotlin.math.sin(ph * 2f); scaleX = k; scaleY = k
                 } else Modifier),
         ) {
-            WhoAvatar(pin.who, av, iniSize.sp, halo = if ((style == "Rings" || ringHot) && pin.count > 0) (t.pal.plus ?: t.p) else null)
+            WhoAvatar(pin.who, av, iniSize.sp, halo = if ((style == "Rings" || (ringHot && style == "Badges")) && pin.count > 0) accent else null, shape = shape)
+            // Names on the photo: a soft shade at the bottom with the name over it.
+            if (look.names == "Over" && av >= 56.dp) Box(Modifier.size(av).clip(shape).background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.5f))), contentAlignment = Alignment.BottomCenter) {
+                T(if (pin.typing) "Typing…" else pin.c.shortTitle, size = (av.value / 7f).coerceIn(10f, 14f).sp, weight = FontWeight.SemiBold, color = Color.White, maxLines = 1,
+                    modifier = Modifier.padding(bottom = av * 0.16f, start = 6.dp, end = 6.dp))
+            }
         }
-        if (pin.count > 0 && style != "Rings") {
+        if (pin.count > 0 && style == "Dot") Box(
+            Modifier.align(Alignment.BottomEnd).offset((-av.value * 0.02f).dp, (-av.value * 0.02f).dp).size((av.value * 0.2f).coerceAtLeast(12f).dp)
+                .border(3.dp, t.bg, CircleShape).padding(2.dp).clip(CircleShape).background(accent),
+        )
+        if (pin.count > 0 && (style == "Badges" || style !in setOf("Rings", "Glow", "Dot", "Pill"))) {
             val bh = badgeH + 2.dp
             CountBadge(pin.count, h = bh, modifier = Modifier.align(Alignment.TopEnd).offset(6.dp, (-4).dp), haze = badgeHaze)
         }
@@ -943,6 +994,27 @@ private fun PinFace(pin: Pin, av: Dp, iniSize: Float, style: String, badgeH: Dp 
 private fun PinName(pin: Pin, size: Float, max: Dp) {
     val hot = pin.count > 0 || pin.typing
     val t = LocalTok.current
+    val look = LocalPinLook.current
+    if (look.names == "Hidden" || look.names == "Over") return
+    // Name pill: the name itself turns into a colored pill with the count.
+    if (look.sign == "Pill" && pin.count > 0 && !pin.typing) {
+        Row(Modifier.clip(RoundedCornerShape(10.dp)).background(t.pal.plus ?: t.p).padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            T(pin.c.shortTitle, size = size.sp, weight = FontWeight.SemiBold, color = t.onFill, maxLines = 1, modifier = Modifier.widthIn(max = max - 26.dp))
+            Spacer(Modifier.width(4.dp))
+            T(pin.count.toString(), size = size.sp, weight = FontWeight.Bold, color = t.onFill.copy(alpha = 0.85f))
+        }
+        return
+    }
+    if (look.names == "Chip") {
+        Box(Modifier.shadow(2.dp, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp)).background(t.card).padding(horizontal = 8.dp, vertical = 2.dp)) {
+            T(if (pin.typing) "Typing…" else pin.c.shortTitle, size = size.sp, weight = if (hot) FontWeight.SemiBold else FontWeight.Medium, color = if (pin.typing) t.p else t.ink, maxLines = 1, modifier = Modifier.widthIn(max = max - 16.dp))
+        }
+        return
+    }
+    if (look.names == "Bold" && !pin.typing) {
+        T(pin.c.shortTitle, size = (size + 0.5f).sp, weight = if (hot) FontWeight.Bold else FontWeight.Normal, color = if (hot) t.ink else t.faint, maxLines = 1, align = TextAlign.Center, modifier = Modifier.widthIn(max = max))
+        return
+    }
     if (pin.typing) T("Typing…", size = size.sp, weight = FontWeight.SemiBold, color = t.p, maxLines = 1, align = TextAlign.Center,
         italic = true, modifier = Modifier.widthIn(max = max))
     else T(pin.c.shortTitle, size = size.sp, weight = if (hot) FontWeight.SemiBold else FontWeight.Medium, color = if (hot) t.ink else t.soft, maxLines = 1, align = TextAlign.Center, modifier = Modifier.widthIn(max = max))
@@ -971,7 +1043,8 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
     val t = LocalTok.current
     val cardShape = RoundedCornerShape(32.dp)
     val cardMod = Modifier.fillMaxWidth().padding(bottom = 14.dp).clip(cardShape).background(t.card).cardEdge(cardShape)
-    val limit = mapOf("Grid" to 8, "Large" to 6, "Cards" to 6, "Spotlight" to 7)[layout] ?: 12
+    val look = pinLookOf(LocalRepo.current.prefs.state)
+    val limit = mapOf("Grid" to 8, "Large" to 6, "Cards" to 6, "Spotlight" to 7, "Honeycomb" to 7)[layout] ?: 12
     val pins = all.take(limit)
     val dh = ctl.dh
     DisposableEffect(Unit) { onDispose { dh.zone = null; dh.area = null } }
@@ -983,32 +1056,60 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
             // Lights up while a dragged chat is over it.
             .then(if (glow > 0.01f) Modifier.border(2.dp, LocalTok.current.p.copy(alpha = 0.55f * glow), RoundedCornerShape(30.dp)) else Modifier),
     ) {
+    androidx.compose.runtime.CompositionLocalProvider(LocalPinLook provides look) {
     when (layout) {
-        "Large", "Grid" -> {
+        "Large", "Grid", "Honeycomb" -> {
+            val honey = layout == "Honeycomb"
             val cols = if (layout == "Large") 3 else 4
-            val av = if (layout == "Large") 92.dp else 84.dp
-            // Open layout: no card behind the faces, more air between them, a hairline under the set.
+            val av = if (layout == "Large") 92.dp else if (honey) 78.dp else 84.dp
+            val tiles = look.back == "Tiles"
+            val accent = t.pal.plus ?: t.p
+            // What sits behind the faces: nothing, a frosted card, a tinted tray, or a color band reaching up behind the title.
+            val backMod = when (look.back) {
+                "Frosted" -> Modifier.clip(cardShape).background(t.glassStrong).cardEdge(cardShape).padding(top = 14.dp, bottom = 6.dp)
+                "Tray" -> Modifier.clip(cardShape).background(t.tone).padding(top = 14.dp, bottom = 6.dp)
+                "Band" -> Modifier.drawBehind {
+                    val up = 260.dp.toPx()
+                    drawRect(Brush.verticalGradient(listOf(accent.copy(alpha = 0.32f), accent.copy(alpha = 0.18f), accent.copy(alpha = 0f)), startY = -up, endY = size.height + 30.dp.toPx()),
+                        topLeft = androidx.compose.ui.geometry.Offset(-40.dp.toPx(), -up), size = androidx.compose.ui.geometry.Size(size.width + 80.dp.toPx(), size.height + up + 30.dp.toPx()))
+                }
+                else -> Modifier
+            }
+            // Honeycomb: rows of 4 and 3, the short rows shifted half a step so they nest.
+            val rows = if (honey) buildList { var i = 0; var four = true; while (i < pins.size) { val n = if (four) 4 else 3; add(pins.subList(i, minOf(pins.size, i + n))); i += n; four = !four } } else pins.chunked(cols)
             Column(
-                Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 22.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                Modifier.fillMaxWidth().padding(bottom = 22.dp).then(backMod).padding(top = 6.dp, bottom = if (look.back == "Frosted" || look.back == "Tray") 8.dp else 0.dp),
+                verticalArrangement = Arrangement.spacedBy(if (honey) 2.dp else if (tiles) 8.dp else 14.dp),
             ) {
-                val rowsN = (pins.size + cols - 1) / cols
-                pins.chunked(cols).forEachIndexed { r, row ->
-                    Row(Modifier.fillMaxWidth()) {
-                        row.forEachIndexed { i, pin ->
+                val rowsN = rows.size
+                var idx = 0
+                rows.forEachIndexed { r, row ->
+                    val short = honey && r % 2 == 1
+                    Row(Modifier.fillMaxWidth().padding(horizontal = if (tiles) 4.dp else 0.dp), horizontalArrangement = if (tiles) Arrangement.spacedBy(8.dp) else Arrangement.Start) {
+                        if (short) Spacer(Modifier.weight(0.5f))
+                        row.forEach { pin ->
+                            val n = idx++
                             Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
-                                PinItem(pin, r * cols + i, ctl, Modifier.enterOnce("pin:$layout:" + pin.c.id, r * cols + i, pop = true)) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Box(Modifier.jellyRise(reveal, r * cols + i, cols, rowsN)) { PinFace(pin, av, if (layout == "Large") 28f else 24f, style, ringHot = true) }
-                                        Spacer(Modifier.height(8.dp))
-                                        Box(Modifier.jellyRise(reveal, r * cols + i, cols, rowsN, name = true)) {
-                                            PinName(pin, if (layout == "Large") 14f else 12.5f, if (layout == "Large") 108.dp else 88.dp)
+                                PinItem(pin, n, ctl, Modifier.enterOnce("pin:$layout:" + pin.c.id, n, pop = true)) {
+                                    Column(
+                                        (if (tiles) Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(t.card).cardEdge(RoundedCornerShape(22.dp)).padding(vertical = 10.dp) else Modifier),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                    ) {
+                                        val faceAv = if (tiles) av * 0.82f else av
+                                        Box(Modifier.jellyRise(reveal, n, cols, rowsN)) { PinFace(pin, faceAv, if (layout == "Large") 28f else 24f, style, ringHot = true) }
+                                        if (look.names != "Hidden" && look.names != "Over") {
+                                            Spacer(Modifier.height(8.dp))
+                                            Box(Modifier.jellyRise(reveal, n, cols, rowsN, name = true)) {
+                                                PinName(pin, if (layout == "Large") 14f else 12.5f, if (layout == "Large") 108.dp else 88.dp)
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
-                        repeat(cols - row.size) { Spacer(Modifier.weight(1f)) }
+                        val want = if (honey) (if (short) 3 else 4) else cols
+                        repeat(want - row.size) { Spacer(Modifier.weight(1f)) }
+                        if (short) Spacer(Modifier.weight(0.5f))
                     }
                 }
             }
@@ -1110,6 +1211,7 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
                 }
             }
         }
+    }
     }
     }
 }

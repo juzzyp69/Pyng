@@ -41,6 +41,8 @@ val RELEASES = listOf(
             "Automatic Code Copying\nNew codes are copied as they arrive, so your keyboard can suggest them. Turn it off in Settings",
             "Version History Added\nTap Version in Help & about to see what changed in each update",
             "New App Icons\nEvery icon uses the main Pyng logo, with 8 colors each for Soft and Duotone and a frostier Glass",
+            "More Pinned Chat Styles\nNew photo shapes, new-message signs, name styles, backdrops and a Honeycomb layout in Style studio",
+            "App Renamed to Pyng\nEasier to tell apart from Google Messages on your home screen and in notifications",
         ),
         fixed = listOf(
             "Chat Search Names\nItems under Latest shared now show who sent them",

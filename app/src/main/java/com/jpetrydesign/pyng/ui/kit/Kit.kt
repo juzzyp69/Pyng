@@ -260,12 +260,16 @@ fun Avatar(
     fontSize: TextUnit = (size.value / 3.1f).sp,
     halo: Color? = null,
     modifier: Modifier = Modifier,
+    shape: androidx.compose.ui.graphics.Shape = CircleShape,
 ) {
     var m = modifier.size(size)
     if (halo != null) m = m.drawBehind {
-        drawCircle(halo, radius = this.size.minDimension / 2 + 3.5.dp.toPx(), style = Stroke(2.dp.toPx()))
+        // The ring follows the photo's shape, a little outside it.
+        val g = 3.5.dp.toPx()
+        val o = shape.createOutline(androidx.compose.ui.geometry.Size(this.size.width + 2 * g, this.size.height + 2 * g), layoutDirection, this)
+        androidx.compose.ui.graphics.drawscope.translate(-g, -g) { drawOutline(o, halo, style = Stroke(2.dp.toPx())) }
     }
-    Box(m.clip(CircleShape).background(bg), contentAlignment = Alignment.Center) {
+    Box(m.clip(shape).background(bg), contentAlignment = Alignment.Center) {
         if (!photo.isNullOrEmpty()) {
             AsyncImage(model = if (photo.startsWith("http") || photo.startsWith("content://")) photo else File(photo), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         } else {

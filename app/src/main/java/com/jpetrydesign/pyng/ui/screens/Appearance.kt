@@ -58,6 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -207,6 +208,9 @@ private fun StylePicker(key: String?, onDone: () -> Unit) {
         val (title, hint) = when (k) {
             "pinLayout" -> "Pinned layout" to "Hold a pinned chat, then drag to rearrange"
             "pinStyle" -> "Pinned notifications" to "How pinned chats show something new"
+            "pinShape" -> "Photo shape" to "The shape of pinned chat photos"
+            "pinNames" -> "Names" to "How names show under pinned chats"
+            "pinBack" -> "Backdrop" to "What sits behind your pinned chats"
             "bubble" -> "Bubble shape" to "Tap a style to preview it live"
             "gradient" -> "Bubble gradient" to "How color flows through the bubbles you send"
             "textSize" -> "Text size" to "Messages and your conversation list"
@@ -248,18 +252,20 @@ fun StyleTiles(k: String, pickWall: () -> Unit) {
                 "pinLayout" -> tiles = listOf(
                     "Grid" to "2 rows of 4", "Large" to "Bigger, 3 across", "Pages" to "4 per page, swipe", "Carousel" to "One scrolling row", "Compact" to "Small row, no card",
                     "Chips" to "Name pills that wrap", "Cards" to "2 across, with previews", "Spotlight" to "Top chat big, rest small", "List" to "Pinned rows on top", "Dock" to "Floating bar at the bottom",
+                    "Honeycomb" to "Rows that nest",
                 ).map { (n, s) -> Tile(n, s, p.pinLayout == n, { repo.prefs.edit { it.copy(pinLayout = n) } }) { PinMini(n, AV, LN) } }
-                "pinStyle" -> tiles = listOf("Badges" to "Unread count on the photo", "Rings" to "A colored ring when there is news").map { (n, s) ->
-                    Tile(n, s, p.pinStyle == n, { repo.prefs.edit { it.copy(pinStyle = n) } }) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            Box(Modifier.size(46.dp)) {
-                                if (n == "Rings") Box(Modifier.size(46.dp).border(2.5.dp, t.pal.plus ?: t.p, CircleShape).padding(5.dp).clip(CircleShape).background(AV))
-                                else { Box(Modifier.padding(3.dp).size(40.dp).clip(CircleShape).background(AV)); Box(Modifier.align(Alignment.TopEnd).size(16.dp).clip(CircleShape).background(t.badgeBg)) }
-                            }
-                            Box(Modifier.padding(3.dp).size(40.dp).clip(CircleShape).background(AV))
-                        }
-                    }
-                }
+                "pinStyle" -> { cols = 3; pvH = 76.dp; tiles = listOf("Badges" to "Count", "Rings" to "Ring", "Glow" to "Soft light", "Dot" to "Small dot", "Pill" to "Name pill").map { (n, sub) ->
+                    Tile(if (n == "Pill") "Name pill" else n, sub, p.pinStyle == n, { repo.prefs.edit { it.copy(pinStyle = n) } }) { PinSample(pinLookOf(p).copy(sign = n)) }
+                } }
+                "pinShape" -> { cols = 3; pvH = 76.dp; tiles = listOf("Circle", "Squircle", "Rounded", "Bubble", "Framed").map { n ->
+                    Tile(if (n == "Bubble") "Chat bubble" else n, null, pinLookOf(p).shape == n, { repo.prefs.setOpt("pinShape", n) }) { PinSample(pinLookOf(p).copy(shape = n)) }
+                } }
+                "pinNames" -> { cols = 3; pvH = 76.dp; tiles = listOf("Below" to "Below", "Bold" to "Bold when new", "Chip" to "In a chip", "Over" to "On the photo", "Hidden" to "Hidden").map { (n, label) ->
+                    Tile(label, null, pinLookOf(p).names == n, { repo.prefs.setOpt("pinNames", n) }) { PinSample(pinLookOf(p).copy(names = n)) }
+                } }
+                "pinBack" -> { cols = 3; pvH = 76.dp; tiles = listOf("None" to "None", "Frosted" to "Frosted card", "Tray" to "Tinted tray", "Tiles" to "Own tiles", "Band" to "Color band").map { (n, label) ->
+                    Tile(label, null, pinLookOf(p).back == n, { repo.prefs.setOpt("pinBack", n) }) { PinSample(pinLookOf(p).copy(back = n)) }
+                } }
                 "bubble" -> {
                     cols = 3
                     tiles = listOf("Rounded", "Soft", "Pill").map { n ->
@@ -401,6 +407,10 @@ private fun PinMini(n: String, AV: Color, LN: Color) {
             listOf(42, 30, 36, 46, 28).forEach { box(it.dp, 14.dp, 7.dp) }
         }
         "Cards" -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { repeat(2) { Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { repeat(2) { box(44.dp, 28.dp, 7.dp) } } } }
+        "Honeycomb" -> Column(verticalArrangement = Arrangement.spacedBy(2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { repeat(4) { c(17.dp) } }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { repeat(3) { c(17.dp) } }
+        }
         "Spotlight" -> Column(verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.CenterHorizontally) { box(96.dp, 28.dp, 8.dp); Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { repeat(3) { box(28.dp, 24.dp, 7.dp) } } }
         "List" -> Column(verticalArrangement = Arrangement.spacedBy(5.dp)) { repeat(2) { box(110.dp, 11.dp, 4.dp, AV, false) }; repeat(3) { box(110.dp, 11.dp, 4.dp, LN, false) } }
         else -> Column(verticalArrangement = Arrangement.spacedBy(5.dp)) { repeat(3) { box(110.dp, 9.dp, 4.dp, LN, false) }; box(84.dp, 18.dp, 9.dp) }
@@ -706,7 +716,7 @@ private fun StyleStudio(kind: String?, onClose: () -> Unit) {
         val k = last ?: return@AnimatedVisibility
         val chat = k == "chat"
         val tabs = if (chat) listOf("bubble" to "Bubbles", "gradient" to "Gradient", "statusStyle" to "Status", "photoGroups" to "Photos", "textSize" to "Text", "font" to "Font", "defWall" to "Wallpaper")
-            else listOf("pinLayout" to "Layout", "pinStyle" to "Badges", "density" to "Density", "showPhotos" to "Faces")
+            else listOf("pinLayout" to "Layout", "pinShape" to "Shape", "pinStyle" to "New messages", "pinNames" to "Names", "pinBack" to "Backdrop", "density" to "Density", "showPhotos" to "Faces")
         var tab by remember(k) { mutableStateOf(tabs.first().first) }
         Column(Modifier.fillMaxSize().background(t.bg).statusBarsPadding().navigationBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(start = 6.dp, end = 16.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -787,8 +797,13 @@ fun HomeStylePreview(compact: Boolean) {
     val LN = if (t.dark) Color.White.copy(alpha = 0.18f) else Color(0x1F15171D)
     Column(Modifier.fillMaxSize().padding(if (compact) 8.dp else 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.graphicsLayer { val s = if (compact) 0.78f else 1.1f; scaleX = s; scaleY = s }.padding(vertical = if (compact) 0.dp else 8.dp)) {
-            PinMini(p.pinLayout, AV, LN)
-            if (p.pinStyle == "Badges") Box(Modifier.align(Alignment.TopEnd).offset(4.dp, (-4).dp).size(12.dp).clip(CircleShape).background(t.badgeBg))
+            if (compact) {
+                PinMini(p.pinLayout, AV, LN)
+                if (p.pinStyle == "Badges") Box(Modifier.align(Alignment.TopEnd).offset(4.dp, (-4).dp).size(12.dp).clip(CircleShape).background(t.badgeBg))
+            } else Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                PinMini(p.pinLayout, AV, LN)
+                PinSample(pinLookOf(p), big = true)
+            }
         }
         Spacer(Modifier.height(if (compact) 4.dp else 12.dp))
         Column(
@@ -819,6 +834,65 @@ fun StatusSample(style: String, t: Tok, compact: Boolean = false) {
             else -> {
                 Ico(Icons.read, t.p, if (compact) 10.dp else 14.dp, 2.1f); Spacer(Modifier.width(3.dp))
                 T(if (compact) "Read" else "Read 3:02 PM", size = fs, weight = FontWeight.SemiBold, color = t.p)
+            }
+        }
+    }
+}
+
+
+/**
+ * Three sample pinned chats drawn with a [PinLook]: the first has news, so the new-message sign,
+ * shape, names and backdrop all show.
+ */
+@Composable
+fun PinSample(look: PinLook, big: Boolean = false) {
+    val t = LocalTok.current
+    val av = if (big) 40.dp else 30.dp
+    val accent = t.pal.plus ?: t.p
+    val shape = pinShapeOf(look.shape)
+    val tones = listOf(t.p.copy(alpha = 0.45f), t.p.copy(alpha = 0.3f), t.p.copy(alpha = 0.2f))
+    val backMod = when (look.back) {
+        "Frosted" -> Modifier.clip(RoundedCornerShape(14.dp)).background(t.glassStrong).padding(6.dp)
+        "Tray" -> Modifier.clip(RoundedCornerShape(14.dp)).background(t.tone).padding(6.dp)
+        "Band" -> Modifier.clip(RoundedCornerShape(14.dp)).background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.35f), accent.copy(alpha = 0f)))).padding(6.dp)
+        else -> Modifier.padding(6.dp)
+    }
+    Row(backMod, horizontalArrangement = Arrangement.spacedBy(if (big) 12.dp else 8.dp), verticalAlignment = Alignment.Top) {
+        tones.forEachIndexed { i, tone ->
+            val hot = i == 0
+            Column(
+                (if (look.back == "Tiles") Modifier.clip(RoundedCornerShape(10.dp)).background(if (t.dark) t.card else Color.White).padding(4.dp) else Modifier),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Box(Modifier.size(av)) {
+                    if (hot && look.sign == "Glow") Box(Modifier.size(av).drawBehind {
+                        drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = 0.6f), accent.copy(alpha = 0f)), center = center, radius = size.minDimension * 0.8f), radius = size.minDimension * 0.8f)
+                    })
+                    var m = Modifier.size(av)
+                    if (hot && look.sign == "Rings") m = m.drawBehind {
+                        val g = 3.dp.toPx()
+                        val o = shape.createOutline(androidx.compose.ui.geometry.Size(size.width + 2 * g, size.height + 2 * g), layoutDirection, this)
+                        androidx.compose.ui.graphics.drawscope.translate(-g, -g) { drawOutline(o, accent, style = androidx.compose.ui.graphics.drawscope.Stroke(1.6.dp.toPx())) }
+                    }
+                    if (look.shape == "Framed") m = m.shadow(3.dp, CircleShape).border(2.dp, if (t.dark) Color(0xFF2A2F3B) else Color.White, CircleShape)
+                    Box(m.clip(shape).background(tone), contentAlignment = Alignment.BottomCenter) {
+                        if (look.names == "Over") Box(Modifier.padding(bottom = av * 0.18f).size(av * 0.5f, 3.dp).clip(RoundedCornerShape(2.dp)).background(Color.White))
+                    }
+                    if (hot && look.sign == "Badges") Box(Modifier.align(Alignment.TopEnd).offset(3.dp, (-3).dp).size(if (big) 14.dp else 11.dp).clip(CircleShape).background(t.badgeBg))
+                    if (hot && look.sign == "Dot") Box(Modifier.align(Alignment.BottomEnd).size(if (big) 11.dp else 9.dp).border(2.dp, t.bg, CircleShape).padding(1.5.dp).clip(CircleShape).background(accent))
+                }
+                if (look.names != "Hidden" && look.names != "Over") {
+                    Spacer(Modifier.height(5.dp))
+                    val w = av * 0.8f
+                    when {
+                        hot && look.sign == "Pill" -> Box(Modifier.size(w + 6.dp, 8.dp).clip(RoundedCornerShape(4.dp)).background(accent))
+                        look.names == "Chip" -> Box(Modifier.clip(RoundedCornerShape(5.dp)).background(if (t.dark) t.card else Color.White).padding(horizontal = 4.dp, vertical = 2.dp)) {
+                            Box(Modifier.size(w * 0.8f, 4.dp).clip(RoundedCornerShape(2.dp)).background(t.soft.copy(alpha = 0.5f)))
+                        }
+                        look.names == "Bold" -> Box(Modifier.size(w, if (hot) 5.dp else 4.dp).clip(RoundedCornerShape(2.dp)).background(if (hot) t.ink else t.faint.copy(alpha = 0.6f)))
+                        else -> Box(Modifier.size(w, 4.dp).clip(RoundedCornerShape(2.dp)).background(t.soft.copy(alpha = 0.5f)))
+                    }
+                }
             }
         }
     }

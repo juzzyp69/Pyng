@@ -216,7 +216,7 @@ object Notifier {
 
     fun linkNotification(ctx: Context) = NotificationCompat.Builder(ctx, CH_LINK)
         .setSmallIcon(R.drawable.ic_stat_message)
-        .setContentTitle("Messages")
+        .setContentTitle("Pyng")
         .setContentText("Connected")
         .setOngoing(true)
         .setSilent(true)
