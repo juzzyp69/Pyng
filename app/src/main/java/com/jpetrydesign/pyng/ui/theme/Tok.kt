@@ -21,13 +21,23 @@ val PyngFont = FontFamily(
     Font(R.font.geist_bold, FontWeight.Bold),
 )
 
-/** Which typeface the app uses: your phone's (the default) or Pyng's own. Set from Appearance. */
+/** Google Sans Flex, the open-source version of the font Google Messages uses (OFL). */
+val GoogleSans = FontFamily(
+    Font(R.font.google_sans_flex_regular, FontWeight.Normal),
+    Font(R.font.google_sans_flex_medium, FontWeight.Medium),
+    Font(R.font.google_sans_flex_semibold, FontWeight.SemiBold),
+    Font(R.font.google_sans_flex_bold, FontWeight.Bold),
+)
+
+/** Which typeface the app uses: "Google" (default, like Google Messages), "Phone" or "Pyng". Set from Appearance. */
 object AppFont {
-    var system by androidx.compose.runtime.mutableStateOf(true)
+    var pick by androidx.compose.runtime.mutableStateOf("Google")
 }
 
-/** The font everything is drawn with. Follows the phone's font unless you pick Pyng's in Appearance. */
-val Geist: FontFamily get() = if (AppFont.system) FontFamily.Default else PyngFont
+fun fontFor(pick: String): FontFamily = when (pick) { "Phone" -> FontFamily.Default; "Pyng" -> PyngFont; else -> GoogleSans }
+
+/** The font everything is drawn with, as picked in Appearance. */
+val Geist: FontFamily get() = fontFor(AppFont.pick)
 
 /** Every color the UI uses, derived from a palette the same way the prototype does. */
 @Immutable

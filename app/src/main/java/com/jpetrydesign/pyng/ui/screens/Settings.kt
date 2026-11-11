@@ -347,7 +347,7 @@ fun SectionScreen(nav: Nav, key: String) {
                     ListRow("Version", BuildConfig.VERSION_NAME, trailing = null); Hairline()
                     ListRow("Debug log", "Share this if something isn't working", onClick = { nav.go(Route.Log) }); Hairline()
                     ListRow("Replay setup", "See the welcome screens again", onClick = { nav.replace(Route.Setup(0)) }); Hairline()
-                    ListRow("Open-source licenses", "libgm (AGPL-3.0) · Geist font (OFL)", onClick = {
+                    ListRow("Open-source licenses", "libgm (AGPL-3.0) · Google Sans Flex and Geist fonts (OFL)", onClick = {
                         runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/mautrix/gmessages"))) }
                     })
                 }

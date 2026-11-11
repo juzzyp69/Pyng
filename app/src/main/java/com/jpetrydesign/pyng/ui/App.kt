@@ -141,7 +141,7 @@ fun rememberTok(repo: Repo): Tok {
 fun PyngRoot(repo: Repo, nav: Nav) {
     // Font choice is read before anything draws, so text never flashes in the wrong typeface.
     val fontPick = repo.prefs.state.opt("font")
-    remember(fontPick) { com.jpetrydesign.pyng.ui.theme.AppFont.system = fontPick != "Pyng"; fontPick }
+    remember(fontPick) { com.jpetrydesign.pyng.ui.theme.AppFont.pick = fontPick; fontPick }
     val t = rememberTok(repo)
     // Motion follows both Pyng's own "Reduce motion" and Android's "Remove animations".
     val actx = androidx.compose.ui.platform.LocalContext.current

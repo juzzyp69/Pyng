@@ -276,9 +276,10 @@ fun StyleTiles(k: String, pickWall: () -> Unit) {
                 "textSize" -> { cols = 4; pvH = 72.dp; tiles = listOf("S" to 14, "M" to 17, "L" to 21, "XL" to 26).map { (n, fs) ->
                     Tile(TS[n]!!, null, p.textSize == n, { repo.prefs.edit { it.copy(textSize = n) } }) { T("Aa", size = fs.sp, weight = FontWeight.SemiBold) }
                 } }
-                "font" -> { cols = 2; pvH = 72.dp; tiles = listOf(
-                    Triple("Phone", "Your phone's font", androidx.compose.ui.text.font.FontFamily.Default),
-                    Triple("Pyng", "Pyng's own (Geist)", com.jpetrydesign.pyng.ui.theme.PyngFont),
+                "font" -> { cols = 3; pvH = 72.dp; tiles = listOf(
+                    Triple("Google", "Google Sans", com.jpetrydesign.pyng.ui.theme.GoogleSans),
+                    Triple("Phone", "Your phone's", androidx.compose.ui.text.font.FontFamily.Default),
+                    Triple("Pyng", "Geist", com.jpetrydesign.pyng.ui.theme.PyngFont),
                 ).map { (n, label, fam) ->
                     Tile(label, null, p.opt("font") == n, { repo.prefs.setOpt("font", n) }) {
                         androidx.compose.material3.Text("Aa", style = androidx.compose.ui.text.TextStyle(fontFamily = fam, fontSize = 28.sp, fontWeight = FontWeight.SemiBold, color = t.ink))
