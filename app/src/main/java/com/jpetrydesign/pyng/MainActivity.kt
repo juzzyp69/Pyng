@@ -118,6 +118,7 @@ class MainActivity : FragmentActivity() {
             "search" -> Route.Search
             "new" -> Route.NewChat()
             "newgroup" -> Route.NewChat(true)
+            "share" -> { app.repo.pendingShare = com.jpetrydesign.pyng.data.Repo.Shared("Look at this place https://maps.app.goo.gl/pyng", emptyList()); Route.Share }
             "contact" -> Route.Contact(arg.ifEmpty { "c1" })
             "theme" -> Route.ChatTheme(arg.ifEmpty { "c1" })
             "settings" -> Route.Settings
@@ -152,7 +153,7 @@ class MainActivity : FragmentActivity() {
                 val files = uris.take(10).mapNotNull { u -> repo.importUri(u) }
                 if (text.isBlank() && files.isEmpty()) { repo.toast("Nothing to share"); return@launch }
                 repo.pendingShare = com.jpetrydesign.pyng.data.Repo.Shared(text, files)
-                nav.home(); nav.go(Route.NewChat())
+                nav.home(); nav.go(Route.Share)
             }
             return
         }

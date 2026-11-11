@@ -57,6 +57,7 @@ import com.jpetrydesign.pyng.ui.screens.HomeScreen
 import com.jpetrydesign.pyng.ui.screens.ListScreen
 import com.jpetrydesign.pyng.ui.screens.LogScreen
 import com.jpetrydesign.pyng.ui.screens.NewChatScreen
+import com.jpetrydesign.pyng.ui.screens.ShareScreen
 import com.jpetrydesign.pyng.ui.screens.ProfileScreen
 import com.jpetrydesign.pyng.ui.screens.ReactPickScreen
 import com.jpetrydesign.pyng.ui.screens.SearchScreen
@@ -76,6 +77,7 @@ sealed interface Route {
     data object Home : Route
     data object Search : Route
     data class NewChat(val group: Boolean = false) : Route
+    data object Share : Route
     data class Thread(val id: String, val highlight: String? = null, val search: Boolean = false) : Route
     data class Contact(val id: String) : Route
     data class ChatTheme(val id: String) : Route
@@ -256,7 +258,7 @@ private fun WideLayout(nav: Nav, width: androidx.compose.ui.unit.Dp) {
     val fullScreen = top is Route.Setup || top is Route.Viewer || top is Route.Log
     if (fullScreen) { Pane(nav, Modifier.fillMaxSize(), wide = true); return }
     val leftW = if (width > 900.dp) 420.dp else 360.dp
-    val leftRoutes = setOf(Route.Home::class, Route.Settings::class, Route.Section::class, Route.Appearance::class, Route.Profile::class, Route.ReactPick::class, Route.Lists::class, Route.Search::class, Route.NewChat::class)
+    val leftRoutes = setOf(Route.Home::class, Route.Settings::class, Route.Section::class, Route.Appearance::class, Route.Profile::class, Route.ReactPick::class, Route.Lists::class, Route.Search::class, Route.NewChat::class, Route.Share::class)
     val leftTop = nav.stack.lastOrNull { it::class in leftRoutes } ?: Route.Home
     val rightTop = nav.stack.lastOrNull { it !is Route.Home && it::class !in leftRoutes }
     BackHandler(enabled = nav.stack.size > 1) { nav.back() }
@@ -293,6 +295,7 @@ private fun Screen(r: Route, nav: Nav, wide: Boolean) {
         Route.Home -> HomeScreen(nav, wide)
         Route.Search -> SearchScreen(nav)
         is Route.NewChat -> NewChatScreen(nav, r.group)
+        Route.Share -> ShareScreen(nav)
         is Route.Thread -> ThreadScreen(nav, r.id, r.highlight, r.search, wide)
         is Route.Contact -> ContactScreen(nav, r.id)
         is Route.ChatTheme -> ChatThemeScreen(nav, r.id)

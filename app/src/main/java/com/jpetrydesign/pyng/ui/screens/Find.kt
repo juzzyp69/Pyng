@@ -228,8 +228,7 @@ fun NewChatScreen(nav: Nav, group: Boolean) {
     LaunchedEffect(repo.contacts.size) {
         if (demo != null && picked.isEmpty() && repo.contacts.size >= 2) { picked.addAll(repo.contacts.filter { it.name.firstOrNull()?.isLetter() == true }.take(2)); if (demo == "group-name") naming = true }
     }
-    val share = repo.pendingShare
-    fun leave() { repo.pendingShare = null; nav.back() }
+    fun leave() { nav.back() }
     BackHandler { if (naming) naming = false else leave() }
 
     val query = q.trim().lowercase()
@@ -273,12 +272,7 @@ fun NewChatScreen(nav: Nav, group: Boolean) {
         Glow()
         Column(Modifier.fillMaxSize()) {
             PageTop(
-                if (share != null) "Share to…" else if (group) "New group" else "New conversation", { leave() },
-                sub = share?.let { sh ->
-                    val n = sh.files.size
-                    val kind = when { n == 0 -> null; sh.files.all { it.mime.startsWith("image/") } -> if (n == 1) "1 photo" else "$n photos"; sh.files.all { it.mime.startsWith("video/") } -> if (n == 1) "1 video" else "$n videos"; else -> if (n == 1) "1 file" else "$n files" }
-                    listOfNotNull(kind, sh.text.takeIf { it.isNotBlank() }?.let { it.lineSequence().first().take(48) }).joinToString(" · ")
-                },
+                if (group) "New group" else "New conversation", { leave() },
             )
             Spacer(Modifier.height(12.dp))
             // One "To" field: everyone you add sits in it as a chip, and you can keep typing for more.
@@ -329,27 +323,6 @@ fun NewChatScreen(nav: Nav, group: Boolean) {
                         Avatar(null, "#", 44.dp, t.tone, t.p)
                         Spacer(Modifier.width(12.dp))
                         Column { T("Add $q", size = 15.sp, weight = FontWeight.SemiBold); T("Number", size = 13.sp, color = t.soft) }
-                    }
-                }
-                // Sharing: your recent chats first, so sending to someone you talk to is one tap.
-                if (share != null && query.isEmpty() && picked.isEmpty()) {
-                    val recent = repo.convs.values.filter { it.status == "active" }.sortedByDescending { it.ts }.take(8)
-                    if (recent.isNotEmpty()) {
-                        item { T("Recent chats", size = 12.5.sp, weight = FontWeight.SemiBold, color = t.soft, modifier = Modifier.padding(start = 4.dp, top = 12.dp, bottom = 6.dp)) }
-                        items(recent, key = { "r:" + it.id }) { c ->
-                            Row(
-                                Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).clickable { nav.back(); nav.openChat(c.id) }.padding(horizontal = 4.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                WhoAvatar(whoOf(c, repo, t), 44.dp)
-                                Spacer(Modifier.width(12.dp))
-                                Column(Modifier.weight(1f)) {
-                                    T(c.title, size = 15.5.sp, weight = FontWeight.Medium, maxLines = 1)
-                                    T(if (c.group) "${c.people.size} people" else "Chat", size = 13.sp, color = t.soft, maxLines = 1)
-                                }
-                                Ico(Icons.send, t.p, 18.dp, 2f)
-                            }
-                        }
                     }
                 }
                 item { T(if (repo.contacts.isEmpty()) (if (repo.contactsLoaded) "No contacts found. Type a number above to text it." else "Loading contacts…") else if (query.isEmpty()) "All contacts" else "Contacts", size = 12.5.sp, weight = FontWeight.SemiBold, color = t.soft, modifier = Modifier.padding(start = 4.dp, top = 12.dp, bottom = 6.dp)) }

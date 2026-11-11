@@ -73,6 +73,8 @@ shot 44-new --es route new
 shot 45-newgroup --es route newgroup
 WAIT=8 shot 45b-newchat-picked --es route new --es open group-pick
 WAIT=8 shot 45c-newgroup-name --es route new --es open group-name
+WAIT=8 shot 45d-share --es route share
+WAIT=8 shot 45e-share-dark --es route share --es mode Dark
 shot 50-settings --es route settings
 for S in chats notifications chatfeat privacy access storage about; do shot "51-section-$S" --es route "section:$S"; done
 shot 52-appearance --es route appearance
