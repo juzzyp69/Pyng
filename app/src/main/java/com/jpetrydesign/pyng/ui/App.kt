@@ -109,6 +109,18 @@ class Nav(start: Route) {
 
     /** The app color strip shown over Home for a live preview. */
     var strip by mutableStateOf(false)
+    private var stripReturn: List<Route>? = null
+
+    /** Shows the color strip over Home, remembering where you came from. */
+    fun openStrip() { stripReturn = stack.toList(); strip = true; home() }
+
+    /** Done with the color strip: back to the page you opened it from (Appearance), not Home. */
+    fun closeStrip() {
+        strip = false
+        val back = stripReturn ?: return
+        stripReturn = null
+        if (back.size > 1) { forward = true; stack.clear(); stack.addAll(back) }
+    }
 
     fun go(r: Route) { forward = true; stack.add(r) }
     fun replace(r: Route) { forward = true; stack.clear(); stack.add(r) }

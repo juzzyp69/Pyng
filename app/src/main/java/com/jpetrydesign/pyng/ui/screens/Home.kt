@@ -613,7 +613,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
         }
         androidx.compose.runtime.SideEffect { peek.onEditPins = { editPins = true } }
         PermissionSheet(askPerms) { askPerms = false; repo.prefs.edit { it.copy(permsAsked = 1) } }
-        if (nav.strip) ColorStrip(onDone = { nav.strip = false })
+        if (nav.strip) ColorStrip(onDone = { nav.closeStrip() })
     }
 }
 

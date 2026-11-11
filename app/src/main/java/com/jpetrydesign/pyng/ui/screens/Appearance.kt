@@ -146,7 +146,7 @@ fun AppearanceScreen(nav: Nav) {
                         T(pal.name, size = 20.sp, weight = FontWeight.Bold)
                         T("Bubbles, buttons and highlights", size = 13.sp, color = t.soft)
                     }
-                    PillButton("Change", { nav.strip = true; nav.home() }, height = 44.dp)
+                    PillButton("Change", { nav.openStrip() }, height = 44.dp)
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp).padding(bottom = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                     quick.forEach { x ->
