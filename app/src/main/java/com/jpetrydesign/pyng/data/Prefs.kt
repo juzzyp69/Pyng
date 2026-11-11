@@ -69,7 +69,7 @@ data class Scheduled(val id: String, val convId: String, val text: String, val a
 val DEFAULT_TOGGLES = mapOf(
     "smart" to true, "micBtn" to true, "typing" to true, "receipts" to true, "previews" to true, "enterSend" to false,
     "translate" to true, "notif" to true, "sounds" to false, "vibrate" to true, "reactNotif" to true, "mentionsOnly" to false,
-    "quick" to true, "counter" to true, "spam" to true, "otpChip" to true, "otpAuto" to false, "bioLock" to false, "hideSwitcher" to false,
+    "quick" to true, "counter" to true, "spam" to true, "otpChip" to true, "otpAuto" to true, "bioLock" to false, "hideSwitcher" to false,
     "reduceBlur" to false, "reduceMotion" to false, "boldText" to false, "highContrast" to false, "effects" to true,
     "alwaysOn" to false, "hideGmAlerts" to false,
 )
