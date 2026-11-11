@@ -429,14 +429,24 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                         }
                     }
                 }
+                if (rows.isEmpty() && repo.loading && all.isEmpty()) item("skeleton") { Box(onSheet) { SkeletonRows(t) } }
                 if (rows.isEmpty() && !repo.loading) {
                     item("empty") {
-                        Column(Modifier.fillMaxWidth().padding(vertical = 70.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Box(Modifier.size(84.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(Icons.message, t.p, 36.dp, 1.7f) }
-                            Spacer(Modifier.height(10.dp))
-                            T(if (repo.loadError != null) "Couldn't load chats" else "No conversations yet", size = 18.sp, weight = FontWeight.SemiBold)
-                            T(repo.loadError ?: "Tap the message button to text someone or start a group.", size = 13.5.sp, color = t.soft, align = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
-                            if (repo.loadError != null) T("Try again", size = 14.sp, weight = FontWeight.SemiBold, color = t.p, modifier = Modifier.padding(top = 12.dp).clickable { repo.refresh() }.padding(8.dp))
+                        Column(onSheet.fillMaxWidth().padding(vertical = 64.dp, horizontal = 30.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Box(Modifier.size(84.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(if (repo.loadError != null) Icons.warn else Icons.message, t.p, 36.dp, 1.7f) }
+                            Spacer(Modifier.height(12.dp))
+                            T(if (repo.loadError != null) "Couldn't load your chats" else "Nothing here yet", size = 18.sp, weight = FontWeight.SemiBold)
+                            T(
+                                if (repo.loadError != null) "Your phone may be asleep or offline. Opening Google Messages on it usually helps."
+                                else "Start a conversation and it'll show up here.",
+                                size = 13.5.sp, color = t.soft, align = TextAlign.Center, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp),
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            T(
+                                if (repo.loadError != null) "Try again" else "Start a chat", size = 14.5.sp, weight = FontWeight.SemiBold, color = t.onFill,
+                                modifier = Modifier.clip(RoundedCornerShape(22.dp)).background(t.fill)
+                                    .clickable { if (repo.loadError != null) repo.refresh() else nav.go(Route.NewChat()) }.padding(horizontal = 22.dp, vertical = 11.dp),
+                            )
                         }
                     }
                 }

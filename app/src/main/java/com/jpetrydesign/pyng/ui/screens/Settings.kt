@@ -493,6 +493,16 @@ fun ListScreen(nav: Nav, kind: String) {
                 }
                 Spacer(Modifier.height(10.dp))
                 T(mapOf("archived" to "Nothing archived", "spam" to "No spam right now", "starred" to "No starred messages", "scheduled" to "Nothing scheduled")[kind] ?: "", size = 16.sp, weight = FontWeight.SemiBold)
+                T(
+                    mapOf(
+                        "archived" to "Hold a chat in your list and tap Archive to tuck it away here.",
+                        "spam" to "Texts that look like spam land here, out of your way.",
+                        "starred" to "Hold any message and tap Star to keep it here.",
+                        "scheduled" to "Tap + in a chat, then Schedule, to send a text later.",
+                    )[kind] ?: "",
+                    size = 13.5.sp, color = t.soft, align = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 19.sp,
+                    modifier = Modifier.padding(top = 4.dp, start = 30.dp, end = 30.dp),
+                )
             }
         }
         items.forEachIndexed { i, it ->

@@ -5,6 +5,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -285,4 +290,54 @@ fun encExplain(e: Enc) = when (e) {
     Enc.E2EE -> "Messages and replies in this chat are end-to-end encrypted. Only the people in it can read them."
     Enc.RCS -> "This chat uses RCS. Google Messages hasn't marked it end-to-end encrypted, so it may not be (for example, chats with some iPhones)."
     Enc.SMS -> "This chat uses SMS/MMS text messages, which aren't encrypted. Your carrier can see them."
+}
+
+/** A soft pulse for placeholders while something loads. */
+@androidx.compose.runtime.Composable
+private fun pulse(): Float {
+    val tr = androidx.compose.animation.core.rememberInfiniteTransition(label = "skeleton")
+    val a by tr.animateFloat(
+        0.45f, 0.9f,
+        androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(850), androidx.compose.animation.core.RepeatMode.Reverse),
+        label = "skeletonA",
+    )
+    return a
+}
+
+/** Placeholder bubbles while a chat's messages load, so it doesn't open to a blank screen. */
+@androidx.compose.runtime.Composable
+fun SkeletonBubbles(t: com.jpetrydesign.pyng.ui.theme.Tok) {
+    val a = pulse()
+    androidx.compose.foundation.layout.Column(
+        androidx.compose.ui.Modifier.fillMaxWidth().padding(vertical = 18.dp).graphicsLayer { alpha = a },
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+    ) {
+        listOf(false to 0.58f, false to 0.38f, true to 0.5f, false to 0.66f, true to 0.3f, true to 0.55f).forEach { (mine, w) ->
+            androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxWidth(), contentAlignment = if (mine) Alignment.CenterEnd else Alignment.CenterStart) {
+                androidx.compose.foundation.layout.Box(
+                    androidx.compose.ui.Modifier.fillMaxWidth(w).height(38.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(19.dp))
+                        .background(if (mine) t.p.copy(alpha = 0.22f) else t.inBg),
+                )
+            }
+        }
+    }
+}
+
+/** Placeholder rows while your chat list loads. */
+@androidx.compose.runtime.Composable
+fun SkeletonRows(t: com.jpetrydesign.pyng.ui.theme.Tok, count: Int = 6) {
+    val a = pulse()
+    androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp).graphicsLayer { alpha = a }) {
+        repeat(count) { i ->
+            androidx.compose.foundation.layout.Row(androidx.compose.ui.Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.size(50.dp).clip(CircleShape).background(t.tone))
+                androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.width(14.dp))
+                androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.weight(1f)) {
+                    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxWidth(listOf(0.42f, 0.55f, 0.36f)[i % 3]).height(13.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(7.dp)).background(t.neutral))
+                    androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(8.dp))
+                    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxWidth(listOf(0.78f, 0.64f, 0.7f)[i % 3]).height(11.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp)).background(t.neutral.copy(alpha = 0.7f)))
+                }
+            }
+        }
+    }
 }

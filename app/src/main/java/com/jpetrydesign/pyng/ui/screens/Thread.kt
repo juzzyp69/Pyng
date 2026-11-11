@@ -551,8 +551,8 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                     androidx.compose.material3.CircularProgressIndicator(color = t.soft, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
                                 }
                             }
-                            if (!loaded) Column(Modifier.fillMaxWidth().padding(40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                androidx.compose.material3.CircularProgressIndicator(color = t.p, strokeWidth = 2.dp, modifier = Modifier.size(26.dp))
+                            if (!loaded) Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                SkeletonBubbles(t)
                                 // Still waiting after a while: Google Messages on the phone is probably asleep.
                                 var slow by remember(convId) { mutableStateOf(false) }
                                 LaunchedEffect(convId) { delay(7_000); slow = true }
