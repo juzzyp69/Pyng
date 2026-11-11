@@ -118,6 +118,7 @@ fun ChatSearchPanel(
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun Quiet(
     t: Tok, nPhotos: Int, nVideos: Int, nLinks: Int, nFiles: Int, latest: List<Shared>, recent: List<String>,
