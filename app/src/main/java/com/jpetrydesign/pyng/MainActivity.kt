@@ -45,6 +45,7 @@ import com.jpetrydesign.pyng.ui.rememberTok
 import com.jpetrydesign.pyng.ui.screens.CrashScreen
 import com.jpetrydesign.pyng.ui.theme.LocalTok
 import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 
 class MainActivity : FragmentActivity() {
 
@@ -138,6 +139,23 @@ class MainActivity : FragmentActivity() {
 
     private fun handle(i: Intent?) {
         if (i?.action == "new" && app.repo.paired) { nav.go(Route.NewChat()); return }
+        // Shared from another app: copy what was shared, then let you pick who it goes to.
+        if (i?.action == Intent.ACTION_SEND || i?.action == Intent.ACTION_SEND_MULTIPLE) {
+            val repo = app.repo
+            if (!repo.paired) { repo.toast("Sign in to Pyng first, then share again"); return }
+            val text = listOfNotNull(i.getStringExtra(Intent.EXTRA_SUBJECT)?.takeIf { s -> i.getStringExtra(Intent.EXTRA_TEXT)?.contains(s) != true }, i.getStringExtra(Intent.EXTRA_TEXT))
+                .joinToString("\n").trim()
+            @Suppress("DEPRECATION")
+            val uris: List<android.net.Uri> = if (i.action == Intent.ACTION_SEND_MULTIPLE) i.getParcelableArrayListExtra<android.net.Uri>(Intent.EXTRA_STREAM).orEmpty()
+                else listOfNotNull(i.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM))
+            lifecycleScope.launch {
+                val files = uris.take(10).mapNotNull { u -> repo.importUri(u) }
+                if (text.isBlank() && files.isEmpty()) { repo.toast("Nothing to share"); return@launch }
+                repo.pendingShare = com.jpetrydesign.pyng.data.Repo.Shared(text, files)
+                nav.home(); nav.go(Route.NewChat())
+            }
+            return
+        }
         val chat = i?.getStringExtra("chat") ?: return
         if (app.repo.paired && app.repo.prefs.state.setupDone) nav.openChat(chat)
     }

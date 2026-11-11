@@ -130,6 +130,10 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     var demo = false
         private set
     var demoOpen: String? = null
+
+    /** Something shared into Pyng from another app, waiting for you to pick who it goes to. */
+    class Shared(val text: String, val files: List<Pending>)
+    var pendingShare by mutableStateOf<Shared?>(null)
     var onRead: ((String) -> Unit)? = null
 
     private val cacheFile = File(app.filesDir, "convs.json")

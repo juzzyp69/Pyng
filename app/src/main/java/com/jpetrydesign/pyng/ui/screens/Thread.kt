@@ -169,6 +169,14 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     var draft by remember(convId) { mutableStateOf(p.drafts[convId].orEmpty()) }
     var replyTo by remember(convId) { mutableStateOf<Msg?>(null) }
     val attachments = remember(convId) { mutableStateListOf<Pending>() }
+    // Something shared from another app lands in the message box, ready to send.
+    LaunchedEffect(convId) {
+        repo.pendingShare?.let { sh ->
+            if (sh.text.isNotBlank()) draft = if (draft.isBlank()) sh.text else draft.trimEnd() + " " + sh.text
+            attachments.addAll(sh.files)
+            repo.pendingShare = null
+        }
+    }
     var info by remember(convId) { mutableStateOf<String?>(null) }
     var menuFor by remember(convId) { mutableStateOf<Msg?>(null) }
     var detailsFor by remember(convId) { mutableStateOf<Msg?>(null) }
