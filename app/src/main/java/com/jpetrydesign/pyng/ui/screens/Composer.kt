@@ -558,9 +558,11 @@ private fun KlipyTab(t: Tok, kind: String, onGif: (Pending) -> Unit, onMake: (()
     val term = q.trim().ifEmpty { if (cat == "Trending") "" else cat }
     val filter = when (repo.prefs.state.opt("gifRating")) { "G" -> "high"; "PG-13" -> "low"; else -> "medium" }
     val cid = remember { klipyCustomer(repo) }
+    // KLIPY's address for memes is "static-memes"; the rest match their names.
+    val seg = if (kind == "memes") "static-memes" else kind
     suspend fun fetch(p: Int): Pair<List<Klip>, Boolean>? = withContext(Dispatchers.IO) {
         runCatching {
-            val base = "https://api.klipy.com/api/v1/$key/$kind/" + (if (term.isEmpty()) "trending" else "search")
+            val base = "https://api.klipy.com/api/v1/$key/$seg/" + (if (term.isEmpty()) "trending" else "search")
             val url = base + "?per_page=30&page=$p&customer_id=$cid&locale=en_US&content_filter=$filter" +
                 (if (term.isEmpty()) "" else "&q=" + URLEncoder.encode(term, "UTF-8"))
             val c = (URL(url).openConnection() as java.net.HttpURLConnection).apply { connectTimeout = 10_000; readTimeout = 15_000; setRequestProperty("Accept", "application/json") }
@@ -603,7 +605,7 @@ private fun KlipyTab(t: Tok, kind: String, onGif: (Pending) -> Unit, onMake: (()
                 // Tell KLIPY it was shared, so its results get better (part of their terms).
                 launch(Dispatchers.IO) {
                     runCatching {
-                        val c = (URL("https://api.klipy.com/api/v1/$key/$kind/share/${k.slug}").openConnection() as java.net.HttpURLConnection)
+                        val c = (URL("https://api.klipy.com/api/v1/$key/$seg/share/${k.slug}").openConnection() as java.net.HttpURLConnection)
                         c.requestMethod = "POST"; c.doOutput = true; c.connectTimeout = 8_000; c.setRequestProperty("Content-Type", "application/json")
                         c.outputStream.use { it.write(JSONObject().put("customer_id", cid).put("q", term).toString().toByteArray()) }
                         c.responseCode
