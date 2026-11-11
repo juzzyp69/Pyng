@@ -328,9 +328,13 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         prefs.edit { it.copy(pinned = (fromPhone + extra).take(8), pinsSeeded = true) }
     }
 
+    private val loadingOlder = java.util.Collections.synchronizedSet(HashSet<String>())
+
     fun loadMessages(convId: String, older: Boolean = false) {
         if (demo) { if (!msgs.containsKey(convId)) msgs[convId] = emptyList(); return }
+        if (older && !loadingOlder.add(convId)) return
         scope.launch {
+          try {
             val cur = msgs[convId].orEmpty()
             val oldest = cur.firstOrNull { it.id.isNotEmpty() }
             val r = hub.io {
@@ -346,6 +350,7 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
                 if (!older && cur.isEmpty()) msgs[convId] = emptyList()
                 toast("Couldn't load messages: ${it.message}")
             }
+          } finally { if (older) loadingOlder.remove(convId) }
         }
     }
 

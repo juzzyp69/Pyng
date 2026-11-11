@@ -228,7 +228,9 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     LaunchedEffect(convId) {
         repo.activeChat = convId
         com.jpetrydesign.pyng.data.Notifier.cancel(ctx, convId)
-        if (repo.msgs[convId] == null) repo.loadMessages(convId)
+        // Always ask for the latest page: what's cached may only be texts that arrived since Pyng was set up,
+        // and this is what turns on scrolling back through the full history.
+        repo.loadMessages(convId)
         repo.markRead(convId)
         val last = repo.msgs[convId]?.lastOrNull { !it.fromMe }
         if (conv?.unread == true && last != null) fxKind(last.text)?.let { delay(420); fx = it }
@@ -488,7 +490,14 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                 onAdd = { runCatching { ctx.startActivity(Intent(ContactsContract.Intents.Insert.ACTION).setType(ContactsContract.RawContacts.CONTENT_TYPE).putExtra(ContactsContract.Intents.Insert.PHONE, conv?.number)) } },
                                 onSpam = { repo.setBlocked(convId, true, true); repo.toast("Reported and blocked"); nav.back() })
                             if (loaded && msgs.isEmpty() && conv != null) EmptyThread(conv, t) { send("👋") }
-                            if (repo.hasMore[convId] == true) LaunchedEffect(Unit) { repo.loadMessages(convId, older = true) }
+                            // Reaching the top loads the next older page, and keeps going while the top stays in view.
+                            if (repo.hasMore[convId] == true) {
+                                val oldestKey = msgs.firstOrNull { it.id.isNotEmpty() }?.id
+                                LaunchedEffect(oldestKey) { repo.loadMessages(convId, older = true) }
+                                Box(Modifier.fillMaxWidth().padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
+                                    androidx.compose.material3.CircularProgressIndicator(color = t.soft, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                                }
+                            }
                             if (!loaded) Column(Modifier.fillMaxWidth().padding(40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                 androidx.compose.material3.CircularProgressIndicator(color = t.p, strokeWidth = 2.dp, modifier = Modifier.size(26.dp))
                                 // Still waiting after a while: Google Messages on the phone is probably asleep.
