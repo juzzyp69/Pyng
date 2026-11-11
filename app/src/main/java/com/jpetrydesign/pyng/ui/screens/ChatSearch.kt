@@ -108,9 +108,9 @@ fun ChatSearchPanel(
                 "results" -> Results(t, conv, msgs, query, lookingFurther, onJump)
                 "Photos" -> MediaGrid(t, "Photos", photos, lookingFurther, { kind = null }, onOpen)
                 "Videos" -> MediaGrid(t, "Videos", videos, lookingFurther, { kind = null }, onOpen)
-                "Links" -> SharedList(t, "Links", links, { kind = null }, onOpen)
-                "Files" -> SharedList(t, "Files", files, { kind = null }, onOpen)
-                else -> Quiet(t, photos.size, videos.size, links.size, files.size,
+                "Links" -> SharedList(t, conv, "Links", links, { kind = null }, onOpen)
+                "Files" -> SharedList(t, conv, "Files", files, { kind = null }, onOpen)
+                else -> Quiet(t, conv, photos.size, videos.size, links.size, files.size,
                     latest = (photos.take(3) + videos.take(2) + links.take(3)).sortedByDescending { it.m.ts }.take(4),
                     recent = recentSearches(repo), onKind = { kind = it }, onFill = onFill, onOpen = onOpen)
             }
@@ -121,7 +121,7 @@ fun ChatSearchPanel(
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun Quiet(
-    t: Tok, nPhotos: Int, nVideos: Int, nLinks: Int, nFiles: Int, latest: List<Shared>, recent: List<String>,
+    t: Tok, conv: Conv?, nPhotos: Int, nVideos: Int, nLinks: Int, nFiles: Int, latest: List<Shared>, recent: List<String>,
     onKind: (String) -> Unit, onFill: (String) -> Unit, onOpen: (Msg, MediaRef) -> Unit,
 ) {
     val ctx = LocalContext.current
@@ -152,7 +152,7 @@ private fun Quiet(
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             T(titleOf(s), size = 14.5.sp, weight = FontWeight.SemiBold, maxLines = 1)
-                            T(subOf(s), size = 12.5.sp, color = t.soft, maxLines = 1)
+                            T(subOf(s, conv), size = 12.5.sp, color = t.soft, maxLines = 1)
                         }
                     }
                 }
@@ -212,7 +212,7 @@ private fun MediaGrid(t: Tok, title: String, items: List<Shared.Media>, lookingF
 }
 
 @Composable
-private fun SharedList(t: Tok, title: String, items: List<Shared>, onBack: () -> Unit, onOpen: (Msg, MediaRef) -> Unit) {
+private fun SharedList(t: Tok, conv: Conv?, title: String, items: List<Shared>, onBack: () -> Unit, onOpen: (Msg, MediaRef) -> Unit) {
     val ctx = LocalContext.current
     Column(Modifier.fillMaxSize()) {
         SubTop(t, title, items.size, onBack)
@@ -228,7 +228,7 @@ private fun SharedList(t: Tok, title: String, items: List<Shared>, onBack: () ->
                     Column(Modifier.weight(1f)) {
                         T(titleOf(s), size = 14.5.sp, weight = FontWeight.SemiBold, maxLines = 2, lineHeight = 19.sp)
                         Spacer(Modifier.height(3.dp))
-                        T(subOf(s), size = 12.5.sp, color = t.soft, maxLines = 1)
+                        T(subOf(s, conv), size = 12.5.sp, color = t.soft, maxLines = 1)
                     }
                 }
             }
@@ -350,11 +350,11 @@ private fun titleOf(s: Shared): String = when (s) {
     }
 }
 
-private fun subOf(s: Shared): String {
-    val who = nameOf(s.m, null)
+private fun subOf(s: Shared, conv: Conv? = null): String {
+    val who = nameOf(s.m, conv).ifBlank { conv?.shortTitle ?: "" }
     return when (s) {
         is Shared.Link -> hostOf(s.url) + " · " + listTime(s.m.ts)
-        is Shared.Media -> if (!s.ref.isImage && !s.ref.isVideo && s.ref.size > 0) sizeOf(s.ref.size) + " · " + listTime(s.m.ts) else who + " · " + listTime(s.m.ts)
+        is Shared.Media -> if (!s.ref.isImage && !s.ref.isVideo && s.ref.size > 0) sizeOf(s.ref.size) + " · " + listTime(s.m.ts) else listOf(who, listTime(s.m.ts)).filter { it.isNotBlank() }.joinToString(" · ")
     }
 }
 
