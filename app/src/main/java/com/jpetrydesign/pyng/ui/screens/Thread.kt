@@ -45,6 +45,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -328,6 +330,35 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     LaunchedEffect(bottomH) {
         if (opened && stick && sendFx.run == null && list.firstVisibleItemIndex <= 1) list.animateScrollToItem(0)
     }
+    // Opened with a pile of unread texts: a pill up top takes you to the first one.
+    val wasUnread = remember(convId) { conv?.unread == true || convId in p.markedUnread }
+    var unreadAtOpen by remember(convId) { mutableStateOf(-1) }
+    LaunchedEffect(loaded, msgs.size) {
+        if (loaded && unreadAtOpen < 0 && msgs.isNotEmpty()) unreadAtOpen = if (wasUnread) msgs.takeLastWhile { !it.fromMe && !it.isSys }.size else 0
+    }
+    val typingRows = if (typing) 1 else 0
+    val firstUnreadRow = unreadAtOpen - 1 + typingRows
+    var unreadSeen by remember(convId) { mutableStateOf(false) }
+    val unreadOffscreen by remember(convId) {
+        derivedStateOf { unreadAtOpen >= 3 && (list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) < firstUnreadRow }
+    }
+    LaunchedEffect(unreadOffscreen, opened) { if (opened && unreadAtOpen >= 3 && !unreadOffscreen) unreadSeen = true }
+    fun jumpToUnread() {
+        unreadSeen = true
+        scope.launch {
+            list.scrollToItem(firstUnreadRow.coerceAtLeast(0))
+            // Lift it toward the top so the messages after it are in view too.
+            list.animateScrollBy(-(list.layoutInfo.viewportSize.height * 0.62f))
+        }
+    }
+    // New texts while you're scrolled up: the down button counts them.
+    var missed by remember(convId) { mutableStateOf(0) }
+    LaunchedEffect(newestKey) {
+        val newest = msgs.lastOrNull()
+        if (opened && !stick && newest != null && !newest.fromMe && newest.ts >= openedAt - 2000) missed++
+    }
+    val atBottom by remember { derivedStateOf { list.firstVisibleItemIndex <= 1 } }
+    LaunchedEffect(atBottom) { if (atBottom) missed = 0 }
     LaunchedEffect(curMatch, hl) {
         val k = curMatch ?: hl ?: return@LaunchedEffect
         val i = reversed.indexOfFirst { it.key == k || it.id == k }
@@ -542,11 +573,34 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                     }
                 }
 
-                // Jump to latest
+                // Jump to latest. With new texts waiting it widens into a pill that says how many.
                 val showJump by remember { derivedStateOf { list.firstVisibleItemIndex > 4 } }
-                AnimatedVisibility(showJump, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = with(density) { bottomH.toDp() } + 12.dp), enter = fadeIn() + scaleIn(), exit = fadeOut() + scaleOut()) {
-                    Box(Modifier.size(40.dp).edge(CircleShape).frost(CircleShape, t.fab).press(0.9f) { scope.launch { list.animateScrollToItem(0) } }, contentAlignment = Alignment.Center) {
-                        Ico(Icons.arrowDown, t.p, 18.dp, 2.2f)
+                AnimatedVisibility(showJump || missed > 0 && !atBottom, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = with(density) { bottomH.toDp() } + 12.dp), enter = fadeIn() + scaleIn(), exit = fadeOut() + scaleOut()) {
+                    Row(
+                        Modifier.height(40.dp).animateContentSize().edge(RoundedCornerShape(20.dp)).frost(RoundedCornerShape(20.dp), if (missed > 0) t.fabP else t.fab)
+                            .press(0.9f) { scope.launch { list.animateScrollToItem(0) } }.padding(horizontal = if (missed > 0) 14.dp else 11.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (missed > 0) {
+                            T(if (missed == 1) "1 new" else "$missed new", size = 13.5.sp, weight = FontWeight.SemiBold, color = t.plusInk)
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        Ico(Icons.arrowDown, if (missed > 0) t.plusInk else t.p, 18.dp, 2.2f)
+                    }
+                }
+                // Up to your unread texts, when the chat opened with more than fit on screen.
+                AnimatedVisibility(
+                    !searching && !unreadSeen && unreadOffscreen,
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = with(density) { headH.toDp() } + 10.dp),
+                    enter = fadeIn() + scaleIn(initialScale = 0.85f), exit = fadeOut() + scaleOut(targetScale = 0.85f),
+                ) {
+                    Row(
+                        Modifier.height(38.dp).edge(RoundedCornerShape(19.dp)).frost(RoundedCornerShape(19.dp), t.fabP).press(0.94f) { jumpToUnread() }.padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Ico(Icons.arrowDown, t.plusInk, 16.dp, 2.2f, modifier = Modifier.graphicsLayer { rotationZ = 180f })
+                        Spacer(Modifier.width(7.dp))
+                        T("$unreadAtOpen new messages", size = 13.5.sp, weight = FontWeight.SemiBold, color = t.plusInk)
                     }
                 }
 
@@ -581,7 +635,14 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                 }
                             })
                         searching -> SearchHeader(t, query, { query = it; matchIdx = 0; showResults = true }, if (panelOn) -1 else matches.size, matchIdx, { matchIdx++ }, { matchIdx = (matchIdx - 1 + maxOf(1, matches.size)) % maxOf(1, matches.size) }) { searching = false; query = "" }
-                        else -> ThreadHeader(t, conv, typing, wide, onBack = { nav.back() }, onContact = { nav.go(Route.Contact(convId)) }, onCall = { callSheet = true })
+                        else -> ThreadHeader(t, conv, typing, wide, onBack = { nav.back() }, onContact = { nav.go(Route.Contact(convId)) }, onCall = { callSheet = true }, onSwipe = { next ->
+                            // Same order as your chat list: pinned first, then newest.
+                            val active = repo.convs.values.filter { it.status == "active" }
+                            val order = p.pinned.filter { id -> active.any { it.id == id } } + active.filter { it.id !in p.pinned }.sortedByDescending { it.ts }.map { it.id }
+                            val i = order.indexOf(convId)
+                            val to = if (i < 0) null else order.getOrNull(if (next) i + 1 else i - 1)
+                            if (to != null) nav.swapChat(to, next) else repo.toast(if (next) "That's your last chat" else "That's your first chat")
+                        })
                     }
                 }
 
@@ -723,15 +784,35 @@ private fun sysText(status: String) = when (status) {
 }
 
 @Composable
-private fun ThreadHeader(t: Tok, c: Conv?, typing: Boolean, wide: Boolean, onBack: () -> Unit, onContact: () -> Unit, onCall: () -> Unit) {
+private fun ThreadHeader(t: Tok, c: Conv?, typing: Boolean, wide: Boolean, onBack: () -> Unit, onContact: () -> Unit, onCall: () -> Unit, onSwipe: (next: Boolean) -> Unit = {}) {
     val shape = RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp)
+    // Swipe across the name to go to the next or previous chat.
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val reach = with(androidx.compose.ui.platform.LocalDensity.current) { 84.dp.toPx() }
+    var drag by remember { mutableStateOf(0f) }
+    val shown by androidx.compose.animation.core.animateFloatAsState(drag, label = "headSwipe")
     Row(
-        Modifier.fillMaxWidth().shadowEdge(t).frost(shape, t.hdrBg, 34.dp).statusBarsPadding().padding(start = 6.dp, end = 10.dp, top = 12.dp, bottom = 18.dp),
+        Modifier.fillMaxWidth().shadowEdge(t).frost(shape, t.hdrBg, 34.dp).statusBarsPadding().padding(start = 6.dp, end = 10.dp, top = 12.dp, bottom = 18.dp)
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragEnd = { val d = drag; drag = 0f; if (kotlin.math.abs(d) >= reach) onSwipe(d < 0) },
+                    onDragCancel = { drag = 0f },
+                ) { ch, dx ->
+                    val before = drag
+                    drag = (drag + dx).coerceIn(-reach * 1.4f, reach * 1.4f)
+                    if (kotlin.math.abs(before) < reach && kotlin.math.abs(drag) >= reach) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                    ch.consume()
+                }
+            },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         if (!wide) CircleButton(Icons.back, "Back", onBack)
         else Spacer(Modifier.width(8.dp))
-        Row(Modifier.weight(1f).clip(RoundedCornerShape(24.dp)).clickable(onClick = onContact).padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.weight(1f).graphicsLayer { translationX = shown * 0.45f; alpha = 1f - (kotlin.math.abs(shown) / (reach * 3f)).coerceIn(0f, 0.5f) }
+                .clip(RoundedCornerShape(24.dp)).clickable(onClick = onContact).padding(vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             if (c != null) {
                 val w = whoOf(c)
                 Box(Modifier.edge(CircleShape, elevation = 6.dp)) { WhoAvatar(w, 46.dp, 15.sp) }

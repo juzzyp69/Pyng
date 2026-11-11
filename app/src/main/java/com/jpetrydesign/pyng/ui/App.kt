@@ -134,6 +134,13 @@ class Nav(start: Route) {
     }
     fun home() { forward = false; while (stack.size > 1) stack.removeAt(stack.lastIndex); if (stack.first() != Route.Home) { stack.clear(); stack.add(Route.Home) } }
 
+    /** Swaps the open chat for another one, sliding in from the side you swiped toward. */
+    fun swapChat(id: String, next: Boolean) {
+        forward = next
+        while (stack.size > 1 && stack.last() !is Route.Home) stack.removeAt(stack.lastIndex)
+        stack.add(Route.Thread(id))
+    }
+
     /** Opens a chat, replacing any chat already open, so back goes to the list. */
     fun openChat(id: String, highlight: String? = null) {
         forward = true
