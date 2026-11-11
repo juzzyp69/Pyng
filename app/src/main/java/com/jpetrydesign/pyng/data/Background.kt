@@ -357,13 +357,25 @@ class GmListener : android.service.notification.NotificationListenerService() {
         val sender = last?.person?.name?.toString() ?: title
         val text = (last?.text ?: n.extras.getCharSequence(android.app.Notification.EXTRA_TEXT))?.toString().orEmpty()
         if (text.isBlank()) return
+        // Android hides codes and other sensitive texts from apps like Pyng that read notifications. When it has,
+        // leave Google Messages' alert alone (it has the real text) and just wake Pyng to fetch the message itself.
+        if (redacted(text)) { Link.wake(app, "hidden text from Google Messages"); return }
         val conv = repo.matchConversation(sbn.notification.shortcutId, title, sender)
 
-        // Pyng shows its own version; Google Messages' copy goes away.
+        // Pyng shows its own version. Google Messages' copy goes away only if you turned that on.
         val live = app.hub.engine.isConnected
         if (!live) Notifier.showFromGoogle(this, repo, conv, if (style?.isGroupConversation == true) title else sender.ifBlank { title }, sender, text, last?.timestamp ?: System.currentTimeMillis())
-        if (repo.prefs.state.on("replaceGm") && Notifier.canPost(this)) runCatching { cancelNotification(sbn.key) }
+        if (repo.prefs.state.on("hideGmAlerts") && Notifier.canPost(this)) runCatching { cancelNotification(sbn.key) }
         Link.wake(app, "text from Google Messages")
+    }
+
+    /** True when Android swapped the text for its "content hidden" placeholder. */
+    private fun redacted(text: String): Boolean {
+        val sys = runCatching {
+            val id = android.content.res.Resources.getSystem().getIdentifier("redacted_notification_message", "string", "android")
+            if (id != 0) android.content.res.Resources.getSystem().getString(id) else null
+        }.getOrNull()
+        return (sys != null && text.trim() == sys.trim()) || text.contains("content hidden", ignoreCase = true)
     }
 
     companion object { const val GM = "com.google.android.apps.messaging" }

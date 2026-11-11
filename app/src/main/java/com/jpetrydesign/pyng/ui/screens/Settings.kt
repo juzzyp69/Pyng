@@ -247,7 +247,7 @@ fun SectionScreen(nav: Nav, key: String) {
                         trailing = { Toggle(access) },
                     )
                     Hairline()
-                    TogRow("Hide Google Messages' alerts", "replaceGm", "Pyng shows its own notification and clears the Google Messages copy")
+                    TogRow("Hide Google Messages' alerts", "hideGmAlerts", "Clears Google Messages' copy so you only see Pyng's. Codes and other texts Android hides are always left alone")
                     Hairline()
                     ListRow("Silence Google Messages", "Set its notifications to Silent (not off) so you only hear Pyng", onClick = {
                         runCatching { ctx.startActivity(Intent(SysSettings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(SysSettings.EXTRA_APP_PACKAGE, com.jpetrydesign.pyng.data.GmListener.GM)) }
