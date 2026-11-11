@@ -1348,6 +1348,10 @@ private fun PeekBody(cur: Conv, repo: com.jpetrydesign.pyng.data.Repo, t: com.jp
                     }
                     T((if (latest.fromMe) "Sent " else "Received ") + listTime(latest.ts).ifEmpty { clock(latest.ts) }.let { if (it == clock(latest.ts)) it else "$it · " + clock(latest.ts) }, size = 12.sp, color = t.soft, modifier = Modifier.padding(start = 4.dp))
                 }
+            }
+            if (all == null) T("Loading…", size = 13.5.sp, color = t.soft, modifier = Modifier.padding(4.dp))
+            else {
+                // Reply right from here, new messages or not.
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(Modifier.weight(1f).heightIn(min = 46.dp).clip(RoundedCornerShape(23.dp)).background(t.field).padding(horizontal = 18.dp, vertical = 12.dp), contentAlignment = Alignment.CenterStart) {
                         if (reply.isEmpty()) T("Reply to " + cur.shortTitle, size = 15.sp, color = t.soft, maxLines = 1)
@@ -1363,17 +1367,6 @@ private fun PeekBody(cur: Conv, repo: com.jpetrydesign.pyng.data.Repo, t: com.jp
                         },
                         contentAlignment = Alignment.Center,
                     ) { Ico(Icons.send, if (reply.isBlank()) t.p else t.onFill, 20.dp, 2f) }
-                }
-            } else if (all == null) {
-                T("Loading…", size = 13.5.sp, color = t.soft, modifier = Modifier.padding(4.dp))
-            } else {
-                Row(
-                    Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(23.dp)).background(t.fill).clickable(onClick = open),
-                    horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Ico(Icons.message, t.onFill, 18.dp, 2f)
-                    Spacer(Modifier.width(8.dp))
-                    T("Open chat", size = 15.sp, weight = FontWeight.SemiBold, color = t.onFill)
                 }
             }
         }

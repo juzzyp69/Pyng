@@ -76,6 +76,8 @@ fun ShareScreen(nav: Nav) {
     val repo = LocalRepo.current
     val t = LocalTok.current
     val scope = rememberCoroutineScope()
+    // Short screens (a flip phone's cover screen) get a slimmer bottom bar so the list has room.
+    val short = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 700
     val share = repo.pendingShare
     var text by remember { mutableStateOf(share?.text.orEmpty()) }
     val files = remember { mutableStateListOf<com.jpetrydesign.pyng.data.Pending>().apply { addAll(share?.files.orEmpty()) } }
@@ -129,7 +131,7 @@ fun ShareScreen(nav: Nav) {
         Glow()
         Column(Modifier.fillMaxSize()) {
             PageTop("Share", { leave() })
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(if (short) 6.dp else 12.dp))
             Box(Modifier.padding(horizontal = 16.dp)) { SearchField(q, { q = it }, "Search people and chats", focus = false) }
             LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 16.dp)) {
                 // Pinned: a scrolling row of faces, however many you have.
@@ -182,7 +184,7 @@ fun ShareScreen(nav: Nav) {
             // What you're sending, editable, with Send underneath.
             Column(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)).background(t.sheet)
-                    .navigationBarsPadding().imePadding().padding(horizontal = 16.dp, vertical = 14.dp),
+                    .navigationBarsPadding().imePadding().padding(horizontal = 16.dp, vertical = if (short) 10.dp else 14.dp),
             ) {
                 if (files.isNotEmpty()) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 10.dp)) {
@@ -197,22 +199,22 @@ fun ShareScreen(nav: Nav) {
                         }
                     }
                 }
-                Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp)).background(t.field).padding(horizontal = 18.dp, vertical = 13.dp)) {
+                Box(Modifier.fillMaxWidth().heightIn(min = if (short) 42.dp else 48.dp).clip(RoundedCornerShape(24.dp)).background(t.field).padding(horizontal = 18.dp, vertical = if (short) 10.dp else 13.dp)) {
                     if (text.isEmpty()) T("Add a message", size = 15.sp, color = t.soft)
-                    BasicTextField(text, { text = it }, maxLines = 4, cursorBrush = SolidColor(t.p), textStyle = TextStyle(fontFamily = Geist, fontSize = 15.sp, color = t.ink), modifier = Modifier.fillMaxWidth())
+                    BasicTextField(text, { text = it }, maxLines = if (short) 2 else 4, cursorBrush = SolidColor(t.p), textStyle = TextStyle(fontFamily = Geist, fontSize = 15.sp, color = t.ink), modifier = Modifier.fillMaxWidth())
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(if (short) 8.dp else 12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     val canGroup = picked.size >= 2
                     Box(
-                        Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(26.dp)).border(1.5.dp, if (canGroup) t.p else t.hair, RoundedCornerShape(26.dp))
+                        Modifier.weight(1f).height(if (short) 44.dp else 52.dp).clip(RoundedCornerShape(26.dp)).border(1.5.dp, if (canGroup) t.p else t.hair, RoundedCornerShape(26.dp))
                             .clickable(enabled = canGroup && !sending) { send(asGroup = true) },
                         contentAlignment = Alignment.Center,
                     ) { T("Send to a group", size = 15.sp, weight = FontWeight.SemiBold, color = if (canGroup) t.p else t.faint) }
                     PillButton(
                         if (sending) "Sending…" else if (picked.size > 1) "Send to ${picked.size}" else "Send",
                         { if (picked.isEmpty()) repo.toast("Pick someone to send to") else send(asGroup = false) },
-                        Modifier.weight(1f), primary = picked.isNotEmpty(), height = 52.dp,
+                        Modifier.weight(1f), primary = picked.isNotEmpty(), height = if (short) 44.dp else 52.dp,
                     )
                 }
             }

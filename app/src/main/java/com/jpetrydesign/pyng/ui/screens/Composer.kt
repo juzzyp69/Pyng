@@ -368,8 +368,10 @@ fun Composer(
             if (panel != null) last = panel!!
             // Emoji, GIFs and stickers get about half the screen so there's room to browse.
             val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
-            val exprH = (screenH * 0.5f).coerceIn(380f, 560f).dp
-            Column(Modifier.fillMaxWidth().height(when (last) { "expr", "gifs", "stickers" -> exprH; "plus" -> 270.dp; else -> 310.dp }).background(t.sheet).navigationBarsPadding().padding(horizontal = 14.dp, vertical = 14.dp)) {
+            // About half the screen. Short screens (a flip phone's cover screen) keep the chat header in view.
+            val short = screenH < 700
+            val exprH = (screenH * 0.5f).coerceIn(if (short) screenH * 0.4f else 380f, 560f).dp
+            Column(Modifier.fillMaxWidth().height(when (last) { "expr", "gifs", "stickers" -> exprH; "plus" -> if (short) 230.dp else 270.dp; else -> if (short) minOf(310f, screenH * 0.45f).dp else 310.dp }).background(t.sheet).navigationBarsPadding().padding(horizontal = 14.dp, vertical = 14.dp)) {
                 when (last) {
                     "plus" -> PlusGrid(t, translating = conv != null && repo.prefs.state.opt("tr:" + conv.id) == "1") { what ->
                         when (what) {
