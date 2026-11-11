@@ -277,9 +277,10 @@ fun NewChatScreen(nav: Nav, group: Boolean) {
                 Modifier.padding(horizontal = 16.dp).fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(26.dp)).background(t.field)
                     .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { runCatching { fr.requestFocus() } }
                     .padding(start = 18.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.Top,
             ) {
-                T("To", size = 15.sp, weight = FontWeight.SemiBold, color = t.soft)
+                // Lines up with the first row of chips, however many rows there are.
+                Box(Modifier.height(36.dp), contentAlignment = Alignment.Center) { T("To", size = 15.sp, weight = FontWeight.SemiBold, color = t.soft) }
                 Spacer(Modifier.width(12.dp))
                 androidx.compose.foundation.layout.FlowRow(
                     Modifier.weight(1f),
@@ -296,7 +297,7 @@ fun NewChatScreen(nav: Nav, group: Boolean) {
                             Ico(Icons.close, t.p, 11.dp, 2.6f)
                         }
                     }
-                    Box(Modifier.height(36.dp).widthIn(min = 120.dp).weight(1f), contentAlignment = Alignment.CenterStart) {
+                    Box(Modifier.height(36.dp).widthIn(min = 72.dp).weight(1f), contentAlignment = Alignment.CenterStart) {
                         if (q.isEmpty()) T(if (picked.isEmpty()) "Name or number" else "Anyone else?", size = 15.sp, color = t.soft)
                         BasicTextField(
                             q, { q = it }, singleLine = true, cursorBrush = SolidColor(t.p),

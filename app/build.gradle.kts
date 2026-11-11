@@ -15,8 +15,9 @@ android {
         minSdk = 29
         targetSdk = 35
         versionCode = buildNumber
-        versionName = "0.6.4"
+        versionName = "0.6.5"
         buildConfigField("String", "GIPHY_KEY", "\"" + (System.getenv("GIPHY_KEY") ?: "") + "\"")
+        buildConfigField("String", "KLIPY_KEY", "\"" + (System.getenv("KLIPY_KEY") ?: "") + "\"")
     }
 
     signingConfigs {

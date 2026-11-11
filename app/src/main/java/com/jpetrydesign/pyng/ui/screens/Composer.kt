@@ -34,6 +34,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -468,24 +469,186 @@ private fun PlusGrid(t: Tok, translating: Boolean = false, onPick: (String) -> U
 private fun Expressions(t: Tok, initial: String, onEmoji: (String) -> Unit, onSendText: (String) -> Unit, onGif: (Pending) -> Unit, onMake: () -> Unit = {}) {
     var tab by remember { mutableStateOf(initial) }
     Column(Modifier.fillMaxSize()) {
-        Seg(listOf("Emoji", "GIFs", "Stickers"), tab, { tab = it }, height = 40.dp)
+        val klipy = BuildConfig.KLIPY_KEY.isNotBlank()
+        Seg(if (klipy) listOf("Emoji", "GIFs", "Stickers", "Clips", "Memes") else listOf("Emoji", "GIFs", "Stickers"), tab, { tab = it }, height = 40.dp)
         Spacer(Modifier.height(10.dp))
         when (tab) {
             "Emoji" -> EmojiTab(t, onEmoji)
-            "GIFs" -> GifTab(t, onGif)
-            else -> {
-                val stickers = listOf("🐶", "😺", "🍕", "🎉", "💖", "🔥", "😎", "🌈", "☕", "👻", "🌵", "🍩", "🥳", "🫶", "🦄", "🌻")
-                LazyVerticalGrid(GridCells.Fixed(4), Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item {
-                        Column(Modifier.aspectRatio(1f).clip(RoundedCornerShape(18.dp)).background(t.tone).press(0.9f, onMake), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                            Ico(Icons.plus, t.p, 22.dp, 2.2f); Spacer(Modifier.height(4.dp)); T("Make", size = 12.sp, weight = FontWeight.SemiBold, color = t.p)
-                        }
+            "GIFs" -> if (klipy) KlipyTab(t, "gifs", onGif) else GifTab(t, onGif)
+            "Stickers" -> if (klipy) KlipyTab(t, "stickers", onGif, onMake) else OldStickers(t, onSendText, onMake)
+            "Clips" -> KlipyTab(t, "clips", onGif)
+            "Memes" -> KlipyTab(t, "memes", onGif)
+        }
+    }
+}
+
+@Composable
+private fun OldStickers(t: Tok, onSendText: (String) -> Unit, onMake: () -> Unit) {
+    val stickers = listOf("🐶", "😺", "🍕", "🎉", "💖", "🔥", "😎", "🌈", "☕", "👻", "🌵", "🍩", "🥳", "🫶", "🦄", "🌻")
+    LazyVerticalGrid(GridCells.Fixed(4), Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        item { MakeTile(t, onMake) }
+        items(stickers) { e ->
+            Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(18.dp)).background(t.surface).press(0.9f) { onSendText(e) }, contentAlignment = Alignment.Center) { T(e, size = 44.sp) }
+        }
+    }
+}
+
+@Composable
+private fun MakeTile(t: Tok, onMake: () -> Unit) {
+    Column(Modifier.aspectRatio(1f).clip(RoundedCornerShape(18.dp)).background(t.tone).press(0.9f, onMake), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Ico(Icons.plus, t.p, 22.dp, 2.2f); Spacer(Modifier.height(4.dp)); T("Make", size = 12.sp, weight = FontWeight.SemiBold, color = t.p)
+    }
+}
+
+/** One thing from KLIPY: a small moving preview for the grid and the file that gets sent. */
+private data class Klip(val slug: String, val preview: String, val full: String, val mime: String, val w: Int, val h: Int)
+
+/** A stable, random id for this install, which KLIPY uses for "recent" and better results. Nothing personal. */
+private fun klipyCustomer(repo: com.jpetrydesign.pyng.data.Repo): String =
+    repo.prefs.state.opt("klipyCid").ifBlank { java.util.UUID.randomUUID().toString().also { repo.prefs.setOpt("klipyCid", it) } }
+
+private fun parseKlips(kind: String, body: String): Pair<List<Klip>, Boolean> {
+    val root = JSONObject(body)
+    val data = root.optJSONObject("data") ?: return emptyList<Klip>() to false
+    val arr = data.optJSONArray("data") ?: return emptyList<Klip>() to false
+    val out = (0 until arr.length()).mapNotNull { i ->
+        val o = arr.optJSONObject(i) ?: return@mapNotNull null
+        if (o.optString("type") == "ad") return@mapNotNull null
+        val slug = o.optString("slug").ifBlank { o.optString("id") }
+        if (kind == "clips") {
+            val f = o.optJSONObject("file") ?: return@mapNotNull null
+            val mp4 = f.optString("mp4"); val prev = f.optString("webp").ifBlank { f.optString("gif") }
+            if (mp4.isBlank() || prev.isBlank()) return@mapNotNull null
+            val meta = o.optJSONObject("file_meta")
+            val dim = meta?.optJSONObject("mp4") ?: meta?.keys()?.asSequence()?.firstOrNull()?.let { meta.optJSONObject(it) }
+            Klip(slug, prev, mp4, "video/mp4", dim?.optInt("width", 16) ?: 16, dim?.optInt("height", 9) ?: 9)
+        } else {
+            val f = o.optJSONObject("file") ?: return@mapNotNull null
+            fun pick(size: String, vararg fmts: String): Pair<JSONObject, String>? {
+                val s = f.optJSONObject(size) ?: return null
+                for (fm in fmts) s.optJSONObject(fm)?.takeIf { it.optString("url").isNotBlank() }?.let { return it to fm }
+                return null
+            }
+            val prev = pick("sm", "webp", "gif", "png", "jpg") ?: pick("xs", "webp", "gif", "png", "jpg") ?: pick("md", "webp", "gif", "png", "jpg") ?: return@mapNotNull null
+            // Send a size that looks good but stays small enough for any message.
+            val sendFmts = if (kind == "memes") arrayOf("jpg", "png", "webp", "gif") else if (kind == "stickers") arrayOf("gif", "webp", "png") else arrayOf("gif", "webp")
+            val full = pick("md", *sendFmts) ?: pick("hd", *sendFmts) ?: pick("sm", *sendFmts) ?: return@mapNotNull null
+            val mime = when (full.second) { "jpg" -> "image/jpeg"; "png" -> "image/png"; "webp" -> "image/webp"; else -> "image/gif" }
+            Klip(slug, prev.first.optString("url"), full.first.optString("url"), mime, prev.first.optInt("width", 200), prev.first.optInt("height", 150))
+        }
+    }
+    return out to data.optBoolean("has_next", false)
+}
+
+/** GIFs, stickers, clips or memes from KLIPY: trending until you search, more as you scroll. */
+@Composable
+private fun KlipyTab(t: Tok, kind: String, onGif: (Pending) -> Unit, onMake: (() -> Unit)? = null) {
+    val repo = LocalRepo.current
+    val key = BuildConfig.KLIPY_KEY
+    var q by remember(kind) { mutableStateOf("") }
+    var cat by remember(kind) { mutableStateOf("Trending") }
+    var items by remember(kind) { mutableStateOf<List<Klip>>(emptyList()) }
+    var page by remember(kind) { mutableStateOf(1) }
+    var more by remember(kind) { mutableStateOf(false) }
+    var loading by remember(kind) { mutableStateOf(false) }
+    var failed by remember(kind) { mutableStateOf(false) }
+    var sending by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    val term = q.trim().ifEmpty { if (cat == "Trending") "" else cat }
+    val filter = when (repo.prefs.state.opt("gifRating")) { "G" -> "high"; "PG-13" -> "low"; else -> "medium" }
+    val cid = remember { klipyCustomer(repo) }
+    suspend fun fetch(p: Int): Pair<List<Klip>, Boolean>? = withContext(Dispatchers.IO) {
+        runCatching {
+            val base = "https://api.klipy.com/api/v1/$key/$kind/" + (if (term.isEmpty()) "trending" else "search")
+            val url = base + "?per_page=30&page=$p&customer_id=$cid&locale=en_US&content_filter=$filter" +
+                (if (term.isEmpty()) "" else "&q=" + URLEncoder.encode(term, "UTF-8"))
+            val c = (URL(url).openConnection() as java.net.HttpURLConnection).apply { connectTimeout = 10_000; readTimeout = 15_000; setRequestProperty("Accept", "application/json") }
+            parseKlips(kind, c.inputStream.bufferedReader().use { it.readText() })
+        }.getOrNull()
+    }
+    LaunchedEffect(kind, term, filter) {
+        delay(300)
+        loading = true; failed = false
+        val r = fetch(1)
+        if (r == null) failed = true
+        items = r?.first.orEmpty(); more = r?.second == true; page = 1
+        loading = false
+        runCatching { grid.scrollToItem(0) }
+    }
+    // Load the next page as you near the bottom.
+    val nearEnd by remember { androidx.compose.runtime.derivedStateOf { val last = grid.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0; last >= grid.layoutInfo.totalItemsCount - 6 } }
+    LaunchedEffect(nearEnd, more, loading) {
+        if (nearEnd && more && !loading && items.isNotEmpty()) {
+            loading = true
+            val r = fetch(page + 1)
+            if (r != null) { items = (items + r.first).distinctBy { it.slug }; more = r.second; page += 1 } else more = false
+            loading = false
+        }
+    }
+    fun send(k: Klip) {
+        if (sending != null) return
+        sending = k.slug
+        scope.launch {
+            val ext = when (k.mime) { "image/jpeg" -> "jpg"; "image/png" -> "png"; "image/webp" -> "webp"; "video/mp4" -> "mp4"; else -> "gif" }
+            val f = repo.newFile(ext)
+            val ok = withContext(Dispatchers.IO) { runCatching { URL(k.full).openStream().use { i -> f.outputStream().use { i.copyTo(it) } } }.isSuccess }
+            sending = null
+            if (ok) {
+                val label = when (kind) { "stickers" -> "Sticker"; "clips" -> "Clip"; "memes" -> "Meme"; else -> "GIF" }
+                onGif(Pending(f.path, k.mime, "$label.$ext"))
+                // Tell KLIPY it was shared, so its results get better (part of their terms).
+                launch(Dispatchers.IO) {
+                    runCatching {
+                        val c = (URL("https://api.klipy.com/api/v1/$key/$kind/share/${k.slug}").openConnection() as java.net.HttpURLConnection)
+                        c.requestMethod = "POST"; c.doOutput = true; c.connectTimeout = 8_000; c.setRequestProperty("Content-Type", "application/json")
+                        c.outputStream.use { it.write(JSONObject().put("customer_id", cid).put("q", term).toString().toByteArray()) }
+                        c.responseCode
                     }
-                    items(stickers) { e ->
-                        Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(18.dp)).background(t.surface).press(0.9f) { onSendText(e) }, contentAlignment = Alignment.Center) { T(e, size = 44.sp) }
+                }
+            } else repo.toast("Couldn't get that one")
+        }
+    }
+    val noun = when (kind) { "stickers" -> "stickers"; "clips" -> "clips"; "memes" -> "memes"; else -> "GIFs" }
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().height(38.dp).clip(RoundedCornerShape(19.dp)).background(t.field).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Ico(Icons.search, t.soft, 16.dp, 2.2f); Spacer(Modifier.width(8.dp))
+            Box(Modifier.weight(1f)) {
+                if (q.isEmpty()) T("Search $noun", size = 14.sp, color = t.soft)
+                BasicTextField(q, { q = it }, singleLine = true, cursorBrush = SolidColor(t.p), textStyle = TextStyle(fontFamily = Geist, fontSize = 14.sp, color = t.ink), modifier = Modifier.fillMaxWidth())
+            }
+            if (q.isNotEmpty()) Box(Modifier.size(26.dp).clip(CircleShape).clickable { q = "" }, contentAlignment = Alignment.Center) { Ico(Icons.close, t.soft, 12.dp, 2.4f) }
+        }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("Trending", "Haha", "Love", "Yes", "No", "Wow", "Sad", "Dance", "Thank you", "Hello", "Happy birthday").forEach { c ->
+                val on = q.isBlank() && cat == c
+                Box(Modifier.height(30.dp).clip(RoundedCornerShape(15.dp)).background(if (on) t.tone else t.surface).clickable { cat = c; q = "" }.padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+                    T(c, size = 12.5.sp, weight = FontWeight.SemiBold, color = if (on) t.p else t.soft)
+                }
+            }
+        }
+        Box(Modifier.fillMaxSize()) {
+            val cols = if (kind == "stickers") 3 else 2
+            LazyVerticalGrid(GridCells.Fixed(cols), Modifier.fillMaxSize(), state = grid, verticalArrangement = Arrangement.spacedBy(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 18.dp)) {
+                if (onMake != null) item { MakeTile(t, onMake) }
+                items(items, key = { it.slug }) { k ->
+                    val ratio = if (kind == "stickers") 1f else (k.w.toFloat() / maxOf(1, k.h)).coerceIn(0.5f, 2.2f)
+                    Box(
+                        Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(14.dp))
+                            .then(if (kind == "stickers") Modifier else Modifier.background(t.tone)).clickable { send(k) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        AsyncImage(k.preview, null, contentScale = if (kind == "stickers") ContentScale.Fit else ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        if (kind == "clips") Box(Modifier.align(Alignment.BottomStart).padding(6.dp).size(22.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
+                            Ico(Icons.volume, Color.White, 12.dp, 2f)
+                        }
+                        if (sending == k.slug) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(22.dp), color = Color.White, strokeWidth = 2.dp) }
                     }
                 }
             }
+            if (loading && items.isEmpty()) CircularProgressIndicator(Modifier.align(Alignment.Center).size(26.dp), color = t.p, strokeWidth = 2.dp)
+            if (!loading && items.isEmpty()) T(if (failed) "Couldn't load $noun. Check your connection." else "No $noun found", size = 13.5.sp, color = t.soft, modifier = Modifier.align(Alignment.Center))
+            T("Powered by KLIPY", size = 10.sp, color = t.faint, modifier = Modifier.align(Alignment.BottomEnd).clip(RoundedCornerShape(6.dp)).background(t.bg.copy(alpha = 0.7f)).padding(horizontal = 5.dp, vertical = 1.dp))
         }
     }
 }
@@ -539,30 +702,7 @@ private fun GifTab(t: Tok, onGif: (Pending) -> Unit) {
     var sending by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     if (key.isBlank()) {
-        val ctx = LocalContext.current
-        var entry by remember { mutableStateOf("") }
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Spacer(Modifier.height(10.dp))
-            T("Turn on GIF search", size = 16.sp, weight = FontWeight.SemiBold)
-            T("GIFs come from GIPHY, which needs a free key. Make one in a minute: sign in at GIPHY for Developers, tap Create an API key, pick API, then copy the key here.",
-                size = 13.sp, color = t.soft, lineHeight = 18.sp, align = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
-            Spacer(Modifier.height(12.dp))
-            T("Open GIPHY for Developers", size = 14.sp, weight = FontWeight.SemiBold, color = t.p,
-                modifier = Modifier.clip(RoundedCornerShape(18.dp)).clickable { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://developers.giphy.com/dashboard/"))) } }.padding(horizontal = 14.dp, vertical = 8.dp))
-            Spacer(Modifier.height(8.dp))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(22.dp)).background(t.field).padding(horizontal = 16.dp), contentAlignment = Alignment.CenterStart) {
-                    if (entry.isEmpty()) T("Paste your GIPHY key", size = 14.sp, color = t.soft)
-                    BasicTextField(entry, { entry = it.trim() }, singleLine = true, cursorBrush = SolidColor(t.p), textStyle = TextStyle(fontFamily = Geist, fontSize = 14.sp, color = t.ink), modifier = Modifier.fillMaxWidth())
-                }
-                Spacer(Modifier.width(8.dp))
-                Box(
-                    Modifier.height(44.dp).clip(RoundedCornerShape(22.dp)).then(if (entry.length >= 16) Modifier.background(t.plusBg) else Modifier.background(t.surface))
-                        .clickable(enabled = entry.length >= 16) { repo.prefs.setOpt("giphyKey", entry); repo.toast("GIF search is on") }.padding(horizontal = 18.dp),
-                    contentAlignment = Alignment.Center,
-                ) { T("Save", size = 14.sp, weight = FontWeight.SemiBold, color = if (entry.length >= 16) t.plusInk else t.soft) }
-            }
-        }
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { T("GIFs aren't available in this build", size = 14.sp, color = t.soft) }
         return
     }
     val term = q.trim().ifEmpty { if (cat == "Trending") "" else cat }

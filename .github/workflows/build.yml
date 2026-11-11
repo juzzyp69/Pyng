@@ -70,24 +70,25 @@ jobs:
         shell: bash
         env:
           GIPHY_KEY: ${{ secrets.GIPHY_KEY }}
+          KLIPY_KEY: ${{ secrets.KLIPY_KEY }}
         run: |
           set -o pipefail
           gradle --no-daemon --stacktrace assembleRelease 2>&1 | tee ci-logs/app.log
           ls -la app/build/outputs/apk/release
-          cp app/build/outputs/apk/release/app-arm64-v8a-release.apk "pyng-0.6.4.apk"
-          cp app/build/outputs/apk/release/app-x86_64-release.apk "pyng-0.6.4-emulator.apk"
-          ls -la pyng-0.6.4*.apk
+          cp app/build/outputs/apk/release/app-arm64-v8a-release.apk "pyng-0.6.5.apk"
+          cp app/build/outputs/apk/release/app-x86_64-release.apk "pyng-0.6.5-emulator.apk"
+          ls -la pyng-0.6.5*.apk
 
       - name: Publish test build
         uses: softprops/action-gh-release@v2
         with:
           tag_name: test-${{ github.run_number }}
-          name: Pyng 0.6.4 (build ${{ github.run_number }})
+          name: Pyng 0.6.5 (build ${{ github.run_number }})
           prerelease: true
           body: |
             Test build from ${{ github.sha }}.
             Download the APK below on your phone and open it to install.
-          files: pyng-0.6.4.apk
+          files: pyng-0.6.5.apk
 
       - name: Enable KVM
         if: steps.app.outcome == 'success'
@@ -110,7 +111,7 @@ jobs:
           profile: pixel_7
           disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: bash ci/shots.sh pyng-0.6.4-emulator.apk
+          script: bash ci/shots.sh pyng-0.6.5-emulator.apk
 
       - name: Save build logs
         if: always()
