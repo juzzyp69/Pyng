@@ -219,8 +219,27 @@ fun VoicePlayer(m: Msg, ref: MediaRef, path: String, busy: Boolean, shape: Round
             Spacer(Modifier.height(6.dp))
             Box(Modifier.fillMaxWidth().padding(horizontal = 6.dp).height(1.dp).background(fg.copy(alpha = 0.16f)))
             Spacer(Modifier.height(7.dp))
-            T(if (working) "Transcribing…" else text!!.ifBlank { "No words heard in this one" }, size = 14.sp, color = if (working || text.isNullOrBlank()) sub else fg, lineHeight = 19.sp,
-                modifier = Modifier.padding(horizontal = 8.dp))
+            if (working || text.isNullOrBlank()) {
+                T(if (working) "Transcribing…" else "No words heard in this one", size = 14.sp, color = sub, lineHeight = 19.sp, modifier = Modifier.padding(horizontal = 8.dp))
+            } else {
+                // Three lines to start. Long ones get a toggle to read the whole thing, like Google Messages.
+                var open by remember(k) { mutableStateOf(false) }
+                var cut by remember(k, text) { mutableStateOf(false) }
+                androidx.compose.material3.Text(
+                    text, maxLines = if (open) Int.MAX_VALUE else 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    onTextLayout = { if (!open) cut = it.hasVisualOverflow },
+                    style = androidx.compose.ui.text.TextStyle(fontFamily = com.jpetrydesign.pyng.ui.theme.Geist, fontSize = 14.sp, lineHeight = 19.sp, color = fg),
+                    modifier = Modifier.padding(horizontal = 8.dp).animateContentSize(),
+                )
+                if (cut || open) Row(
+                    Modifier.padding(start = 2.dp, top = 6.dp).clip(RoundedCornerShape(12.dp)).background(chip).clickable { open = !open }.padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Ico(if (open) "M6 15l6-6 6 6" else "M6 9l6 6 6-6", fg, 13.dp, 2.4f)
+                    Spacer(Modifier.width(5.dp))
+                    T(if (open) "Hide transcript" else "Full transcript", size = 12.5.sp, weight = FontWeight.SemiBold, color = fg)
+                }
+            }
         } else if (path.isNotEmpty()) {
             Spacer(Modifier.height(4.dp))
             Row(
@@ -316,7 +335,7 @@ private fun decodePcm(path: String, chunk: (ShortArray, Int, Float, Int, Int) ->
 
 /** Turns voice messages into text with the phone's own speech recognition. Nothing leaves the phone. */
 object Transcripts {
-    private fun file(ctx: Context, key: String) = File(File(ctx.filesDir, "transcripts").apply { mkdirs() }, key.replace(Regex("[^A-Za-z0-9_-]"), "_") + ".txt")
+    private fun file(ctx: Context, key: String) = File(File(ctx.filesDir, "transcripts").apply { mkdirs() }, key.replace(Regex("[^A-Za-z0-9_-]"), "_") + ".v2.txt")
 
     fun load(ctx: Context, key: String): String? = runCatching { file(ctx, key).takeIf { it.exists() }?.readText() }.getOrNull()
 
@@ -328,7 +347,7 @@ object Transcripts {
             // The recognizer takes plain 16 kHz mono audio, so the recording is converted first.
             val pcm = withContext(Dispatchers.IO) { runCatching { toPcm16k(ctx, path) }.getOrNull() }
             if (pcm == null) { say("Couldn't read this voice message"); return }
-            val text = withTimeoutOrNull(120_000) { recognize(ctx, pcm) }
+            val text = withTimeoutOrNull(240_000) { recognizeAll(ctx, pcm) }
             pcm.delete()
             if (text == null) { say("Couldn't transcribe this one"); return }
             Voice.texts[key] = text
@@ -363,8 +382,56 @@ object Transcripts {
         return out
     }
 
+    /**
+     * The recognizer is built for live speech, and on a long recording it can drop whole stretches.
+     * So the audio is cut into short pieces at natural pauses, each piece is heard on its own with a
+     * little silence around it, and the pieces are joined back up.
+     */
+    private suspend fun recognizeAll(ctx: Context, pcm: File): String? {
+        val bytes = withContext(Dispatchers.IO) { pcm.readBytes() }
+        val n = bytes.size / 2
+        if (n == 0) return ""
+        fun sample(i: Int) = ((bytes[2 * i + 1].toInt() shl 8) or (bytes[2 * i].toInt() and 0xFF)).toShort().toInt()
+        // Loudness in 50 ms steps, used to find the quietest spot to cut at.
+        val step = 800
+        val frames = FloatArray((n + step - 1) / step) { f ->
+            var sum = 0.0; val from = f * step; val to = minOf(n, from + step)
+            for (i in from until to) { val v = sample(i).toDouble(); sum += v * v }
+            kotlin.math.sqrt(sum / maxOf(1, to - from)).toFloat()
+        }
+        val cuts = ArrayList<Int>()
+        var start = 0
+        val minLen = 16_000 * 7; val maxLen = 16_000 * 12
+        while (n - start > maxLen) {
+            val lo = (start + minLen) / step; val hi = minOf(frames.size - 1, (start + maxLen) / step)
+            var best = lo
+            for (f in lo..hi) if (frames[f] < frames[best]) best = f
+            start = best * step + step / 2
+            cuts += start
+        }
+        val bounds = listOf(0) + cuts + listOf(n)
+        val out = ArrayList<String>()
+        for (i in 0 until bounds.size - 1) {
+            val from = bounds[i]; val to = bounds[i + 1]
+            val piece = File(ctx.cacheDir, "stt-part-" + System.nanoTime() + ".pcm")
+            withContext(Dispatchers.IO) {
+                piece.outputStream().use { o ->
+                    o.write(ByteArray(16_000 / 3 * 2))            // a third of a second of quiet before
+                    o.write(bytes, from * 2, (to - from) * 2)
+                    o.write(ByteArray(16_000 * 2 / 10 * 8))        // and some after, so the last words finish
+                }
+            }
+            val heard = withTimeoutOrNull(60_000) { recognize(ctx, piece, formatted = true) }
+                ?: withTimeoutOrNull(60_000) { recognize(ctx, piece, formatted = false) }
+            piece.delete()
+            if (heard == null && out.isEmpty() && i == bounds.size - 2) return null
+            heard?.trim()?.takeIf { it.isNotEmpty() }?.let { out += it }
+        }
+        return out.joinToString(" ")
+    }
+
     @android.annotation.SuppressLint("NewApi")
-    private suspend fun recognize(ctx: Context, pcm: File): String? = withContext(Dispatchers.Main) {
+    private suspend fun recognize(ctx: Context, pcm: File, formatted: Boolean): String? = withContext(Dispatchers.Main) {
         val onDevice = runCatching { SpeechRecognizer.isOnDeviceRecognitionAvailable(ctx) }.getOrDefault(false)
         if (!onDevice && !SpeechRecognizer.isRecognitionAvailable(ctx)) return@withContext null
         val sr = if (onDevice) SpeechRecognizer.createOnDeviceSpeechRecognizer(ctx) else SpeechRecognizer.createSpeechRecognizer(ctx)
@@ -372,6 +439,8 @@ object Transcripts {
         try {
             suspendCancellableCoroutine { cont ->
                 val parts = ArrayList<String>()
+                var pending = ""   // words heard but not yet confirmed; kept if the session ends first
+                fun all() = (parts + listOfNotNull(pending.takeIf { it.isNotEmpty() })).joinToString(" ")
                 fun done(v: String?) { if (cont.isActive) cont.resume(v) }
                 fun best(b: Bundle?) = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim().orEmpty()
                 sr.setRecognitionListener(object : RecognitionListener {
@@ -380,24 +449,28 @@ object Transcripts {
                     override fun onRmsChanged(rmsdB: Float) {}
                     override fun onBufferReceived(buffer: ByteArray?) {}
                     override fun onEndOfSpeech() {}
-                    override fun onPartialResults(partialResults: Bundle?) {}
+                    override fun onPartialResults(partialResults: Bundle?) { best(partialResults).takeIf { it.isNotEmpty() }?.let { pending = it } }
                     override fun onEvent(eventType: Int, params: Bundle?) {}
-                    override fun onSegmentResults(segmentResults: Bundle) { best(segmentResults).takeIf { it.isNotEmpty() }?.let { parts += it } }
-                    override fun onEndOfSegmentedSession() { done(parts.joinToString(" ")) }
-                    override fun onResults(results: Bundle?) { best(results).takeIf { it.isNotEmpty() }?.let { parts += it }; done(parts.joinToString(" ")) }
+                    override fun onSegmentResults(segmentResults: Bundle) { best(segmentResults).takeIf { it.isNotEmpty() }?.let { parts += it }; pending = "" }
+                    override fun onEndOfSegmentedSession() { done(all()) }
+                    override fun onResults(results: Bundle?) { best(results).takeIf { it.isNotEmpty() }?.let { parts += it; pending = "" }; done(all()) }
                     override fun onError(error: Int) {
-                        if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) done(parts.joinToString(" "))
-                        else done(if (parts.isNotEmpty()) parts.joinToString(" ") else null)
+                        if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) done(all())
+                        else done(all().takeIf { it.isNotEmpty() })
                     }
                 })
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
                     .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    .putExtra(RecognizerIntent.EXTRA_LANGUAGE, java.util.Locale.getDefault().toLanguageTag())
                     .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                    .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                     .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, pfd)
                     .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, android.media.AudioFormat.ENCODING_PCM_16BIT)
                     .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, 16_000)
                     .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1)
                     .putExtra(RecognizerIntent.EXTRA_SEGMENTED_SESSION, RecognizerIntent.EXTRA_AUDIO_SOURCE)
+                // Punctuation and capitals, where the phone's speech engine can do it.
+                if (formatted) intent.putExtra(RecognizerIntent.EXTRA_ENABLE_FORMATTING, RecognizerIntent.FORMATTING_OPTIMIZE_QUALITY)
                 sr.startListening(intent)
                 cont.invokeOnCancellation { runCatching { sr.cancel() } }
             }

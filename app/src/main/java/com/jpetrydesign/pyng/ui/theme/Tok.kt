@@ -8,6 +8,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -104,7 +105,9 @@ fun tok(P: Pal, dark: Boolean, solid: Boolean = false, highContrast: Boolean = f
     val p = if (dark) P.pd else (P.pt ?: P.p)
     val bg = if (dark) (P.bgd ?: hex("#0D0F14")) else (P.bg ?: Color.White)
     val fill = if (dark) P.pd else P.p
-    val onFill = if (dark) hex("#101218") else (P.onP ?: Color.White)
+    // Text on your bubbles: picked for contrast, so a deep color in dark mode gets white text, not dark.
+    val mid = P.grad?.let { androidx.compose.ui.graphics.lerp(it.first, it.second, 0.5f) } ?: fill
+    val onFill = if (dark) inkOn(mid) else (P.onP ?: if (contrast(Color.White, mid) < 2f) hex("#101218") else Color.White)
     val plus = P.plus ?: fill
     val inkD = hex("#F1F2F6"); val inkL = hex("#15171D")
     val outBrush: Brush = P.grad?.let { Brush.linearGradient(listOf(it.first, it.second)) } ?: Brush.linearGradient(listOf(fill, fill))
@@ -200,6 +203,18 @@ class FractionalRadial(private val color: Color, private val fx: Float, private 
 val LocalTok = staticCompositionLocalOf { tok(Palettes.favorites[1], false) }
 
 
+private fun contrast(a: Color, b: Color): Float {
+    val la = a.luminance() + 0.05f; val lb = b.luminance() + 0.05f
+    return if (la > lb) la / lb else lb / la
+}
+
+/** White or near-black, whichever reads better on [c]. Leans white on strong mid-tone colors. */
+fun inkOn(c: Color): Color {
+    val dark = hex("#101218")
+    val w = contrast(Color.White, c)
+    return if (w >= 3.2f || w >= contrast(dark, c)) Color.White else dark
+}
+
 /** Applies the colors picked one by one in "Customize more". */
 fun Tok.withCustom(m: Map<String, com.jpetrydesign.pyng.data.Hsl>): Tok {
     if (m.isEmpty()) return this
@@ -207,7 +222,8 @@ fun Tok.withCustom(m: Map<String, com.jpetrydesign.pyng.data.Hsl>): Tok {
     m["bg"]?.color()?.let { t = t.copy(bg = it) }
     m["inBg"]?.color()?.let { t = t.copy(inBg = it) }
     m["inInk"]?.color()?.let { t = t.copy(inInk = it) }
-    m["outBg"]?.color()?.let { t = t.copy(outBg = Brush.linearGradient(listOf(it, it)), outFlat = it) }
+    m["outBg"]?.color()?.let { t = t.copy(outBg = Brush.linearGradient(listOf(it, it)), outFlat = it, outInk = inkOn(it)) }
+    m["inBg"]?.color()?.let { if (m["inInk"] == null) t = t.copy(inInk = inkOn(it)) }
     m["outInk"]?.color()?.let { t = t.copy(outInk = it) }
     m["accent"]?.color()?.let { t = t.copy(p = it, fill = it, badgeBg = it, plusFlat = it, plusBg = Brush.linearGradient(listOf(it, it))) }
     return t
