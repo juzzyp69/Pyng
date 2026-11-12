@@ -479,7 +479,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                         modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(t.neutral).padding(horizontal = 14.dp, vertical = 6.dp))
                                 }
                             } else {
-                                val inf = if (info == m.key || p.opt("stamps") == "Every message" || m.status == "OUTGOING_SCHEDULED") infoFor(m, conv, p.on("receipts")) else null
+                                val inf = if (info == m.key || p.opt("stamps") == "Every message" || m.status == "OUTGOING_SCHEDULED") infoFor(m, conv, true) else null
                                 val det = if (!m.fromMe && spamWhy == null) detect(m.text) else Detected()
                                 val chips = buildList<Triple<String, String, () -> Unit>> {
                                     det.date?.let { d -> add(Triple("Add to calendar", Icons.cal) { runCatching { ctx.startActivity(Intent(Intent.ACTION_INSERT).setData(CalendarContract.Events.CONTENT_URI).putExtra(CalendarContract.Events.TITLE, m.text.take(60)).putExtra(CalendarContract.Events.DESCRIPTION, d)) } }) }
@@ -503,7 +503,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                         isNew = m.ts > openedAt && !sendFx.arrived(m), burst = burst?.takeIf { b -> b.first == m.key || bundle?.any { it.first.key == b.first } == true }?.second, myId = myId,
                                         nameColor = if (conv?.group == true && !m.fromMe) groupNameColor(t, conv.others.indexOfFirst { it.id == m.participantId }) else null,
                                         bundle = bundle,
-                                        autoStatus = if (statusStyle != "Off" && inf == null && last.key == newestMine && !m.failed) infoFor(m, conv, p.on("receipts")) else null,
+                                        autoStatus = if (statusStyle != "Off" && inf == null && last.key == newestMine && !m.failed) infoFor(m, conv, true) else null,
                                         statusFace = if (statusStyle == "Face" && conv != null && !conv.group) conv.others.firstOrNull()?.let { whoOf(it) } else null,
                                         failLabel = if (!m.failed) null else if (m.status == "OUTGOING_FAILED_TOO_LARGE" || (bundle?.map { it.second } ?: m.media).any { it.size > MAX_RCS_BYTES })
                                             "Not sent · too large to send" else infoFor(m, conv, false).first + " · Tap to retry",

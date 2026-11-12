@@ -204,11 +204,27 @@ fun SectionScreen(nav: Nav, key: String) {
                 Group("Conversation") {
                     TogRow("Smart replies", "smart", "Suggestions above the keyboard"); Hairline()
                     TogRow("Typing indicators", "typing", "Show when people are typing, and let them see when you are"); Hairline()
-                    TogRow("Read receipts", "receipts", "Show when people have read your messages"); Hairline()
                     TogRow("Voice message button", "micBtn", "Show the mic next to the message box"); Hairline()
                     TogRow("Transcribe voice messages", "autoTranscribe", "Turn voice messages into text automatically, right on your phone"); Hairline()
                     TogRow("Link previews", "previews", "Show a preview card for links"); Hairline()
                     TogRow("Enter key sends", "enterSend", "Your keyboard's enter key sends instead of adding a line")
+                }
+                // Whether others see that you've read their texts is Google Messages' setting, so this points there.
+                Group("Read receipts") {
+                    ListRow(
+                        "Send read receipts",
+                        "Lets people see when you've read their texts. This lives in Google Messages, tap to open it",
+                        onClick = {
+                            repo.ask = com.jpetrydesign.pyng.data.Repo.Ask(
+                                "Open Google Messages?",
+                                "Tap your profile picture, then Messages settings, then RCS chats, and turn Send read receipts on or off. Pyng follows whatever you pick.",
+                                "Open", danger = false,
+                            ) {
+                                runCatching { ctx.startActivity(ctx.packageManager.getLaunchIntentForPackage(com.jpetrydesign.pyng.data.GmListener.GM)!!.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                                    .onFailure { repo.toast("Couldn't open Google Messages") }
+                            }
+                        },
+                    )
                 }
                 Group("Reactions & effects") {
                     ListRow("Quick reactions", p.quickReacts.joinToString("  "), onClick = { nav.go(Route.ReactPick) }); Hairline()

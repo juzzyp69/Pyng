@@ -767,7 +767,7 @@ fun ConvRow(
                         }
                         Spacer(Modifier.height(4.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (c.read && p.on("receipts") && !typing && draft == null) { Ico(Icons.read, t.p, 16.dp, 2.2f); Spacer(Modifier.width(6.dp)) }
+                            if (c.read && !typing && draft == null) { Ico(Icons.read, t.p, 16.dp, 2.2f); Spacer(Modifier.width(6.dp)) }
                             if (draft != null && !typing) { T("Draft:", size = 14.sp, weight = FontWeight.SemiBold, color = t.danger); Spacer(Modifier.width(6.dp)) }
                             T(
                                 preview, size = prevSize.sp, maxLines = 1,
