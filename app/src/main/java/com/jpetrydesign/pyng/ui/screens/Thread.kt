@@ -400,7 +400,8 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
         }
         // The send glide: note where the box and send button are before the text leaves them.
         val root = rootCoords[0]
-        val melt = if (motion && attachments.isEmpty() && replyTo == null && text.isNotBlank() && root != null && sendFx.run == null) runCatching {
+        // Big emoji have no bubble to glide into, so they just pop in on their own.
+        val melt = if (motion && attachments.isEmpty() && replyTo == null && text.isNotBlank() && jumboCount(text) == 0 && root != null && sendFx.run == null) runCatching {
             Triple(root.localBoundingBoxOf(sendFx.field!!), root.localBoundingBoxOf(sendFx.text!!), root.localBoundingBoxOf(sendFx.button!!))
         }.getOrNull() else null
         repo.send(convId, text, replyTo?.id.orEmpty(), attachments.toList())

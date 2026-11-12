@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package com.jpetrydesign.pyng.ui.screens
 
 import android.Manifest
@@ -85,6 +87,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.foundation.content.consume
+import androidx.compose.foundation.content.contentReceiver
+import androidx.compose.foundation.content.hasMediaType
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -155,12 +162,34 @@ fun Composer(
     var makerUri by remember { mutableStateOf<Uri?>(null) }
     val pickForSticker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u -> if (u != null) makerUri = u }
 
+    // The message box's text, kept in step with the draft both ways.
+    val field = androidx.compose.foundation.text.input.rememberTextFieldState(draft)
+    val latestDraft by rememberUpdatedState(draft)
+    val latestOnDraft by rememberUpdatedState(onDraft)
+    LaunchedEffect(draft) {
+        if (field.text.toString() != draft) field.edit { replace(0, length, draft); placeCursorAtEnd() }
+    }
+    LaunchedEffect(field) {
+        snapshotFlow { field.text.toString() }.collect { if (it != latestDraft) latestOnDraft(it) }
+    }
     fun add(uris: List<Uri>) {
         if (uris.isEmpty()) return
         busy = true
         scope.launch {
             uris.take(10).forEach { u -> repo.importUri(u)?.let { attachments.add(it) } }
             busy = false; panel = null
+        }
+    }
+    // Pictures pasted into the box, or sent from the keyboard, come in as attachments.
+    val pasted = remember {
+        object : androidx.compose.foundation.content.ReceiveContentListener {
+            override fun onReceive(transferableContent: androidx.compose.foundation.content.TransferableContent): androidx.compose.foundation.content.TransferableContent? {
+                if (!transferableContent.hasMediaType(androidx.compose.foundation.content.MediaType.Image)) return transferableContent
+                val got = ArrayList<Uri>()
+                val rest = transferableContent.consume { item -> item.uri?.let { got += it; true } ?: false }
+                add(got)
+                return rest
+            }
         }
     }
     val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { add(it) }
@@ -309,14 +338,17 @@ fun Composer(
                                     else -> "SMS Message"
                                 }, size = fontSize.sp, color = t.ink.copy(alpha = 0.5f), maxLines = 1, modifier = Modifier.graphicsLayer { alpha = if (fx?.quiet == true) 0f else phA },
                             )
+                            // The newer text field: it shows Paste on a long press even when empty, and it can
+                            // take images pasted from the clipboard or sent from the keyboard (Gboard GIFs and stickers).
                             BasicTextField(
-                                draft, onDraft,
+                                state = field,
                                 textStyle = TextStyle(fontFamily = Geist, fontSize = fontSize.sp, lineHeight = (fontSize * 1.32f).sp, color = t.ink),
                                 cursorBrush = SolidColor(t.p),
-                                maxLines = 6,
+                                lineLimits = androidx.compose.foundation.text.input.TextFieldLineLimits.MultiLine(maxHeightInLines = 6),
                                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = if (p.on("enterSend")) ImeAction.Send else ImeAction.Default),
-                                keyboardActions = KeyboardActions(onSend = { if (hasDraft) onSend(draft) }),
-                                modifier = Modifier.fillMaxWidth().animateContentSize().onGloballyPositioned { fx?.text = it },
+                                onKeyboardAction = if (p.on("enterSend")) androidx.compose.foundation.text.input.KeyboardActionHandler { if (field.text.isNotBlank()) onSend(field.text.toString()) } else null,
+                                modifier = Modifier.fillMaxWidth().animateContentSize().onGloballyPositioned { fx?.text = it }
+                                    .contentReceiver(pasted),
                             )
                         }
                         if (sms && p.on("counter") && draft.isNotEmpty()) {

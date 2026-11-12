@@ -524,6 +524,8 @@ fun ColorStrip(onDone: () -> Unit) {
                     }
                     PillButton("Done", onDone, height = 40.dp)
                 }
+                // See the color in both looks without leaving the sheet.
+                Seg(listOf("Light", "Dark", "Match system"), p.mode, { m -> repo.prefs.edit { it.copy(mode = m) } }, Modifier.padding(horizontal = 20.dp))
                 // Themes you saved, ready to use for the whole app.
                 MyThemes(
                     lib,

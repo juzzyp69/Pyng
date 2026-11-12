@@ -438,6 +438,8 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
                         Box(Modifier.align(Alignment.End)) { Bubble1("See you there", true, t) }
                     }
                 }
+                // Light or dark, right here, so you can see the chat's colors both ways. Same switch as in Appearance.
+                Seg(listOf("Light", "Dark", "Match system"), p.mode, { m -> repo.prefs.edit { it.copy(mode = m) } }, Modifier.padding(horizontal = 16.dp).padding(top = 12.dp))
                 // Two modes, never both at once: Theme (pick a theme or one overall color) and
                 // Custom (set each part's color on its own). Switching crossfades.
                 androidx.compose.animation.Crossfade(customizing, label = "themeMode") { custom ->
