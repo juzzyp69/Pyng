@@ -65,6 +65,10 @@ class SendFx {
     /** The landing squish, applied to the real bubble. */
     var bubbleScaleX by mutableFloatStateOf(1f)
     var bubbleScaleY by mutableFloatStateOf(1f)
+    /** Pop and Swoosh move the real bubble itself. */
+    var bubbleTX by mutableFloatStateOf(0f)
+    var bubbleTY by mutableFloatStateOf(0f)
+    var bubbleRot by mutableFloatStateOf(0f)
     /** True for a moment after sending, so the box's placeholder doesn't show through the flying bubble. */
     var quiet by mutableStateOf(false)
     // The send button stays put now; kept so the composer's hookup doesn't change.
@@ -75,6 +79,9 @@ class SendFx {
     fun alphaFor(m: Msg): Float = if (m.tmpId.isNotEmpty() && m.tmpId == hideTmp) bubbleAlpha else 1f
     fun scaleXFor(m: Msg): Float = if (m.tmpId.isNotEmpty() && m.tmpId == hideTmp) bubbleScaleX else 1f
     fun scaleYFor(m: Msg): Float = if (m.tmpId.isNotEmpty() && m.tmpId == hideTmp) bubbleScaleY else 1f
+    fun txFor(m: Msg): Float = if (m.tmpId.isNotEmpty() && m.tmpId == hideTmp) bubbleTX else 0f
+    fun tyFor(m: Msg): Float = if (m.tmpId.isNotEmpty() && m.tmpId == hideTmp) bubbleTY else 0f
+    fun rotFor(m: Msg): Float = if (m.tmpId.isNotEmpty() && m.tmpId == hideTmp) bubbleRot else 0f
     fun isTarget(m: Msg) = m.tmpId.isNotEmpty() && m.tmpId == run?.tmpId
     /** Messages that already arrived by gliding in, so they never play the fade-in on top of it. */
     val flown = HashSet<String>()
@@ -85,6 +92,7 @@ class SendFx {
         bubble = null
         bubbleAlpha = 0f
         bubbleScaleX = 1f; bubbleScaleY = 1f
+        bubbleTX = 0f; bubbleTY = 0f; bubbleRot = 0f
         hideTmp = r.tmpId
         quiet = true
         run = r
@@ -96,12 +104,13 @@ class SendFx {
         quiet = false
         bubbleAlpha = 1f
         bubbleScaleX = 1f; bubbleScaleY = 1f
+        bubbleTX = 0f; bubbleTY = 0f; bubbleRot = 0f
         btnScale = 1f
         btnAlpha = 1f
     }
 }
 
-data class MeltRun(val tmpId: String, val text: String, val field: Rect, val textBox: Rect, val button: Rect, val stamp: Long = System.nanoTime())
+data class MeltRun(val tmpId: String, val text: String, val field: Rect, val textBox: Rect, val button: Rect, val style: String = "Jelly", val stamp: Long = System.nanoTime())
 
 val LocalSendFx = compositionLocalOf<SendFx?> { null }
 
@@ -175,12 +184,10 @@ fun SendMeltLayer(fx: SendFx, t: Tok, fontSize: Float, bold: Boolean, corner: Fl
     val dryStyle = remember(fontSize, bold) { TextStyle(fontFamily = Geist, fontSize = fontSize.sp, lineHeight = (fontSize * 1.32f).sp, fontWeight = weight) }
     val wetStyle = remember(fontSize, bold) { TextStyle(fontFamily = Geist, fontSize = fontSize.sp, lineHeight = (fontSize * 1.4f).sp, fontWeight = weight) }
     var frame by remember(run.stamp) { mutableIntStateOf(0) }
-    var layerAlpha by remember(run.stamp) { mutableFloatStateOf(1f) }
-    val glide = remember(run.stamp) { Glide(run, d) }
+    val flight = remember(run.stamp) { flightFor(run.style, run, d, corner) }
     val dry = remember(run.stamp) { measurer.measure(AnnotatedString(run.text), dryStyle, constraints = Constraints(maxWidth = max(1, run.textBox.width.toInt()))) }
     val wetHolder = remember(run.stamp) { arrayOfNulls<TextLayoutResult>(1) }
-    val padL = 16f * d
-    val padT = 11f * d
+    val look = remember(run.stamp, t) { Look(t, dry, { wetHolder[0] }, 16f * d, 11f * d) }
     LaunchedEffect(run.stamp) {
         fun bubbleRect(): Rect? {
             val r = root() ?: return null; val b = fx.bubble ?: return null
@@ -191,60 +198,47 @@ fun SendMeltLayer(fx: SendFx, t: Tok, fontSize: Float, bold: Boolean, corner: Fl
         var waited = 0f
         var carry = 0f
         var t = 0f
+        var known: Rect? = null
         while (true) {
             val now = withFrameNanos { it }
             val dt = ((now - last) / 1e9f).coerceAtMost(0.1f); last = now
-            val B = bubbleRect()
-            if (B == null && t == 0f) {
+            flight.screenW = root()?.size?.width?.toFloat() ?: 0f
+            // Once a style starts moving the real bubble, its measured box moves too, so keep the first one.
+            val B = if (flight.showReal && known != null) known else bubbleRect()?.also { if (!flight.showReal) known = it }
+            if (B == null && t == 0f && flight.needsBubble) {
                 // Waiting a frame or two for the new bubble to be laid out.
                 waited += dt
-                if (waited > 0.45f) break // it never showed (scrolled away, or an emoji-only message)
+                if (waited > 0.45f) break // it never showed (scrolled away)
                 frame++
                 continue
             }
             if (B != null && measuredFor != B.width.toInt()) {
                 measuredFor = B.width.toInt()
-                wetHolder[0] = measurer.measure(AnnotatedString(run.text), wetStyle, constraints = Constraints(maxWidth = max(1, (B.width - padL * 2).toInt())))
+                wetHolder[0] = measurer.measure(AnnotatedString(run.text), wetStyle, constraints = Constraints(maxWidth = max(1, (B.width - 32f * d).toInt())))
             }
             carry += dt
-            val target = B ?: Rect(glide.L.to, glide.T.to, glide.R.to, glide.T.to + glide.H.to)
-            while (carry >= SUB) { carry -= SUB; t += SUB; glide.step(SUB, t, target) }
+            val target = B ?: known ?: run.field
+            while (carry >= SUB) { carry -= SUB; t += SUB; flight.step(SUB, t, target) }
             if (t > 0.2f) fx.quiet = false
-            if (glide.landed) {
-                // Swap in the real bubble in the same frame the flying one disappears.
-                layerAlpha = 0f
-                fx.bubbleAlpha = 1f
-                fx.bubbleScaleX = glide.SX.v
-                fx.bubbleScaleY = glide.SY.v
-            }
+            // The real bubble shows the moment the flying one hands over, with the same bounce.
+            fx.bubbleAlpha = if (flight.showReal) 1f else 0f
+            fx.bubbleScaleX = flight.realSX; fx.bubbleScaleY = flight.realSY
+            fx.bubbleTX = flight.realTX; fx.bubbleTY = flight.realTY; fx.bubbleRot = flight.realRot
             frame++
-            if (glide.done || t > 1.6f) break
+            if (flight.done || t > flight.maxTime) break
         }
         fx.finish()
     }
 
-    Canvas(Modifier.fillMaxSize().graphicsLayer { alpha = layerAlpha }) {
+    val blurOk = android.os.Build.VERSION.SDK_INT >= 31
+    Canvas(
+        Modifier.fillMaxSize().graphicsLayer {
+            if (frame < 0) return@graphicsLayer
+            val b = flight.blur
+            renderEffect = if (blurOk && b > 0.5f) androidx.compose.ui.graphics.BlurEffect(b, b) else null
+        },
+    ) {
         if (frame < 0) return@Canvas // reading frame redraws every frame
-        val g = glide
-        if (g.landed) return@Canvas
-        val top = g.T.v
-        val w = max(1f, g.R.v - g.L.v)
-        val h = max(1f, g.H.v)
-        val tint = ease(g.time / 0.13f)
-        val r = min(h / 2f, lerp(24f * d, corner * d, g.T.prog(g.F.top)))
-        val pivot = Offset(g.L.v + w / 2f, top + h / 2f)
-        scale(g.sx, g.sy, pivot) {
-            // It starts looking like the message box (so nothing behind shows through) and turns into the bubble.
-            if (tint < 1f) drawRoundRect(t.field.compositeOver(t.bg), topLeft = Offset(g.L.v, top), size = Size(w, h), cornerRadius = CornerRadius(r), alpha = 1f - tint)
-            drawRoundRect(t.outBg, topLeft = Offset(g.L.v, top), size = Size(w, h), cornerRadius = CornerRadius(r), alpha = tint)
-            // Your words: the box's ink fading out as the bubble's ink fades in.
-            val tx = g.L.v + lerp(g.T0.x - g.F.left, padL, g.L.prog(g.F.left))
-            val ty = top + lerp(g.T0.y - g.F.top, padT, g.T.prog(g.F.top))
-            val dryA = 1f - ease(g.time / 0.1f)
-            if (dryA > 0.01f) drawText(dry, color = t.ink, topLeft = Offset(tx, ty), alpha = dryA)
-            val wet = wetHolder[0]
-            val wetA = ease((g.time - 0.02f) / 0.12f)
-            if (wet != null && wetA > 0.01f) drawText(wet, color = t.outInk, topLeft = Offset(tx, ty), alpha = wetA)
-        }
+        flight.draw(this, look)
     }
 }

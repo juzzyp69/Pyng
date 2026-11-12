@@ -37,6 +37,8 @@ val RELEASES = listOf(
     Release(
         "0.9", "Nov 12, 2026",
         added = listOf(
+            "Send Animations\nTen ways for a message to leave the box, in Classic and Liquid sets. Pick one in Style studio under Chat style, Send",
+            "Choose Your Style\nA new setup page with a live preview for colors, pinned chats, bubbles, send animation and app icon",
             "New Share Screen\nPinned chats in a row up top, then recent chats and contacts. Pick a few, edit the message at the bottom and send, or start a group",
             "Pyng in the Share Sheet\nYour pinned and recent chats show up right when you share from another app",
             "Review Before Sending\nTap an attachment to preview everything. Crop, turn, straighten or add an effect to photos, and trim or crop videos",

@@ -105,6 +105,9 @@ import com.jpetrydesign.pyng.ui.theme.swatchOf
 import com.jpetrydesign.pyng.ui.theme.toHsl
 import kotlinx.coroutines.launch
 import kotlin.math.atan2
+import kotlin.math.min
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.clipRect
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.roundToInt
@@ -215,6 +218,7 @@ private fun StylePicker(key: String?, onDone: () -> Unit) {
             "pinBack" -> "Backdrop" to "What sits behind your pinned chats"
             "bubble" -> "Bubble shape" to "Tap a style to preview it live"
             "gradient" -> "Bubble gradient" to "How color flows through the bubbles you send"
+            "sendStyle" -> "Send animation" to "How a message leaves the box when you send it"
             "textSize" -> "Text size" to "Messages and your conversation list"
             "font" -> "Font" to "Used everywhere in Pyng"
             "showPhotos" -> "Contact photos" to "Tap a style to preview it live"
@@ -325,6 +329,9 @@ fun StyleTiles(k: String, pickWall: () -> Unit) {
                         Column(verticalArrangement = Arrangement.spacedBy(if (n == "Compact") 4.dp else 11.dp)) { repeat(if (n == "Compact") 6 else 4) { Box(Modifier.size(104.dp, 8.dp).clip(RoundedCornerShape(4.dp)).background(LN)) } }
                     }
                 }
+                "sendStyle" -> { cols = 2; pvH = 84.dp; tiles = (SendStyles.classic.map { it to "Classic" } + SendStyles.liquid.map { it to "Liquid" }).map { (n, set) ->
+                    Tile(n, set + " · " + SendStyles.about[n], p.opt("sendStyle").ifBlank { "Jelly" } == n, { repo.prefs.setOpt("sendStyle", n) }) { SendMini(n, t) }
+                } }
                 "statusStyle" -> { cols = 3; pvH = 72.dp; tiles = listOf("Icon and text" to "Check, then Read", "Face" to "Their photo", "Off" to "Tap to see").map { (n, sub) ->
                     Tile(n, sub, p.opt("statusStyle") == n, { repo.prefs.setOpt("statusStyle", n) }) { StatusSample(n, t) }
                 } }
@@ -719,7 +726,7 @@ private fun StyleStudio(kind: String?, onClose: () -> Unit) {
     ) {
         val k = last ?: return@AnimatedVisibility
         val chat = k == "chat"
-        val tabs = if (chat) listOf("bubble" to "Bubbles", "gradient" to "Gradient", "statusStyle" to "Status", "photoGroups" to "Photos", "textSize" to "Text", "font" to "Font", "defWall" to "Wallpaper")
+        val tabs = if (chat) listOf("bubble" to "Bubbles", "sendStyle" to "Send", "gradient" to "Gradient", "statusStyle" to "Status", "photoGroups" to "Photos", "textSize" to "Text", "font" to "Font", "defWall" to "Wallpaper")
             else listOf("pinLayout" to "Layout", "pinShape" to "Shape", "pinStyle" to "New messages", "pinNames" to "Names", "pinBack" to "Backdrop", "density" to "Density", "showPhotos" to "Faces")
         var tab by remember(k) { mutableStateOf(tabs.first().first) }
         Column(Modifier.fillMaxSize().background(t.bg).statusBarsPadding().navigationBarsPadding()) {
@@ -898,6 +905,42 @@ fun PinSample(look: PinLook, big: Boolean = false) {
                     }
                 }
             }
+        }
+    }
+}
+
+
+/** A little sketch of a send animation: the message box at the bottom, the bubble it becomes, and the style's signature. */
+@Composable
+fun SendMini(style: String, t: com.jpetrydesign.pyng.ui.theme.Tok) {
+    val out = t.outFlat
+    val box = if (t.dark) Color.White.copy(alpha = 0.12f) else Color(0x14000000)
+    androidx.compose.foundation.Canvas(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp)) {
+        val w = size.width; val h = size.height; val dp = density
+        val r = 9f * dp
+        // the message box
+        drawRoundRect(box, androidx.compose.ui.geometry.Offset(0f, h - 18f * dp), androidx.compose.ui.geometry.Size(w * 0.78f, 18f * dp), androidx.compose.ui.geometry.CornerRadius(9f * dp))
+        // where the bubble ends up
+        val bw = w * 0.5f; val bh = 20f * dp; val bx = w - bw; val by = 4f * dp
+        fun bubble(x: Float = bx, y: Float = by, ww: Float = bw, hh: Float = bh, a: Float = 1f) =
+            drawRoundRect(out, androidx.compose.ui.geometry.Offset(x, y), androidx.compose.ui.geometry.Size(ww, hh), androidx.compose.ui.geometry.CornerRadius(min(r, hh / 2)), alpha = a)
+        val faint = out.copy(alpha = 0.35f)
+        when (style) {
+            "Jelly" -> { bubble(bx - 3f * dp, by + 3f * dp, bw + 6f * dp, bh - 5f * dp); drawRoundRect(faint, androidx.compose.ui.geometry.Offset(bx + bw * 0.2f, by + bh + 8f * dp), androidx.compose.ui.geometry.Size(bw * 0.6f, 12f * dp), androidx.compose.ui.geometry.CornerRadius(6f * dp)) }
+            "Pop" -> { bubble(); for (i in 0 until 5) { val a = (-150f + i * 30f) * (Math.PI / 180f).toFloat(); val cx = bx + bw / 2; val cy = by + bh / 2
+                drawLine(faint, androidx.compose.ui.geometry.Offset(cx + kotlin.math.cos(a) * bw * 0.62f, cy + kotlin.math.sin(a) * bh * 1.1f), androidx.compose.ui.geometry.Offset(cx + kotlin.math.cos(a) * bw * 0.78f, cy + kotlin.math.sin(a) * bh * 1.5f), 2f * dp) } }
+            "Swoosh" -> { rotate(-6f, androidx.compose.ui.geometry.Offset(bx + bw / 2, by + bh / 2)) { bubble() }; for (i in 0 until 3) drawLine(faint, androidx.compose.ui.geometry.Offset(bx - (12f + i * 8f) * dp, by + (5f + i * 6f) * dp), androidx.compose.ui.geometry.Offset(bx - (2f + i * 4f) * dp, by + (5f + i * 6f) * dp), 2f * dp) }
+            "Taffy" -> { bubble(); drawRoundRect(faint, androidx.compose.ui.geometry.Offset(bx + bw * 0.15f, by + bh - 4f * dp), androidx.compose.ui.geometry.Size(bw * 0.7f, h - bh - 18f * dp), androidx.compose.ui.geometry.CornerRadius(10f * dp)) }
+            "Shimmer" -> { bubble(); clipRect(bx, by, bx + bw, by + bh) { drawLine(Color.White.copy(alpha = 0.55f), androidx.compose.ui.geometry.Offset(bx + bw * 0.45f, by + bh + 4f), androidx.compose.ui.geometry.Offset(bx + bw * 0.62f, by - 4f), 6f * dp) } }
+            "Rise", "Honey" -> { bubble(); val nw = if (style == "Honey") 9f * dp else 5f * dp; val cx = bx + bw * 0.45f
+                val path = androidx.compose.ui.graphics.Path().apply { moveTo(cx - nw * 1.6f, by + bh - 2f); cubicTo(cx - nw * 0.5f, by + bh + 10f * dp, cx - nw * 0.5f, h - 26f * dp, cx - nw * 2.2f, h - 16f * dp); lineTo(cx + nw * 2.2f, h - 16f * dp); cubicTo(cx + nw * 0.5f, h - 26f * dp, cx + nw * 0.5f, by + bh + 10f * dp, cx + nw * 1.6f, by + bh - 2f); close() }
+                drawPath(path, out) }
+            "Droplet" -> { bubble(a = 0.35f); val cx = w * 0.42f; val cy = h * 0.55f; val rr = 8f * dp
+                val path = androidx.compose.ui.graphics.Path().apply { moveTo(cx, cy + rr + 9f * dp); cubicTo(cx - rr * 0.3f, cy + rr * 0.9f, cx - rr, cy + rr * 0.5f, cx - rr, cy); cubicTo(cx - rr, cy - rr * 1.35f, cx + rr, cy - rr * 1.35f, cx + rr, cy); cubicTo(cx + rr, cy + rr * 0.5f, cx + rr * 0.3f, cy + rr * 0.9f, cx, cy + rr + 9f * dp); close() }
+                drawPath(path, out) }
+            "Splash" -> { bubble(); listOf(-0.1f to -0.5f, 0.2f to -0.9f, 0.75f to -0.8f, 1.05f to -0.3f).forEach { (fx, fy) -> drawCircle(out, 2.6f * dp, androidx.compose.ui.geometry.Offset(bx + bw * fx, by + bh * 0.5f + bh * fy)) } }
+            "Ink" -> { bubble(); drawRoundRect(out.copy(alpha = 0.5f), androidx.compose.ui.geometry.Offset(bx - 5f * dp, by - 5f * dp), androidx.compose.ui.geometry.Size(bw + 10f * dp, bh + 10f * dp), androidx.compose.ui.geometry.CornerRadius(r + 5f * dp), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f * dp))
+                drawCircle(out, 4f * dp, androidx.compose.ui.geometry.Offset(w * 0.86f, h * 0.62f)) }
         }
     }
 }

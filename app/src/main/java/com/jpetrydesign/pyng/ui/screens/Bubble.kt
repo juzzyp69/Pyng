@@ -408,7 +408,7 @@ private fun BubbleBody(m: Msg, x: RowCtx, shape: RoundedCornerShape, jumbo: Int,
             Column(
                 Modifier
                     .then(if (fx != null && fx.isTarget(m)) Modifier.onGloballyPositioned { fx.bubble = it } else Modifier)
-                    .then(if (fx != null) Modifier.graphicsLayer { alpha = fx.alphaFor(m); scaleX = fx.scaleXFor(m); scaleY = fx.scaleYFor(m) } else Modifier)
+                    .then(if (fx != null) Modifier.graphicsLayer { alpha = fx.alphaFor(m); scaleX = fx.scaleXFor(m); scaleY = fx.scaleYFor(m); translationX = fx.txFor(m); translationY = fx.tyFor(m); rotationZ = fx.rotFor(m) } else Modifier)
                     .clip(shape)
                     .then(if (acrossScreen) Modifier.screenGradient(t.outTop, t.outBottom) else Modifier.background(bg))
                     .padding(horizontal = 16.dp, vertical = 11.dp),

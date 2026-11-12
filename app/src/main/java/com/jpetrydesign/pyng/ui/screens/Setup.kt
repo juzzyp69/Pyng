@@ -166,7 +166,7 @@ fun SetupScreen(startStep: Int, onDone: () -> Unit, onLog: () -> Unit) {
                     if (link == "done") StatusCard(true, "Chat features connected", "RCS through Google Messages")
                     else if (error != null) StatusCard(false, "Couldn't link", error!!)
                 }
-                else -> ColorsStep { finish() }
+                else -> StyleStep { finish() }
             }
         }
         if (step in 1..2 && !(step == 2 && link != "done")) {
@@ -356,6 +356,77 @@ private fun ColorsStep(onDone: () -> Unit) {
         }
         Spacer(Modifier.height(18.dp))
         Seg(listOf("Light", "Dark", "Match system"), p.mode, { m -> repo.prefs.edit { it.copy(mode = m) } })
+    }
+}
+
+/**
+ * Choose your style: one page with a live preview up top and tabs for colors, pinned chats, bubbles,
+ * send animation and app icon. Next walks through the tabs; "Customize later" skips straight in.
+ */
+@Composable
+private fun StyleStep(onDone: () -> Unit) {
+    val repo = LocalRepo.current
+    val t = LocalTok.current
+    val p = repo.prefs.state
+    val tabs = listOf("Colors", "Pinned", "Bubbles", "Send", "Icon")
+    var tab by remember { mutableStateOf(0) }
+    Column(Modifier.fillMaxSize().systemBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth().padding(horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Spacer(Modifier.height(18.dp))
+            T("Choose Your Style", size = 27.sp, weight = FontWeight.Bold, letterSpacing = (-0.6).sp, modifier = Modifier.enter(0))
+            T("Tap around. You can change all of it later.", size = 14.sp, color = t.soft, modifier = Modifier.padding(top = 4.dp).enter(1))
+            Spacer(Modifier.height(14.dp))
+            // The preview: your home screen for pinned chats, a chat for everything else.
+            Box(
+                Modifier.fillMaxWidth().height(190.dp).enter(2).edge(RoundedCornerShape(26.dp), elevation = 8.dp)
+                    .clip(RoundedCornerShape(26.dp)).background(if (t.dark) t.card else Color.White),
+            ) {
+                androidx.compose.animation.Crossfade(tabs[tab] == "Pinned", label = "stylePreview") { home -> if (home) HomeStylePreview(compact = false) else ChatStylePreview(compact = false) }
+            }
+            Spacer(Modifier.height(14.dp))
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(19.dp)).background(if (t.dark) t.card else t.neutral).padding(4.dp)) {
+                tabs.forEachIndexed { i, n ->
+                    val on = i == tab
+                    Box(Modifier.weight(1f).height(34.dp).clip(RoundedCornerShape(15.dp)).background(if (on) t.tone else Color.Transparent).clickable { tab = i }, contentAlignment = Alignment.Center) {
+                        T(n, size = 12.5.sp, weight = FontWeight.SemiBold, color = if (on) t.p else t.soft, maxLines = 1)
+                    }
+                }
+            }
+        }
+        // The open tab's choices.
+        androidx.compose.animation.AnimatedContent(tab, label = "styleTab", modifier = Modifier.weight(1f).widthIn(max = 560.dp).fillMaxWidth(),
+            transitionSpec = {
+                val dir = if (targetState > initialState) 1 else -1
+                (androidx.compose.animation.slideInHorizontally { it * dir / 3 } + androidx.compose.animation.fadeIn()) togetherWith (androidx.compose.animation.slideOutHorizontally { -it * dir / 3 } + androidx.compose.animation.fadeOut())
+            }) { i ->
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp)) {
+                when (tabs[i]) {
+                    "Colors" -> {
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            (Palettes.favorites + Palettes.colors).forEach { x ->
+                                val on = p.themeKey == x.name
+                                Column(Modifier.width(66.dp).clickable { repo.prefs.edit { it.copy(themeKey = x.name) } }, horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Box(Modifier.size(54.dp).then(if (on) Modifier.border(2.dp, t.ink, CircleShape).padding(4.dp) else Modifier).clip(CircleShape).background(swatchOf(x)))
+                                    Spacer(Modifier.height(6.dp))
+                                    T(x.name, size = 11.5.sp, weight = FontWeight.Medium, color = t.soft, maxLines = 1)
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Seg(listOf("Light", "Dark", "Match system"), p.mode, { m -> repo.prefs.edit { it.copy(mode = m) } })
+                    }
+                    "Pinned" -> { StyleTiles("pinShape") {}; Spacer(Modifier.height(12.dp)); StyleTiles("pinStyle") {} }
+                    "Bubbles" -> { StyleTiles("bubble") {}; Spacer(Modifier.height(12.dp)); StyleTiles("textSize") {} }
+                    "Send" -> StyleTiles("sendStyle") {}
+                    else -> StyleTiles("appIcon") {}
+                }
+            }
+        }
+        Column(Modifier.widthIn(max = 460.dp).fillMaxWidth().padding(horizontal = 28.dp).padding(bottom = 26.dp, top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            val last = tab == tabs.lastIndex
+            PillButton(if (last) "Start messaging" else "Next", { if (last) onDone() else tab++ }, Modifier.fillMaxWidth().edge(RoundedCornerShape(29.dp), primary = true), height = 56.dp)
+            T("Customize later", size = 14.sp, weight = FontWeight.SemiBold, color = t.soft, modifier = Modifier.padding(top = 10.dp).clickable(onClick = onDone).padding(6.dp))
+        }
     }
 }
 

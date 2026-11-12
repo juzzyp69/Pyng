@@ -408,7 +408,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
         }.getOrNull() else null
         repo.send(convId, text, replyTo?.id.orEmpty(), attachments.toList())
         if (melt != null) repo.msgs[convId]?.lastOrNull { it.status == "LOCAL" && it.text == text.trim() }?.tmpId?.let { tmp ->
-            sendFx.start(MeltRun(tmp, text.trim(), melt.first, melt.second, melt.third))
+            sendFx.start(MeltRun(tmp, text.trim(), melt.first, melt.second, melt.third, p.opt("sendStyle").ifBlank { "Jelly" }))
         }
         if (p.on("effects")) fxKind(text)?.let { fx = it }
         draft = ""; replyTo = null; attachments.clear(); info = null
