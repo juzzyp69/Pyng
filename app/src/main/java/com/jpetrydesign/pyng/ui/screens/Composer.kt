@@ -92,6 +92,7 @@ import androidx.compose.foundation.content.contentReceiver
 import androidx.compose.foundation.content.hasMediaType
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -146,6 +147,7 @@ fun Composer(
     lastIncoming: String,
     fontSize: Float = 15.5f,
     initialPanel: String? = null,
+    onReview: (Int) -> Unit = {},
 ) {
     val repo = LocalRepo.current
     val ctx = LocalContext.current
@@ -167,7 +169,7 @@ fun Composer(
     val latestDraft by rememberUpdatedState(draft)
     val latestOnDraft by rememberUpdatedState(onDraft)
     LaunchedEffect(draft) {
-        if (field.text.toString() != draft) field.edit { replace(0, length, draft); placeCursorAtEnd() }
+        if (field.text.toString() != draft) field.setTextAndPlaceCursorAtEnd(draft)
     }
     LaunchedEffect(field) {
         snapshotFlow { field.text.toString() }.collect { if (it != latestDraft) latestOnDraft(it) }
@@ -192,7 +194,17 @@ fun Composer(
             }
         }
     }
-    val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { add(it) }
+    // Photos and videos from the gallery open the review screen, so you see what you're sending first.
+    val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        busy = true
+        scope.launch {
+            val first = attachments.size
+            uris.take(10).forEach { u -> repo.importUri(u)?.let { attachments.add(it) } }
+            busy = false; panel = null
+            if (attachments.size > first) onReview(first)
+        }
+    }
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { add(it) }
     var camFile by remember { mutableStateOf<File?>(null) }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
@@ -299,12 +311,19 @@ fun Composer(
             }
             if (attachments.isNotEmpty() || busy) {
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    attachments.forEach { a ->
-                        Box(Modifier.size(76.dp).clip(RoundedCornerShape(16.dp)).background(t.tone)) {
+                    attachments.forEachIndexed { i, a ->
+                        // Tap to preview and edit everything you're sending.
+                        Box(Modifier.size(76.dp).clip(RoundedCornerShape(16.dp)).background(t.tone).clickable { kb?.hide(); onReview(i) }) {
                             if (a.mime.startsWith("image/") || a.mime.startsWith("video/")) AsyncImage(File(a.path), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                             else Column(Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.Center) {
                                 Ico(if (a.mime.contains("vcard")) Icons.contact else Icons.file, t.p, 20.dp)
                                 T(a.name, size = 10.sp, maxLines = 2, color = t.ink)
+                            }
+                            if (ReviewEdits.byPath.containsKey(a.path)) Box(Modifier.align(Alignment.BottomEnd).padding(5.dp).size(18.dp).clip(CircleShape).background(t.p), contentAlignment = Alignment.Center) {
+                                Ico("M4 20l4-1 11-11-3-3L5 16z", t.onFill, 10.dp, 2.6f)
+                            }
+                            if (a.mime.startsWith("video/")) Box(Modifier.align(Alignment.BottomStart).padding(5.dp).clip(RoundedCornerShape(8.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 5.dp, vertical = 2.dp)) {
+                                Ico("M8 5v14l11-7z", Color.White, 10.dp, 2f)
                             }
                             Box(
                                 Modifier.align(Alignment.TopEnd).padding(4.dp).size(22.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).clickable { attachments.remove(a) },

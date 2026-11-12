@@ -208,9 +208,11 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     var menuAnchor by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     // The photo open in the viewer, as (message key, attachment id).
     var viewing by remember(convId) { mutableStateOf<Pair<String, String>?>(null) }
+    // The attachment review screen, open at this attachment.
+    var reviewAt by remember(convId) { mutableStateOf<Int?>(null) }
     // Opening a photo, the message menu or any sheet puts the keyboard away.
     val kbCtl = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
-    val covered = viewing != null || menuFor != null || detailsFor != null || forward != null || forwardAll != null || callSheet || schedule != null || selectTextFor != null
+    val covered = viewing != null || reviewAt != null || menuFor != null || detailsFor != null || forward != null || forwardAll != null || callSheet || schedule != null || selectTextFor != null
     LaunchedEffect(covered) { if (covered) { focusManager.clearFocus(); kbCtl?.hide() } }
     fun view(m: Msg, ref: com.jpetrydesign.pyng.data.MediaRef) {
         if ((ref.isImage || ref.isVideo) && !ref.waiting) { viewing = m.key to ref.id; info = null } else openMedia(ctx, repo, nav, ref)
@@ -660,6 +662,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                         onSchedule = { schedule = it }, onSend = { send(it) }, smart = p.on("smart") && msgs.lastOrNull()?.fromMe == false && draft.isEmpty() && !selecting && conv != null && !automated(conv, msgs.lastOrNull()?.text.orEmpty()),
                         lastIncoming = msgs.lastOrNull { !it.fromMe }?.text.orEmpty(),
                         fontSize = fontSize, initialPanel = demoPanel,
+                        onReview = { reviewAt = it },
                     )
                 }
             }
@@ -691,6 +694,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                         repo.confirm("Delete message?", "It'll be deleted from Google Messages on your phone too. The other person still has their copy.") { repo.deleteMessages(listOf(m)); repo.toast("Message deleted") }
                     }
                 })
+            reviewAt?.let { i -> ReviewScreen(attachments, i) { reviewAt = null } }
             DetailsSheet(detailsFor, conv) { detailsFor = null }
             SelectTextSheet(selectTextFor) { selectTextFor = null }
             ForwardSheet(forward) { target, m ->
