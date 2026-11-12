@@ -35,6 +35,35 @@ data class Release(val version: String, val date: String, val added: List<String
  */
 val RELEASES = listOf(
     Release(
+        "0.9", "Nov 12, 2026",
+        added = listOf(
+            "New Share Screen\nPinned chats in a row up top, then recent chats and contacts. Pick a few, edit the message at the bottom and send, or start a group",
+            "Pyng in the Share Sheet\nYour pinned and recent chats show up right when you share from another app",
+            "Review Before Sending\nTap an attachment to preview everything. Crop, turn, straighten or add an effect to photos, and trim or crop videos",
+            "Paste Pictures\nPaste images into the message box, or send GIFs and stickers straight from your keyboard",
+            "Reaction Picker\nSearch every emoji, hold one to favorite it, and find your recent reactions",
+            "Message Reminders\nHold a message and tap Remind me. The reminder opens the chat right at that message",
+            "Swipe Between Chats\nSwipe across the name at the top of a chat to go to the next or previous one",
+            "Unread Jump\nA pill takes you to the first new message, and the down arrow counts texts that arrive while you're scrolled up",
+            "Reply From Peek\nHold any chat to see its last message and reply without opening it",
+            "Fuller Voice Transcripts\nLong voice messages are transcribed start to finish, with punctuation and a Full transcript button",
+            "Light and Dark Everywhere\nSwitch between light and dark right from App color and Chat theme",
+            "Read Receipts Shortcut\nA new card in Chats settings takes you to Google Messages to turn read receipts on or off",
+            "Text Links in Pyng\nAn optional setting lets text links from other apps open in Pyng",
+            "Friendlier Screens\nSoft placeholders while things load, and helpful notes when a list is empty",
+        ),
+        fixed = listOf(
+            "Missing Parts of Transcripts\nLong voice messages no longer skip whole stretches in the middle",
+            "Dark Text on Bubbles\nChats with a deep bubble color now get white text in dark mode",
+            "Plus Sign Instead of a Photo\nPeople without a photo now show their initials in notifications",
+            "White Box on Emoji\nSending just an emoji no longer flashes a white box",
+            "No Paste Option\nHolding the message box now shows Paste and Select all",
+            "Keyboard Staying Open\nThe keyboard now closes when you open a photo, a menu or another screen",
+            "Cover Screen Layout\nThe emoji panel and share screen fit on a flip phone's outside screen",
+            "Read Status Toggle\nRemoved the switch that only hid Read under your messages. Read status always shows now",
+        ),
+    ),
+    Release(
         "0.8", "Nov 11, 2026",
         added = listOf(
             "Copy Button for Codes\nVerification code notifications now show a Copy button next to Reply",
