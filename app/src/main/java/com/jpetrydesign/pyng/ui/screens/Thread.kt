@@ -208,6 +208,10 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     var menuAnchor by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     // The photo open in the viewer, as (message key, attachment id).
     var viewing by remember(convId) { mutableStateOf<Pair<String, String>?>(null) }
+    // Opening a photo, the message menu or any sheet puts the keyboard away.
+    val kbCtl = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val covered = viewing != null || menuFor != null || detailsFor != null || forward != null || forwardAll != null || callSheet || schedule != null || selectTextFor != null
+    LaunchedEffect(covered) { if (covered) { focusManager.clearFocus(); kbCtl?.hide() } }
     fun view(m: Msg, ref: com.jpetrydesign.pyng.data.MediaRef) {
         if ((ref.isImage || ref.isVideo) && !ref.waiting) { viewing = m.key to ref.id; info = null } else openMedia(ctx, repo, nav, ref)
     }

@@ -251,6 +251,10 @@ private fun transition(forward: Boolean, motion: Boolean): ContentTransform =
 private fun Pane(nav: Nav, modifier: Modifier, wide: Boolean) {
     val motion = LocalMotion.current
     BackHandler(enabled = nav.stack.size > 1) { nav.back() }
+    // Going to another screen puts the keyboard away. A screen that wants it (like New message) asks again.
+    val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    LaunchedEffect(nav.top) { focus.clearFocus(); kb?.hide() }
     AnimatedContent(nav.top, modifier, transitionSpec = { transition(nav.forward, motion) }, label = "nav") { r ->
         Screen(r, nav, wide)
     }
