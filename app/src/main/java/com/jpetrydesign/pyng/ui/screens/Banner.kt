@@ -206,7 +206,7 @@ fun updateShortcuts(ctx: Context, repo: Repo) {
         val recent = repo.convs.values.filter { it.status == "active" && !it.readOnly && it.id !in p.pinned }.sortedByDescending { it.ts }
         (pinned + recent).take(max - 1).forEachIndexed { i, c ->
             val path = repo.avatars[c.avatarId].orEmpty()
-            val bmp = Notifier.circle(if (path.isNotEmpty()) BitmapFactory.decodeFile(path) else null) ?: initialsBitmap(initialsOf(c.title))
+            val bmp = Notifier.circle(if (path.isNotEmpty()) BitmapFactory.decodeFile(path) else null) ?: Notifier.initials(c.title)
             val person = androidx.core.app.Person.Builder().setName(c.title).setKey(c.id).setIcon(IconCompat.createWithBitmap(bmp)).build()
             // Same id as the chat's notification shortcut, so Android treats them as one conversation.
             list += ShortcutInfoCompat.Builder(ctx, c.id)
@@ -226,12 +226,3 @@ fun updateShortcuts(ctx: Context, repo: Repo) {
 /** Matches the share-target in res/xml/shortcuts.xml. */
 const val SHARE_CATEGORY = "com.jpetrydesign.pyng.SHARE_TARGET"
 
-private fun initialsBitmap(ini: String): Bitmap {
-    val size = 192
-    val b = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-    val c = Canvas(b)
-    c.drawCircle(size / 2f, size / 2f, size / 2f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE3ECFB.toInt() })
-    val tp = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1E5FD1.toInt(); textSize = 72f; textAlign = Paint.Align.CENTER; isFakeBoldText = true }
-    c.drawText(ini, size / 2f, size / 2f - (tp.descent() + tp.ascent()) / 2, tp)
-    return b
-}

@@ -76,6 +76,30 @@ object Notifier {
         return out
     }
 
+    /**
+     * A photo stand-in for people without one: their initials on a soft color picked from their
+     * name, so the same person always gets the same color. [square] fills the whole tile for
+     * Android's conversation icons, which crop it themselves.
+     */
+    fun initials(name: String, square: Boolean = false): Bitmap {
+        val tones = listOf(0xFFDCE7FB to 0xFF1E5FD1, 0xFFF9DDE6 to 0xFFB8325E, 0xFFDFF1E6 to 0xFF2E7A4F, 0xFFEDE3FA to 0xFF6B3FB0,
+            0xFFFCE8D6 to 0xFFB25A1C, 0xFFDDF0F3 to 0xFF16707E, 0xFFF3EFD9 to 0xFF7C6812, 0xFFE6E8EE to 0xFF41485A)
+        val (bg, ink) = tones[Math.floorMod(name.trim().lowercase().hashCode(), tones.size)]
+        val size = 192
+        val b = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val c = Canvas(b)
+        val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = bg.toInt() }
+        if (square) c.drawRect(0f, 0f, size.toFloat(), size.toFloat(), fill) else c.drawCircle(size / 2f, size / 2f, size / 2f, fill)
+        val ini = com.jpetrydesign.pyng.ui.kit.initialsOf(name).ifBlank { "#" }
+        val tp = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = ink.toInt(); textAlign = Paint.Align.CENTER
+            textSize = if (square) 56f else 74f
+            typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+        }
+        c.drawText(ini, size / 2f, size / 2f - (tp.descent() + tp.ascent()) / 2, tp)
+        return b
+    }
+
     /** When each chat last made a sound, so the same text arriving twice only alerts once. */
     private val lastAlert = mutableMapOf<String, Pair<Long, String>>()
     private val placeholders = mutableMapOf<String, String>()
@@ -121,12 +145,14 @@ object Notifier {
         while (list.size > 7) list.removeAt(0)
 
         val avatarPath = if (conv.group) repo.prefs.state.opt("gphoto:" + conv.id) else repo.prefs.state.opt("cphoto:" + conv.avatarId).ifBlank { repo.avatars[conv.avatarId].orEmpty() }
-        val icon = circle(loadBitmap(ctx, avatarPath))
+        val photo = circle(loadBitmap(ctx, avatarPath))
+        // No photo: their initials, never a blank or a plus sign.
+        val icon = photo ?: initials(conv.title)
         val me = NPerson.Builder().setName("You").build()
         val style = NotificationCompat.MessagingStyle(me).setConversationTitle(if (conv.group) conv.title else null).setGroupConversation(conv.group)
         list.forEach { (who, msg) ->
             val pb = NPerson.Builder().setName(who).setKey(msg.participantId.ifEmpty { who })
-            if (!conv.group && icon != null) pb.setIcon(IconCompat.createWithBitmap(icon))
+            if (!conv.group) pb.setIcon(IconCompat.createWithBitmap(icon))
             style.addMessage(
                 notifText(msg).ifEmpty { "📎 Attachment" },
                 if (msg.ts > 0) msg.ts else System.currentTimeMillis(), pb.build(),
@@ -178,10 +204,10 @@ object Notifier {
         }
         // Registering the chat as a conversation puts it in Android's Conversations section, with the photo.
         if (!placeholder) runCatching {
-            val person = NPerson.Builder().setName(conv.title).setKey(conv.id).apply { if (icon != null) setIcon(IconCompat.createWithBitmap(icon)) }.build()
+            val person = NPerson.Builder().setName(conv.title).setKey(conv.id).setIcon(IconCompat.createWithBitmap(icon)).build()
             val sc = androidx.core.content.pm.ShortcutInfoCompat.Builder(ctx, conv.id)
                 .setShortLabel(conv.shortTitle.ifBlank { conv.title }).setLongLabel(conv.title)
-                .setIcon(if (icon != null) IconCompat.createWithAdaptiveBitmap(icon) else IconCompat.createWithResource(ctx, R.drawable.ic_shortcut_new))
+                .setIcon(IconCompat.createWithAdaptiveBitmap(photo ?: initials(conv.title, square = true)))
                 .setIntent(Intent(ctx, MainActivity::class.java).setAction("open").putExtra("chat", conv.id))
                 .setLongLived(true).setPerson(person)
                 .setCategories(setOf(com.jpetrydesign.pyng.ui.screens.SHARE_CATEGORY, "android.shortcut.conversation"))

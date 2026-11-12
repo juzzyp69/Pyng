@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.draw.shadow
@@ -123,7 +125,6 @@ fun MessageMenu(
         val bottomSafe = WindowInsets.navigationBars.getBottom(density) + with(density) { 12.dp.roundToPx() }
         val bar: @Composable () -> Unit = {
             if (canReact) {
-                if (!more) {
                     Row(
                         Modifier.shadow(10.dp, RoundedCornerShape(32.dp)).clip(RoundedCornerShape(32.dp)).background(t.sheet)
                             .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
@@ -133,24 +134,12 @@ fun MessageMenu(
                         p.quickReacts.forEachIndexed { i, e ->
                             Box(
                                 Modifier.enter(i, pop = true).size(46.dp).clip(CircleShape).background(if (mine == e) t.tone else androidx.compose.ui.graphics.Color.Transparent)
-                                    .press(0.8f) { onReact(cur, e); close() },
+                                    .press(0.8f) { noteReaction(repo, e); onReact(cur, e); close() },
                                 contentAlignment = Alignment.Center,
                             ) { T(e, size = 27.sp) }
                         }
                         Box(Modifier.size(46.dp).clip(CircleShape).clickable { more = true }, contentAlignment = Alignment.Center) { Ico(Icons.emojiAdd, t.soft, 24.dp, 1.8f) }
                     }
-                } else {
-                    Box(
-                        Modifier.width(340.dp).height(300.dp).shadow(10.dp, RoundedCornerShape(26.dp)).clip(RoundedCornerShape(26.dp)).background(t.sheet)
-                            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {},
-                    ) {
-                        LazyVerticalGrid(GridCells.Fixed(8), Modifier.fillMaxSize().padding(8.dp)) {
-                            items(EmojiData.cats.flatMap { it.items }.map { it.first }) { e ->
-                                Box(Modifier.aspectRatio(1f).clip(CircleShape).clickable { onReact(cur, e); close() }, contentAlignment = Alignment.Center) { T(e, size = 24.sp) }
-                            }
-                        }
-                    }
-                }
             }
         }
         val bubble: @Composable () -> Unit = {
@@ -267,6 +256,19 @@ fun MessageMenu(
                 u.placeRelative(bubX, y + barH)
                 ac.placeRelative(edgeX(ac.width), y + barH + u.height + gap - lift)
             }
+        }
+        // The full picker slides up from the bottom, like the keyboard's emoji panel.
+        androidx.compose.animation.AnimatedVisibility(
+            more, modifier = Modifier.align(Alignment.BottomCenter),
+            enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut(),
+        ) {
+            Box(
+                Modifier.fillMaxWidth().fillMaxHeight(0.6f).shadow(16.dp, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                    .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)).background(t.sheet)
+                    .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
+                    .navigationBarsPadding().padding(start = 14.dp, end = 14.dp, top = 16.dp),
+            ) { ReactionPicker(t, mine) { e -> onReact(cur, e); close() } }
         }
     }
 }
