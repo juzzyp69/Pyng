@@ -133,7 +133,8 @@ fun tok(P: Pal, dark: Boolean, solid: Boolean = false, highContrast: Boolean = f
         // Received bubbles in light mode: nearly white with just a hint of the theme color.
         inBg = if (dark) Color.White.copy(alpha = 0.10f) else (if (P.bg != null) Color.White.copy(alpha = 0.9f) else androidx.compose.ui.graphics.lerp(androidx.compose.ui.graphics.lerp(Color.White, p, 0.07f), Color.Black, 0.025f)),
         inInk = if (dark) inkD else inkL,
-        outBg = outBrush, outFlat = fill, outInk = onFill,
+        // Text on your bubbles is picked against the bubble itself (the middle of its gradient), so it stays readable whatever the theme.
+        outBg = outBrush, outFlat = fill, outInk = bubbleInk(P.grad?.first ?: androidx.compose.ui.graphics.lerp(fill, Color.White, if (dark) 0.10f else 0.08f), P.grad?.second ?: androidx.compose.ui.graphics.lerp(fill, Color.Black, if (dark) 0.10f else 0.18f)),
         badgeBg = fill.a(0xD9), badgeInk = onFill,
         plusBg = P.grad?.let { Brush.linearGradient(listOf(it.first, it.second)) } ?: Brush.linearGradient(listOf(plus, plus)),
         plusFlat = plus,
@@ -209,6 +210,14 @@ private fun contrast(a: Color, b: Color): Float {
 }
 
 /** White or near-black, whichever reads better on [c]. Leans white on strong mid-tone colors. */
+/** Readable text for a bubble that runs from [top] to [bottom]: judged on both ends, not just the middle. */
+fun bubbleInk(top: Color, bottom: Color): Color {
+    val dark = hex("#101218")
+    val white = minOf(contrast(Color.White, top), contrast(Color.White, bottom))
+    val ink = minOf(contrast(dark, top), contrast(dark, bottom))
+    return if (white >= 3.2f || white >= ink) Color.White else dark
+}
+
 fun inkOn(c: Color): Color {
     val dark = hex("#101218")
     val w = contrast(Color.White, c)
@@ -222,9 +231,15 @@ fun Tok.withCustom(m: Map<String, com.jpetrydesign.pyng.data.Hsl>): Tok {
     m["bg"]?.color()?.let { t = t.copy(bg = it) }
     m["inBg"]?.color()?.let { t = t.copy(inBg = it) }
     m["inInk"]?.color()?.let { t = t.copy(inInk = it) }
-    m["outBg"]?.color()?.let { t = t.copy(outBg = Brush.linearGradient(listOf(it, it)), outFlat = it, outInk = inkOn(it)) }
+    m["outBg"]?.color()?.let {
+        // The bubble is drawn from outTop/outBottom, so a picked color has to set those too.
+        val top = androidx.compose.ui.graphics.lerp(it, Color.White, if (t.dark) 0.10f else 0.08f)
+        val bottom = androidx.compose.ui.graphics.lerp(it, Color.Black, if (t.dark) 0.10f else 0.18f)
+        t = t.copy(outBg = Brush.linearGradient(listOf(it, it)), outFlat = it, outTop = top, outBottom = bottom, outInk = bubbleInk(top, bottom))
+    }
     m["inBg"]?.color()?.let { if (m["inInk"] == null) t = t.copy(inInk = inkOn(it)) }
-    m["outInk"]?.color()?.let { t = t.copy(outInk = it) }
+    // A picked text color is kept only if it can actually be read on the bubble.
+    m["outInk"]?.color()?.let { if (minOf(contrast(it, t.outTop), contrast(it, t.outBottom)) >= 2.5f) t = t.copy(outInk = it) }
     m["accent"]?.color()?.let { t = t.copy(p = it, fill = it, badgeBg = it, plusFlat = it, plusBg = Brush.linearGradient(listOf(it, it))) }
     return t
 }

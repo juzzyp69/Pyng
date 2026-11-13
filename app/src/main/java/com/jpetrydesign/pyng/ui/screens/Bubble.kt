@@ -383,7 +383,7 @@ private fun BubbleBody(m: Msg, x: RowCtx, shape: RoundedCornerShape, jumbo: Int,
     // Across the screen: every sent bubble shows its slice of one screen-tall gradient (like iMessage).
     val acrossScreen = me && gradMode == "Across the screen"
     val fg = if (me) t.outInk else t.inInk
-    val sub = if (me) (if (t.dark) Color(0x9E101218) else Color(0xBFFFFFFF)) else t.soft
+    val sub = if (me) fg.copy(alpha = if (fg == Color.White) 0.75f else 0.62f) else t.soft
     val quoteBg = if (me) Color.White.copy(alpha = 0.18f) else t.neutral
     val bold = LocalRepo.current.prefs.state.on("boldText")
     Column(Modifier.graphicsLayer { alpha = if (m.pending && m.media.isNotEmpty()) 0.7f else 1f }, horizontalAlignment = if (me) Alignment.End else Alignment.Start) {
