@@ -77,7 +77,13 @@ fun ReactionPicker(t: Tok, mine: String?, onPick: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     val favs = reactFavorites(repo)
     val recent = reactRecents(repo)
-    fun pick(e: String) { noteReaction(repo, e); onPick(e) }
+    // Holding an emoji only favorites it: the lift of that same finger (and any tap a moment
+    // after, while the grid shifts) never sends a reaction.
+    val heldAt = remember { longArrayOf(0L) }
+    fun pick(e: String) {
+        if (android.os.SystemClock.uptimeMillis() - heldAt[0] < 700) return
+        noteReaction(repo, e); onPick(e)
+    }
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -130,7 +136,7 @@ fun ReactionPicker(t: Tok, mine: String?, onPick: (String) -> Unit) {
                 items(list, key = { "$label:$it" }) { e ->
                     Box(
                         Modifier.aspectRatio(1f).clip(CircleShape).background(if (e == mine) t.tone else Color.Transparent)
-                            .holdable(onLong = { toggleFavorite(repo, e) }, onClick = { pick(e) }),
+                            .holdable(onLong = { heldAt[0] = android.os.SystemClock.uptimeMillis(); toggleFavorite(repo, e) }, onClick = { pick(e) }),
                         contentAlignment = Alignment.Center,
                     ) {
                         T(e, size = 26.sp)

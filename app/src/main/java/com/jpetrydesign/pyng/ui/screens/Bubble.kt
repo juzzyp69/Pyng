@@ -139,6 +139,8 @@ class RowActs(
     val onLongItem: ((Msg) -> Unit)? = null,
     val onDoubleItem: ((Msg) -> Unit)? = null,
     val onPlacedKey: ((String, androidx.compose.ui.layout.LayoutCoordinates) -> Unit)? = null,
+    /** Tap the reactions under a message to see who reacted. */
+    val onReactions: (() -> Unit)? = null,
 )
 
 fun bubbleShape(me: Boolean, prev: Boolean, next: Boolean, big: Dp, small: Dp): RoundedCornerShape =
@@ -261,7 +263,7 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
                             if (m.reactions.isNotEmpty()) {
                                 val all = m.reactions.sumOf { it.count }
                                 val txt = m.reactions.joinToString("") { it.emoji } + if (all > 1) " $all" else ""
-                                ReactionPill(txt, t, Modifier.align(if (me) Alignment.BottomStart else Alignment.BottomEnd).padding(horizontal = 8.dp).offset(y = 2.dp))
+                                ReactionPill(txt, t, Modifier.align(if (me) Alignment.BottomStart else Alignment.BottomEnd).padding(horizontal = 8.dp).offset(y = 2.dp), a.onReactions)
                             }
                         }
                     }
@@ -332,14 +334,14 @@ private fun Modifier.fadeUp(): Modifier {
 }
 
 @Composable
-private fun ReactionPill(text: String, t: Tok, modifier: Modifier) {
+private fun ReactionPill(text: String, t: Tok, modifier: Modifier, onClick: (() -> Unit)? = null) {
     val k = remember { Animatable(0f) }
     LaunchedEffect(text) { k.snapTo(0f); k.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 500f)) }
     Box(
         modifier.graphicsLayer { scaleX = k.value; scaleY = k.value }
             .shadow(4.dp, RoundedCornerShape(13.dp), clip = false, ambientColor = t.shadow, spotColor = t.shadow)
             .height(26.dp).widthIn(min = 26.dp).clip(RoundedCornerShape(13.dp)).background(if (t.dark) Color(0xFF2A2D36) else Color.White)
-            .border(1.dp, t.edgeLine, RoundedCornerShape(13.dp)).padding(horizontal = 6.dp),
+            .border(1.dp, t.edgeLine, RoundedCornerShape(13.dp)).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(horizontal = 6.dp),
         contentAlignment = Alignment.Center,
     ) { T(text, size = 12.5.sp, color = t.ink, maxLines = 1) }
 }

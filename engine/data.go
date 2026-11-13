@@ -254,6 +254,23 @@ func (m *Messenger) SendReaction(messageID string, emoji string, remove bool) (e
 	return err
 }
 
+// SwitchReaction replaces your reaction on a message with a different emoji, so you never have two.
+func (m *Messenger) SwitchReaction(messageID string, emoji string) (err error) {
+	defer m.guard("SwitchReaction", &err)
+	cli, err := m.ready()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := ctx20()
+	defer cancel()
+	_, err = cli.SendReaction(ctx, &gmproto.SendReactionRequest{
+		MessageID:    messageID,
+		ReactionData: gmproto.MakeReactionData(emoji),
+		Action:       gmproto.SendReactionRequest_SWITCH,
+	})
+	return err
+}
+
 // MarkRead marks a conversation as read up to messageID.
 func (m *Messenger) MarkRead(conversationID string, messageID string) (err error) {
 	defer m.guard("MarkRead", &err)

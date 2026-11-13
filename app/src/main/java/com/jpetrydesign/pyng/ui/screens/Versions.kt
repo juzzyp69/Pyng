@@ -35,6 +35,20 @@ data class Release(val version: String, val date: String, val added: List<String
  */
 val RELEASES = listOf(
     Release(
+        "0.9.2", "Nov 12, 2026",
+        added = listOf(
+            "See Who Reacted\nTap the reactions under a message to see everyone's emoji and photo, with filters for each emoji",
+            "Three Reaction Styles\nFaces, Cards or Tabs, in Style studio and the setup screen",
+            "One Reaction Each\nTap a new emoji to switch yours, or tap it again (or its ✕) to take it off",
+            "Fits Any Screen\nThe message menu sizes itself to your screen and slides up when a message is low",
+            "Frosted Menus\nThe reaction bar and menu are see-through, so the chat shows softly behind them",
+        ),
+        fixed = listOf(
+            "Favoriting Emoji\nHolding an emoji in the picker only favorites it and no longer reacts",
+            "Choose Your Style\nLive previews for Send and Reactions, Classic and Liquid side by side, labeled Pinned choices, and no stray bubble in the preview",
+        ),
+    ),
+    Release(
         "0.9.1", "Nov 12, 2026",
         added = listOf(
             "Send Animation Preview\nThe Send tab in Style studio now plays your chosen animation on a loop",

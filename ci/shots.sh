@@ -53,6 +53,7 @@ shot 18-thread-info --es route thread:c1 --es wall None --es open info
 shot 19-thread-ts --es route thread:c1 --es open ts
 shot 20-thread-menu --es route thread:c1 --es open menu
 WAIT=10 shot 20b-thread-menu-late --es route thread:c1 --es open menu
+WAIT=8 shot 20c-thread-who --es route thread:c1 --es open menu-who
 adb shell dumpsys gfxinfo $PKG > ci-logs/gfx-menu.txt 2>&1
 shot 21-thread-plus --es route thread:c1 --es open plus
 shot 22-thread-emoji --es route thread:c1 --es open expr
@@ -80,7 +81,7 @@ for S in chats notifications chatfeat privacy access storage about; do shot "51-
 shot 52-appearance --es route appearance
 shot 52b-studio-chat --es route appearance --es open studio:chat
 shot 52c-studio-home --es route appearance --es open studio:home
-for K in pinLayout pinStyle bubble textSize showPhotos density appIcon defWall; do shot "53-pick-$K" --es route appearance --es open "pick:$K"; done
+for K in pinLayout pinStyle bubble textSize showPhotos density appIcon defWall sendStyle reactStyle; do shot "53-pick-$K" --es route appearance --es open "pick:$K"; done
 shot 54-profile --es route profile
 shot 55-react --es route react
 for K in archived starred scheduled spam; do shot "56-list-$K" --es route "lists:$K"; done

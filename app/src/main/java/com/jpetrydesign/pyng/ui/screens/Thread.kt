@@ -181,6 +181,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     }
     var info by remember(convId) { mutableStateOf<String?>(null) }
     var menuFor by remember(convId) { mutableStateOf<Msg?>(null) }
+    var menuWho by remember(convId) { mutableStateOf(false) }
     var detailsFor by remember(convId) { mutableStateOf<Msg?>(null) }
     var forward by remember(convId) { mutableStateOf<Msg?>(null) }
     // Forward all: the whole set of photos sent together (the sheet shows the first).
@@ -217,7 +218,8 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     fun view(m: Msg, ref: com.jpetrydesign.pyng.data.MediaRef) {
         if ((ref.isImage || ref.isVideo) && !ref.waiting) { viewing = m.key to ref.id; info = null } else openMedia(ctx, repo, nav, ref)
     }
-    fun openMenu(m: Msg) {
+    fun openMenu(m: Msg, who: Boolean = false) {
+        menuWho = who
         menuAnchor = runCatching {
             val r = rootCoords[0]; val b = bubbleCoords[m.key]
             if (r != null && b != null && b.isAttached) r.localBoundingBoxOf(b) else null
@@ -234,6 +236,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
             "search" -> searching = true
             "search-q" -> { searching = true; delay(600); query = "the" }
             "menu-strip" -> if (menuFor == null) list.lastOrNull { mediaBundles(list).of.containsKey(it.key) }?.let { delay(900); openMenu(it) }
+            "menu-who" -> if (menuFor == null) list.lastOrNull { it.reactions.isNotEmpty() }?.let { delay(900); openMenu(it, who = true) }
             "menu-link" -> if (menuFor == null) list.lastOrNull { linksIn(it.text).isNotEmpty() }?.let { delay(900); openMenu(it) }
             "info" -> info = list.lastOrNull { it.fromMe }?.key
             "ts" -> tsShift = -with(density) { 76.dp.toPx() }
@@ -537,6 +540,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                         onLongItem = { bm -> if (!selecting) { openMenu(bm); info = null } },
                                         onDoubleItem = { bm -> if (bm.id.isNotEmpty()) { repo.react(bm, "❤️"); burst = bm.key to "❤️" } },
                                         onPlacedKey = { k, c -> bubbleCoords[k] = c },
+                                        onReactions = { if (!selecting) { openMenu(m, who = true); info = null } },
                                     ),
                                 )
                             }
@@ -677,6 +681,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                 onSelect = { m -> (bundles.of[m.key]?.map { it.first.key }?.distinct() ?: listOf(m.key)).forEach { k -> if (k !in selected) selected.add(k) } },
                 onDetails = { detailsFor = it }, onSelectText = { selectTextFor = it },
                 group = menuFor?.let { bundles.of[it.key] },
+                showWho = menuWho,
                 onSave = { refs -> scope.launch { saveFiles(ctx, repo.filesFor(refs)) } },
                 onShare = { refs -> scope.launch { shareFiles(ctx, repo.filesFor(refs)) } },
                 onForwardAll = { list -> forwardAll = list; forward = list.firstOrNull() },

@@ -3,6 +3,10 @@ package com.jpetrydesign.pyng.ui.screens
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -88,6 +92,8 @@ fun MessageMenu(
     onSave: (List<com.jpetrydesign.pyng.data.MediaRef>) -> Unit = {},
     onShare: (List<com.jpetrydesign.pyng.data.MediaRef>) -> Unit = {},
     onForwardAll: (List<Msg>) -> Unit = {},
+    /** Opened from the reactions under a message: show who reacted above the bar. */
+    showWho: Boolean = false,
 ) {
     val repo = LocalRepo.current
     val ctx = LocalContext.current
@@ -109,46 +115,71 @@ fun MessageMenu(
     val cur = last ?: return
     val p = repo.prefs.state
     val myId = conv?.me?.id.orEmpty()
-    val mine = cur.reactions.firstOrNull { myId.isNotEmpty() && myId in it.by }?.emoji
+    val mine = cur.reactions.firstOrNull { myId.isNotEmpty() && myId in it.by }?.emoji ?: repo.myReaction(cur)
     val canReact = cur.id.isNotEmpty() && conv?.rcs == true
     val me = cur.fromMe
     val density = androidx.compose.ui.platform.LocalDensity.current
     val close = { more = false; onDismiss() }
+    val style = p.opt("reactStyle").ifBlank { "Faces" }
+    val fits = remember(style) { menuFits(style) }
+    val reactors = reactorsOf(cur, conv, repo, t)
+    val who = showWho && reactors.isNotEmpty()
+    val glass = popGlass(t)
+    val swallow = Modifier.clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
 
     Box(
         Modifier.fillMaxSize().zIndex(25f)
             .graphicsLayer { alpha = k.value.coerceIn(0f, 1f) }
-            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = if (t.dark) 0.45f else 0.22f))
+            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = if (t.dark) 0.4f else 0.18f))
             .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { close() },
     ) {
         val topSafe = WindowInsets.statusBars.getTop(density) + with(density) { 12.dp.roundToPx() }
         val bottomSafe = WindowInsets.navigationBars.getBottom(density) + with(density) { 12.dp.roundToPx() }
-        val bar: @Composable () -> Unit = {
+        val whoPanel: @Composable (MenuFit) -> Unit = { f ->
+            WhoReacted(reactors, style, f, t) { repo.react(cur, mine ?: return@WhoReacted); repo.toast("Reaction removed"); close() }
+        }
+        val bar: @Composable (MenuFit) -> Unit = { f ->
             if (canReact) {
-                    Row(
-                        Modifier.shadow(10.dp, RoundedCornerShape(32.dp)).clip(RoundedCornerShape(32.dp)).background(t.sheet)
-                            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
-                            .padding(horizontal = 6.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        p.quickReacts.forEachIndexed { i, e ->
-                            Box(
-                                Modifier.enter(i, pop = true).size(46.dp).clip(CircleShape).background(if (mine == e) t.tone else androidx.compose.ui.graphics.Color.Transparent)
-                                    .press(0.8f) { noteReaction(repo, e); onReact(cur, e); close() },
-                                contentAlignment = Alignment.Center,
-                            ) { T(e, size = 27.sp) }
+                Row(
+                    Modifier.shadow(10.dp, RoundedCornerShape(32.dp)).clip(RoundedCornerShape(32.dp)).background(glass)
+                        .border(1.dp, t.edgeLine, RoundedCornerShape(32.dp)).then(swallow).padding(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    p.quickReacts.forEachIndexed { i, e ->
+                        val on = mine == e
+                        Box(
+                            Modifier.enter(i, pop = true).size(f.cell).clip(CircleShape)
+                                .background(if (on) t.p.copy(alpha = 0.22f) else androidx.compose.ui.graphics.Color.Transparent)
+                                .then(if (on) Modifier.border(1.5.dp, t.p, CircleShape) else Modifier)
+                                .press(0.8f) {
+                                    if (on) repo.toast("Reaction removed") else noteReaction(repo, e)
+                                    onReact(cur, e); close()
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            T(e, size = f.barEm)
+                            // Yours gets a small dot under it; tap it again to take it off.
+                            if (on) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).size(4.dp).clip(CircleShape).background(t.p))
                         }
-                        Box(Modifier.size(46.dp).clip(CircleShape).clickable { more = true }, contentAlignment = Alignment.Center) { Ico(Icons.emojiAdd, t.soft, 24.dp, 1.8f) }
                     }
+                    Box(Modifier.size(f.cell).clip(CircleShape).clickable { more = true }, contentAlignment = Alignment.Center) { Ico(Icons.emojiAdd, t.soft, 22.dp, 1.8f) }
+                }
             }
         }
+        // Only the end of a very long message shows, fading out, when space is short.
+        val capH = remember { intArrayOf(Int.MAX_VALUE) }
         val bubble: @Composable () -> Unit = {
             val rc = lastRow
-            val a = lastAnchor
             Box(
-                Modifier.graphicsLayer { val s = 1f + 0.035f * k.value; scaleX = s; scaleY = s; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (me) 1f else 0f, 0.5f) }
-                    .heightIn(max = 300.dp).clip(RoundedCornerShape(20.dp))
-                    .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {},
+                Modifier.graphicsLayer { val sc = 1f + 0.035f * k.value; scaleX = sc; scaleY = sc; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (me) 1f else 0f, 0.5f); compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        if (size.height >= capH[0] - 1) drawRect(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(0f to androidx.compose.ui.graphics.Color.Black, (1f - 28.dp.toPx() / size.height).coerceIn(0f, 1f) to androidx.compose.ui.graphics.Color.Black, 1f to androidx.compose.ui.graphics.Color.Transparent),
+                            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                        )
+                    }
+                    .clip(RoundedCornerShape(20.dp)).then(swallow),
                 contentAlignment = if (me) Alignment.TopEnd else Alignment.TopStart,
             ) {
                 val g = lastGroup
@@ -157,104 +188,152 @@ fun MessageMenu(
                 else T(msgPreview(cur), size = 15.sp, color = if (me) t.outInk else t.inInk, modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(t.inBg).padding(horizontal = 16.dp, vertical = 10.dp))
             }
         }
-        val actions: @Composable () -> Unit = {
-            Column(
-                Modifier.width(232.dp).heightIn(max = 430.dp).shadow(12.dp, RoundedCornerShape(24.dp)).clip(RoundedCornerShape(24.dp)).background(t.sheet)
-                    .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
-                    .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                    .padding(vertical = 6.dp),
-            ) {
-                var i = 0
-                @Composable fun item(label: String, icon: String, danger: Boolean = false, go: () -> Unit) {
-                    Row(
-                        Modifier.enter(i++).fillMaxWidth().clickable { go(); close() }.padding(horizontal = 18.dp, vertical = 13.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Ico(icon, if (danger) t.danger else t.ink, 21.dp)
-                        Spacer(Modifier.width(16.dp))
-                        T(label, size = 15.5.sp, weight = FontWeight.Medium, color = if (danger) t.danger else t.ink)
-                    }
+        // Everything the menu offers, shown as a list, or as one slim row when the screen is short.
+        data class Act(val label: String, val icon: String, val danger: Boolean = false, val go: () -> Unit)
+        val acts = buildList {
+            val g = lastGroup
+            val files = cur.media.filter { !it.isContact }
+            val links = linksIn(cur.text)
+            if (cur.id.isNotEmpty()) add(Act("Reply", Icons.reply) { onReply(cur) })
+            if (g != null) {
+                val kind = if (g.all { it.second.isVideo }) "videos" else if (g.any { it.second.isVideo }) "items" else "photos"
+                add(Act("Save all ${g.size} $kind", Icons.download) { onSave(g.map { it.second }) })
+                add(Act("Share all", Icons.share) { onShare(g.map { it.second }) })
+                add(Act("Forward all", Icons.forward) { onForwardAll(g.map { it.first }.distinctBy { it.key }) })
+            } else {
+                add(Act("Forward", Icons.forward) { onForward(cur) })
+                if (files.isNotEmpty()) {
+                    add(Act("Save", Icons.download) { onSave(files) })
+                    add(Act("Share", Icons.share) { onShare(files) })
                 }
-                val g = lastGroup
-                val files = cur.media.filter { !it.isContact }
-                val links = linksIn(cur.text)
-                if (cur.id.isNotEmpty()) item("Reply", Icons.reply) { onReply(cur) }
-                if (g != null) {
-                    val kind = if (g.all { it.second.isVideo }) "videos" else if (g.any { it.second.isVideo }) "items" else "photos"
-                    item("Save all ${g.size} $kind", Icons.download) { onSave(g.map { it.second }) }
-                    item("Share all", Icons.share) { onShare(g.map { it.second }) }
-                    item("Forward all", Icons.forward) { onForwardAll(g.map { it.first }.distinctBy { it.key }) }
-                } else {
-                    item("Forward", Icons.forward) { onForward(cur) }
-                    if (files.isNotEmpty()) {
-                        item("Save", Icons.download) { onSave(files) }
-                        item("Share", Icons.share) { onShare(files) }
-                    }
-                }
-                if (links.isNotEmpty()) {
-                    item(if (links.size > 1) "Copy first link" else "Copy link", Icons.link) { copy(ctx, links.first()); repo.toast("Link copied") }
-                    item("Share link", Icons.share) {
-                        runCatching { ctx.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, links.first()), "Share link")) }
-                    }
-                }
-                if (cur.text.isNotEmpty()) item(if (links.isNotEmpty() && cur.text.trim() != links.first()) "Copy text" else if (links.isNotEmpty()) "Copy all" else "Copy", Icons.copy) { onCopy(cur) }
-                if (cur.text.length > 1) item("Select text", Icons.select) { onSelectText(cur) }
-                item(if (p.isStarred(cur.key)) "Unstar" else "Star", Icons.star) { onStar(cur) }
-                // Remind me: opens up into three times right here in the menu.
-                if (conv != null && cur.id.isNotEmpty()) {
-                    Row(
-                        Modifier.enter(i++).fillMaxWidth().clickable { reminding = !reminding }.padding(horizontal = 18.dp, vertical = 13.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Ico(Icons.bell, t.ink, 21.dp)
-                        Spacer(Modifier.width(16.dp))
-                        T("Remind me", size = 15.5.sp, weight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                        Ico(if (reminding) "M6 15l6-6 6 6" else "M6 9l6 6 6-6", t.soft, 16.dp, 2.2f)
-                    }
-                    if (reminding) com.jpetrydesign.pyng.data.ReminderWorker.choices().forEach { (label, at) ->
-                        Row(
-                            Modifier.fillMaxWidth().clickable {
-                                val who = if (cur.fromMe) "You" else conv.people.firstOrNull { it.id == cur.participantId }?.short ?: conv.shortTitle
-                                com.jpetrydesign.pyng.data.ReminderWorker.plan(ctx, conv.id, cur.id, conv.title, (if (conv.group || cur.fromMe) "$who: " else "") + cur.text.ifBlank { cur.summary }, at)
-                                repo.toast("Reminder set for " + (if (label == "In 1 hour") clock(at) else label.substringAfter(" at ").let { l -> if (label.startsWith("Tomorrow")) "tomorrow at $l" else "tonight at $l" }))
-                                close()
-                            }.padding(start = 55.dp, end = 18.dp, top = 11.dp, bottom = 11.dp),
-                        ) { T(label, size = 14.5.sp, color = t.p, weight = FontWeight.Medium) }
-                    }
-                }
-                if (p.on("readAloud") && cur.text.isNotEmpty()) item("Read aloud", Icons.volume) { Speaker.say(ctx, cur.text) }
-                item("Delete", Icons.trash, danger = true) { onDelete(cur) }
-                item("Select more", Icons.select) { onSelect(cur) }
-                item("Info", Icons.details) { onDetails(cur) }
+            }
+            if (links.isNotEmpty()) {
+                add(Act(if (links.size > 1) "Copy first link" else "Copy link", Icons.link) { copy(ctx, links.first()); repo.toast("Link copied") })
+                add(Act("Share link", Icons.share) {
+                    runCatching { ctx.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, links.first()), "Share link")) }
+                })
+            }
+            if (cur.text.isNotEmpty()) add(Act(if (links.isNotEmpty() && cur.text.trim() != links.first()) "Copy text" else if (links.isNotEmpty()) "Copy all" else "Copy", Icons.copy) { onCopy(cur) })
+            if (cur.text.length > 1) add(Act("Select text", Icons.select) { onSelectText(cur) })
+            add(Act(if (p.isStarred(cur.key)) "Unstar" else "Star", Icons.star) { onStar(cur) })
+            if (p.on("readAloud") && cur.text.isNotEmpty()) add(Act("Read aloud", Icons.volume) { Speaker.say(ctx, cur.text) })
+            add(Act("Delete", Icons.trash, danger = true) { onDelete(cur) })
+            add(Act("Select more", Icons.select) { onSelect(cur) })
+            add(Act("Info", Icons.details) { onDetails(cur) })
+        }
+        val canRemind = conv != null && cur.id.isNotEmpty()
+        val remindChoices: @Composable (Dp) -> Unit = { start ->
+            if (reminding && conv != null) com.jpetrydesign.pyng.data.ReminderWorker.choices().forEach { (label, at) ->
+                Row(
+                    Modifier.fillMaxWidth().clickable {
+                        val whoName = if (cur.fromMe) "You" else conv.people.firstOrNull { it.id == cur.participantId }?.short ?: conv.shortTitle
+                        com.jpetrydesign.pyng.data.ReminderWorker.plan(ctx, conv.id, cur.id, conv.title, (if (conv.group || cur.fromMe) "$whoName: " else "") + cur.text.ifBlank { cur.summary }, at)
+                        repo.toast("Reminder set for " + (if (label == "In 1 hour") clock(at) else label.substringAfter(" at ").let { l -> if (label.startsWith("Tomorrow")) "tomorrow at $l" else "tonight at $l" }))
+                        close()
+                    }.padding(start = start, end = 18.dp, top = 10.dp, bottom = 10.dp),
+                ) { T(label, size = 14.5.sp, color = t.p, weight = FontWeight.Medium) }
             }
         }
-        val gap = with(density) { 10.dp.roundToPx() }
+        val actions: @Composable (MenuFit) -> Unit = { f ->
+            val shape = RoundedCornerShape(if (f.strip) 22.dp else 22.dp)
+            Column(
+                (if (f.strip) Modifier.fillMaxWidth() else Modifier.width(220.dp)).shadow(12.dp, shape).clip(shape).background(glass)
+                    .border(1.dp, t.edgeLine, shape).then(swallow),
+            ) {
+                if (f.strip) {
+                    Row(Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 4.dp, vertical = 2.dp)) {
+                        val all = acts.take(4) + (if (canRemind) listOf(Act("Remind me", Icons.bell) {}) else emptyList()) + acts.drop(4)
+                        all.forEachIndexed { i, a ->
+                            Column(
+                                Modifier.enter(i).width(66.dp).clip(RoundedCornerShape(16.dp))
+                                    .clickable { if (a.label == "Remind me") reminding = !reminding else { a.go(); close() } }
+                                    .padding(vertical = 8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Ico(a.icon, if (a.danger) t.danger else t.ink, 19.dp)
+                                Spacer(Modifier.height(4.dp))
+                                T(a.label, size = 11.sp, weight = FontWeight.Medium, color = if (a.danger) t.danger else t.ink, maxLines = 1)
+                            }
+                        }
+                    }
+                    remindChoices(18.dp)
+                } else {
+                    Column(Modifier.heightIn(max = 430.dp).verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(vertical = 4.dp)) {
+                        var i = 0
+                        @Composable fun row(a: Act, trailing: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
+                            Row(
+                                Modifier.enter(i++).fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = f.rowPad),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Ico(a.icon, if (a.danger) t.danger else t.ink, 19.dp)
+                                Spacer(Modifier.width(14.dp))
+                                T(a.label, size = 15.sp, weight = FontWeight.Medium, color = if (a.danger) t.danger else t.ink, modifier = Modifier.weight(1f))
+                                trailing?.invoke()
+                            }
+                        }
+                        // Remind me sits after Star and opens up into three times right here.
+                        val starAt = acts.indexOfFirst { it.icon == Icons.star }
+                        acts.forEachIndexed { j, a ->
+                            row(a) { a.go(); close() }
+                            if (j == starAt && canRemind) {
+                                row(Act("Remind me", Icons.bell) {}, { Ico(if (reminding) "M6 15l6-6 6 6" else "M6 9l6 6 6-6", t.soft, 16.dp, 2.2f) }) { reminding = !reminding }
+                                remindChoices(51.dp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        val gap = with(density) { 8.dp.roundToPx() }
         val side = with(density) { 12.dp.roundToPx() }
-        androidx.compose.ui.layout.Layout(
-            contents = listOf(bar, bubble, actions),
-            modifier = Modifier.fillMaxSize(),
-        ) { (barM, bubM, actM), cons ->
+        androidx.compose.ui.layout.SubcomposeLayout(Modifier.fillMaxSize()) { cons ->
             val loose = cons.copy(minWidth = 0, minHeight = 0)
-            val b = barM.firstOrNull()?.measure(loose)
-            // Same width limit as bubbles in the chat, so the text wraps the same way.
-            val maxBub = minOf((cons.maxWidth * 0.74f).toInt(), with(density) { 420.dp.roundToPx() })
-            val u = bubM.first().measure(loose.copy(maxWidth = maxBub))
-            val ac = actM.first().measure(loose)
-            layout(cons.maxWidth, cons.maxHeight) {
-                val H = cons.maxHeight; val W = cons.maxWidth
+            val H = cons.maxHeight; val W = cons.maxWidth
+            val avail = H - topSafe - bottomSafe
+            val inner = loose.copy(maxWidth = maxOf(0, W - 2 * side))
+            // Same width limit as bubbles in the chat, so the text wraps the same way. A very long
+            // message never takes more than about a third of the screen.
+            val maxBub = minOf((W * 0.74f).toInt(), 420.dp.roundToPx())
+            val cap = maxOf((avail * 0.34f).toInt(), minOf(300.dp.roundToPx(), (avail * 0.45f).toInt()))
+            capH[0] = cap
+            var u = subcompose("bubble", bubble).first().measure(loose.copy(maxWidth = maxBub, maxHeight = cap))
+            // Try each size in turn and keep the first that fits on screen.
+            var pick = fits.last()
+            var wP: androidx.compose.ui.layout.Placeable? = null
+            var bP: androidx.compose.ui.layout.Placeable? = null
+            var aP: androidx.compose.ui.layout.Placeable? = null
+            fun total() = listOfNotNull(wP, bP, u, aP).let { l -> l.sumOf { it.height } + gap * (l.size - 1) }
+            for ((i, f) in fits.withIndex()) {
+                wP = if (who) subcompose("who$i") { whoPanel(f) }.firstOrNull()?.measure(inner) else null
+                bP = subcompose("bar$i") { bar(f) }.firstOrNull()?.measure(loose)
+                aP = subcompose("act$i") { actions(f) }.firstOrNull()?.measure(inner)
+                pick = f
+                if (total() <= avail) break
+            }
+            // Still too tall: trim the message preview to whatever room is left.
+            val over = total() - avail
+            if (over > 0) {
+                val c2 = maxOf(64.dp.roundToPx(), u.height - over)
+                capH[0] = c2
+                u = subcompose("bubble2", bubble).first().measure(loose.copy(maxWidth = maxBub, maxHeight = c2))
+            }
+            layout(W, H) {
                 val top0 = lastAnchor?.top?.toInt() ?: (H / 3)
-                val barH = if (b != null) b.height + gap else 0
-                val total = barH + u.height + gap + ac.height
-                var y = top0 - barH
-                if (y + total > H - bottomSafe) y = H - bottomSafe - total
+                val above = listOfNotNull(wP, bP).sumOf { it.height + gap }
+                val tot = total()
+                // Keep the message where it was in the chat when there's room; otherwise slide everything together.
+                var y = top0 - above
+                if (y + tot > H - bottomSafe) y = H - bottomSafe - tot
                 if (y < topSafe) y = topSafe
                 val a = lastAnchor
                 val bubX = (if (a != null) (if (me) a.right.toInt() - u.width else a.left.toInt()) else if (me) W - side - u.width else side).coerceIn(0, maxOf(0, W - u.width))
                 val edgeX = { w: Int -> if (me) (bubX + u.width - w).coerceIn(side, maxOf(side, W - side - w)) else bubX.coerceIn(side, maxOf(side, W - side - w)) }
                 val lift = ((1f - k.value) * 24f).toInt()
-                b?.placeRelative(edgeX(b.width), y + lift)
-                u.placeRelative(bubX, y + barH)
-                ac.placeRelative(edgeX(ac.width), y + barH + u.height + gap - lift)
+                var yy = y
+                wP?.let { it.placeRelative(side, yy + lift); yy += it.height + gap }
+                bP?.let { it.placeRelative(edgeX(it.width), yy + lift); yy += it.height + gap }
+                u.placeRelative(bubX, yy); yy += u.height + gap
+                aP?.let { it.placeRelative(if (pick.strip) side else edgeX(it.width), yy - lift) }
             }
         }
         // The full picker slides up from the bottom, like the keyboard's emoji panel.

@@ -672,12 +672,21 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
 
     fun discard(m: Msg) { msgs[m.convId] = msgs[m.convId].orEmpty().filter { it.key != m.key } }
 
+    /** The reaction you last sent on each message, for when Google hasn't told us yet whose is whose. */
+    private val myReacts = mutableMapOf<String, String>()
+
+    /** Your reaction on a message, if you've left one. */
+    fun myReaction(m: Msg): String? = myReacts[m.id]?.takeIf { e -> m.reactions.any { it.emoji == e } }
+
+    /**
+     * One reaction per person: tapping a new emoji switches yours, tapping the same one takes it off.
+     */
     fun react(m: Msg, emoji: String) {
         val myId = convs[m.convId]?.me?.id.orEmpty()
-        val mine = m.reactions.firstOrNull { myId.isNotEmpty() && myId in it.by }
-        val remove = mine?.emoji == emoji
+        val mineEmoji = m.reactions.firstOrNull { myId.isNotEmpty() && myId in it.by }?.emoji ?: myReaction(m)
+        val remove = mineEmoji == emoji
         val updated = m.reactions.map { r ->
-            if (r.emoji == mine?.emoji) r.copy(count = r.count - 1, by = r.by - myId) else r
+            if (r.emoji == mineEmoji) r.copy(count = r.count - 1, by = r.by - myId) else r
         }.filter { it.count > 0 }.let { rs ->
             if (remove) rs else {
                 val ex = rs.firstOrNull { it.emoji == emoji }
@@ -685,10 +694,15 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
                 else rs + Reaction(emoji, 1, listOf(myId))
             }
         }
+        if (remove) myReacts.remove(m.id) else myReacts[m.id] = emoji
         upsert(m.copy(reactions = updated))
         scope.launch {
-            if (mine != null && !remove) hub.io { it.sendReaction(m.id, mine.emoji, true) }
-            hub.io { it.sendReaction(m.id, emoji, remove) }.onFailure { toast("Reaction didn't send") }
+            val r = when {
+                remove -> hub.io { it.sendReaction(m.id, emoji, true) }
+                mineEmoji != null -> hub.io { it.switchReaction(m.id, emoji) }
+                else -> hub.io { it.sendReaction(m.id, emoji, false) }
+            }
+            r.onFailure { toast("Reaction didn't send") }
         }
     }
 

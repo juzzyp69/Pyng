@@ -368,7 +368,7 @@ private fun StyleStep(onDone: () -> Unit) {
     val repo = LocalRepo.current
     val t = LocalTok.current
     val p = repo.prefs.state
-    val tabs = listOf("Colors", "Pinned", "Bubbles", "Send", "Icon")
+    val tabs = listOf("Colors", "Pinned", "Bubbles", "Send", "Reactions", "Icon")
     var tab by remember { mutableStateOf(0) }
     Column(Modifier.fillMaxSize().systemBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
         Column(Modifier.widthIn(max = 560.dp).fillMaxWidth().padding(horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -376,18 +376,28 @@ private fun StyleStep(onDone: () -> Unit) {
             T("Choose Your Style", size = 27.sp, weight = FontWeight.Bold, letterSpacing = (-0.6).sp, modifier = Modifier.enter(0))
             T("Tap around. You can change all of it later.", size = 14.sp, color = t.soft, modifier = Modifier.padding(top = 4.dp).enter(1))
             Spacer(Modifier.height(14.dp))
-            // The preview: your home screen for pinned chats, a chat for everything else.
+            // The preview: your home screen for pinned chats, the animation for Send, reactions for
+            // Reactions, and a chat for everything else.
             Box(
-                Modifier.fillMaxWidth().height(190.dp).enter(2).edge(RoundedCornerShape(26.dp), elevation = 8.dp)
+                Modifier.fillMaxWidth().height(220.dp).enter(2).edge(RoundedCornerShape(26.dp), elevation = 8.dp)
                     .clip(RoundedCornerShape(26.dp)).background(if (t.dark) t.card else Color.White),
             ) {
-                androidx.compose.animation.Crossfade(tabs[tab] == "Pinned", label = "stylePreview") { home -> if (home) HomeStylePreview(compact = false) else ChatStylePreview(compact = false) }
+                androidx.compose.animation.Crossfade(tabs[tab], label = "stylePreview") { name ->
+                    when (name) {
+                        "Pinned" -> HomeStylePreview(compact = false)
+                        "Send" -> SendPreview(p.opt("sendStyle").ifBlank { "Jelly" })
+                        "Reactions" -> ReactPreview()
+                        else -> ChatStylePreview(compact = false)
+                    }
+                }
             }
             Spacer(Modifier.height(14.dp))
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(19.dp)).background(if (t.dark) t.card else t.neutral).padding(4.dp)) {
+            val tabScroll = rememberScrollState()
+            androidx.compose.runtime.LaunchedEffect(tab) { tabScroll.animateScrollTo(if (tab >= 3) tabScroll.maxValue else 0) }
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(19.dp)).background(if (t.dark) t.card else t.neutral).horizontalScroll(tabScroll).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 tabs.forEachIndexed { i, n ->
                     val on = i == tab
-                    Box(Modifier.weight(1f).height(34.dp).clip(RoundedCornerShape(15.dp)).background(if (on) t.tone else Color.Transparent).clickable { tab = i }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.height(34.dp).clip(RoundedCornerShape(15.dp)).background(if (on) t.tone else Color.Transparent).clickable { tab = i }.padding(horizontal = 13.dp), contentAlignment = Alignment.Center) {
                         T(n, size = 12.5.sp, weight = FontWeight.SemiBold, color = if (on) t.p else t.soft, maxLines = 1)
                     }
                 }
@@ -415,9 +425,14 @@ private fun StyleStep(onDone: () -> Unit) {
                         Spacer(Modifier.height(16.dp))
                         Seg(listOf("Light", "Dark", "Match system"), p.mode, { m -> repo.prefs.edit { it.copy(mode = m) } })
                     }
-                    "Pinned" -> { StyleTiles("pinShape") {}; Spacer(Modifier.height(12.dp)); StyleTiles("pinStyle") {} }
-                    "Bubbles" -> { StyleTiles("bubble") {}; Spacer(Modifier.height(12.dp)); StyleTiles("textSize") {} }
+                    "Pinned" -> {
+                        SetupLabel("Layout"); StyleTiles("pinLayout") {}
+                        SetupLabel("Photo shape"); StyleTiles("pinShape") {}
+                        SetupLabel("New messages"); StyleTiles("pinStyle") {}
+                    }
+                    "Bubbles" -> { SetupLabel("Bubble shape"); StyleTiles("bubble") {}; SetupLabel("Text size"); StyleTiles("textSize") {} }
                     "Send" -> StyleTiles("sendStyle") {}
+                    "Reactions" -> StyleTiles("reactStyle") {}
                     else -> StyleTiles("appIcon") {}
                 }
             }
@@ -428,6 +443,12 @@ private fun StyleStep(onDone: () -> Unit) {
             T("Customize later", size = 14.sp, weight = FontWeight.SemiBold, color = t.soft, modifier = Modifier.padding(top = 10.dp).clickable(onClick = onDone).padding(6.dp))
         }
     }
+}
+
+/** A small heading above a group of choices in setup. */
+@Composable
+private fun SetupLabel(text: String) {
+    T(text, size = 13.sp, weight = FontWeight.SemiBold, color = LocalTok.current.soft, modifier = Modifier.padding(start = 4.dp, top = 6.dp, bottom = 8.dp))
 }
 
 @Composable

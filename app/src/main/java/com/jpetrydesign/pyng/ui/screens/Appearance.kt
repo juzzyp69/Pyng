@@ -219,6 +219,7 @@ private fun StylePicker(key: String?, onDone: () -> Unit) {
             "bubble" -> "Bubble shape" to "Tap a style to preview it live"
             "gradient" -> "Bubble gradient" to "How color flows through the bubbles you send"
             "sendStyle" -> "Send animation" to "How a message leaves the box when you send it"
+            "reactStyle" -> "Reactions" to "How you see who reacted to a message"
             "textSize" -> "Text size" to "Messages and your conversation list"
             "font" -> "Font" to "Used everywhere in Pyng"
             "showPhotos" -> "Contact photos" to "Tap a style to preview it live"
@@ -254,6 +255,7 @@ fun StyleTiles(k: String, pickWall: () -> Unit) {
             val tiles: List<Tile>
             var cols = 2
             var pvH = 96.dp
+            var heads: List<String>? = null
             when (k) {
                 "pinLayout" -> tiles = listOf(
                     "Grid" to "2 rows of 4", "Large" to "Bigger, 3 across", "Pages" to "4 per page, swipe", "Carousel" to "One scrolling row", "Compact" to "Small row, no card",
@@ -329,8 +331,13 @@ fun StyleTiles(k: String, pickWall: () -> Unit) {
                         Column(verticalArrangement = Arrangement.spacedBy(if (n == "Compact") 4.dp else 11.dp)) { repeat(if (n == "Compact") 6 else 4) { Box(Modifier.size(104.dp, 8.dp).clip(RoundedCornerShape(4.dp)).background(LN)) } }
                     }
                 }
-                "sendStyle" -> { cols = 2; pvH = 84.dp; tiles = (SendStyles.classic.map { it to "Classic" } + SendStyles.liquid.map { it to "Liquid" }).map { (n, set) ->
-                    Tile(n, set + " · " + SendStyles.about[n], p.opt("sendStyle").ifBlank { "Jelly" } == n, { repo.prefs.setOpt("sendStyle", n) }) { SendMini(n, t) }
+                "sendStyle" -> { cols = 2; pvH = 84.dp; heads = listOf("Classic", "Liquid")
+                    // Two columns: classic styles on the left, liquid ones on the right.
+                    tiles = SendStyles.classic.zip(SendStyles.liquid).flatMap { (a, b) -> listOf(a, b) }.map { n ->
+                        Tile(n, SendStyles.about[n], p.opt("sendStyle").ifBlank { "Jelly" } == n, { repo.prefs.setOpt("sendStyle", n) }) { SendMini(n, t) }
+                    } }
+                "reactStyle" -> { cols = 3; pvH = 84.dp; tiles = listOf("Faces" to "Big emoji, small photo", "Cards" to "Grouped by emoji", "Tabs" to "A list with tabs").map { (n, sub) ->
+                    Tile(n, sub, p.opt("reactStyle").ifBlank { "Faces" } == n, { repo.prefs.setOpt("reactStyle", n) }) { ReactMini(n, t) }
                 } }
                 "statusStyle" -> { cols = 3; pvH = 72.dp; tiles = listOf("Icon and text" to "Check, then Read", "Face" to "Their photo", "Off" to "Tap to see").map { (n, sub) ->
                     Tile(n, sub, p.opt("statusStyle") == n, { repo.prefs.setOpt("statusStyle", n) }) { StatusSample(n, t) }
@@ -351,6 +358,11 @@ fun StyleTiles(k: String, pickWall: () -> Unit) {
                         Box(Modifier.size(36.dp).clip(CircleShape).background(if (t.dark) Color(0xFF2A2D36) else Color.White), contentAlignment = Alignment.Center) { Ico(Icons.gallery, t.p, 17.dp) }
                     }
                 }) + Palettes.walls.map { w -> Tile(w, null, p.defWall == w, { repo.prefs.edit { it.copy(defWall = w) } }) { Wallpaper(w, t) } } }
+            }
+            heads?.let { hs ->
+                Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    hs.forEach { h -> T(h, size = 13.sp, weight = FontWeight.SemiBold, color = t.soft, align = TextAlign.Center, modifier = Modifier.weight(1f)) }
+                }
             }
             tiles.chunked(cols).forEachIndexed { r, row ->
                 Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -726,7 +738,7 @@ private fun StyleStudio(kind: String?, onClose: () -> Unit) {
     ) {
         val k = last ?: return@AnimatedVisibility
         val chat = k == "chat"
-        val tabs = if (chat) listOf("bubble" to "Bubbles", "sendStyle" to "Send", "gradient" to "Gradient", "statusStyle" to "Status", "photoGroups" to "Photos", "textSize" to "Text", "font" to "Font", "defWall" to "Wallpaper")
+        val tabs = if (chat) listOf("bubble" to "Bubbles", "sendStyle" to "Send", "reactStyle" to "Reactions", "gradient" to "Gradient", "statusStyle" to "Status", "photoGroups" to "Photos", "textSize" to "Text", "font" to "Font", "defWall" to "Wallpaper")
             else listOf("pinLayout" to "Layout", "pinShape" to "Shape", "pinStyle" to "New messages", "pinNames" to "Names", "pinBack" to "Backdrop", "density" to "Density", "showPhotos" to "Faces")
         var tab by remember(k) { mutableStateOf(tabs.first().first) }
         Column(Modifier.fillMaxSize().background(t.bg).statusBarsPadding().navigationBarsPadding()) {
@@ -745,6 +757,7 @@ private fun StyleStudio(kind: String?, onClose: () -> Unit) {
             ) {
                 // On the Send tab the preview plays your send animation on a loop.
                 if (chat && tab == "sendStyle") SendPreview(LocalRepo.current.prefs.state.opt("sendStyle").ifBlank { "Jelly" })
+                else if (chat && tab == "reactStyle") ReactPreview()
                 else if (chat) ChatStylePreview(compact = false) else HomeStylePreview(compact = false)
             }
             // Tabs.
@@ -783,13 +796,14 @@ fun ChatStylePreview(compact: Boolean) {
         "Each bubble" -> Brush.verticalGradient(listOf(t.outTop, t.outBottom))
         else -> if (i == 0) Brush.verticalGradient(listOf(t.outTop, mid)) else Brush.verticalGradient(listOf(mid, t.outBottom))
     }
-    Box(Modifier.fillMaxSize()) {
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        val roomy = maxHeight >= 240.dp
         if (!compact) Wallpaper(p.defWall, t)
         Column(Modifier.fillMaxSize().padding(pad), verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 5.dp)) {
             Box(Modifier.clip(com.jpetrydesign.pyng.ui.screens.bubbleShape(false, false, false, big * (if (compact) 0.7f else 1f), small)).background(t.inBg).padding(horizontal = if (compact) 9.dp else 13.dp, vertical = if (compact) 5.dp else 8.dp)) {
                 T("Back from the trip!!", size = fs.sp, color = t.inInk, maxLines = 1)
             }
-            if (!compact) { PhotoGroupMini(p.opt("photoGroups"), t, 1.15f); Spacer(Modifier.height(2.dp)) }
+            if (!compact && roomy) { PhotoGroupMini(p.opt("photoGroups"), t, 1.15f); Spacer(Modifier.height(2.dp)) }
             Spacer(Modifier.weight(1f))
             listOf("Ok these are so good", "How was the drive?").forEachIndexed { i, txt ->
                 Box(Modifier.align(Alignment.End).clip(com.jpetrydesign.pyng.ui.screens.bubbleShape(true, i == 1, i == 0, big * (if (compact) 0.7f else 1f), small)).background(outFill(i))
