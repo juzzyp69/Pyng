@@ -141,7 +141,7 @@ fun MessageMenu(
         val bar: @Composable (MenuFit) -> Unit = { f ->
             if (canReact) {
                 Row(
-                    Modifier.shadow(10.dp, RoundedCornerShape(32.dp)).clip(RoundedCornerShape(32.dp)).background(glass)
+                    Modifier.clip(RoundedCornerShape(32.dp)).background(glass)
                         .border(1.dp, t.edgeLine, RoundedCornerShape(32.dp)).then(swallow).padding(4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -237,7 +237,7 @@ fun MessageMenu(
         val actions: @Composable (MenuFit) -> Unit = { f ->
             val shape = RoundedCornerShape(if (f.strip) 22.dp else 22.dp)
             Column(
-                (if (f.strip) Modifier.fillMaxWidth() else Modifier.width(220.dp)).shadow(12.dp, shape).clip(shape).background(glass)
+                (if (f.strip) Modifier.fillMaxWidth() else Modifier.width(220.dp)).clip(shape).background(glass)
                     .border(1.dp, t.edgeLine, shape).then(swallow),
             ) {
                 if (f.strip) {
