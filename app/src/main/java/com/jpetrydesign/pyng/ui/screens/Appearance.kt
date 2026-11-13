@@ -742,7 +742,11 @@ private fun StyleStudio(kind: String?, onClose: () -> Unit) {
             Box(
                 Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(if (chat) 270.dp else 230.dp)
                     .edge(RoundedCornerShape(28.dp), elevation = 10.dp).clip(RoundedCornerShape(28.dp)).background(if (t.dark) t.card else Color.White),
-            ) { if (chat) ChatStylePreview(compact = false) else HomeStylePreview(compact = false) }
+            ) {
+                // On the Send tab the preview plays your send animation on a loop.
+                if (chat && tab == "sendStyle") SendPreview(LocalRepo.current.prefs.state.opt("sendStyle").ifBlank { "Jelly" })
+                else if (chat) ChatStylePreview(compact = false) else HomeStylePreview(compact = false)
+            }
             // Tabs.
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 tabs.forEach { (key, label) ->

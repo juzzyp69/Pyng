@@ -35,6 +35,16 @@ data class Release(val version: String, val date: String, val added: List<String
  */
 val RELEASES = listOf(
     Release(
+        "0.9.1", "Nov 12, 2026",
+        added = listOf(
+            "Send Animation Preview\nThe Send tab in Style studio now plays your chosen animation on a loop",
+            "Swipe All the Way\nDrag a chat across to archive, delete or mark it, and it slides off as the action happens",
+        ),
+        fixed = listOf(
+            "Clipped Rows When Swiping\nThe chat row keeps its rounded corners and photo while you swipe",
+        ),
+    ),
+    Release(
         "0.9", "Nov 12, 2026",
         added = listOf(
             "Send Animations\nTen ways for a message to leave the box, in Classic and Liquid sets. Pick one in Style studio under Chat style, Send",
@@ -212,7 +222,7 @@ val RELEASES = listOf(
 @Composable
 fun VersionHistory() {
     val t = LocalTok.current
-    val current = BuildConfig.VERSION_NAME.split('.').take(2).joinToString(".")
+    val current = BuildConfig.VERSION_NAME.removeSuffix(".0")
     Column(Modifier.fillMaxWidth().padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         RELEASES.forEach { r ->
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(t.card).padding(14.dp)) {

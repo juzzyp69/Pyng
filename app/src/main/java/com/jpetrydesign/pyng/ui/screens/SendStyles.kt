@@ -505,3 +505,4 @@ internal class InkFlight(run: MeltRun, d: Float, corner: Float) : Flight(run, d,
         }
     }
 }
+

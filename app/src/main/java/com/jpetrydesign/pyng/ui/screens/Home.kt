@@ -79,6 +79,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.layout
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -679,7 +680,9 @@ fun ConvRow(
     val prevSize = 14.5f
     val av = if (compact) 46.dp else 56.dp
     val density = LocalDensity.current
-    val maxPx = with(density) { 150.dp.toPx() }
+    // You can drag a row all the way across; past the trigger point, letting go does the action.
+    val maxPx = with(density) { androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp.toPx() }
+    val inset = 12.dp
     val trigger = with(density) { 90.dp.toPx() }
     val leftOn = p.opt("swipe") != "Off"; val rightOn = p.opt("swipeR") != "Off"
     val dx = remember { Animatable(0f) }
@@ -704,7 +707,17 @@ fun ConvRow(
             .onGloballyPositioned { rowCoords[0] = it }
             .graphicsLayer { alpha = if (lifted) 0.4f else 1f },
     ) {
-        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(if (dx.value != 0f) 18.dp else 0.dp))) {
+        // The swipe area reaches a little past the list's edges, so the sliding card has room for its
+        // rounded corners and the photo never gets clipped.
+        Box(
+            Modifier.fillMaxWidth()
+                .layout { m, cons ->
+                    val extra = inset.roundToPx()
+                    val pl = m.measure(cons.copy(minWidth = cons.maxWidth + extra * 2, maxWidth = cons.maxWidth + extra * 2))
+                    layout(cons.maxWidth, pl.height) { pl.place(-extra, 0) }
+                }
+                .clip(RoundedCornerShape(22.dp)),
+        ) {
             if (dx.value != 0f) {
                 Row(
                     Modifier.matchParentSize().background(cfg.third).padding(horizontal = 22.dp),
@@ -721,7 +734,7 @@ fun ConvRow(
             }
             Column(
                 Modifier.fillMaxWidth().offset { IntOffset(dx.value.roundToInt(), 0) }
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(22.dp))
                     .background(if (dx.value != 0f) t.bg else if (selected) t.tone else Color.Transparent)
                     .pointerInput(c.id) {
                         detectTapGestures(onTap = { openNow() }, onLongPress = { at ->
@@ -738,8 +751,16 @@ fun ConvRow(
                         detectHorizontalDragGestures(
                             onDragEnd = {
                                 val v = dx.value
-                                if (v > trigger) onSwipe(1) else if (v < -trigger) onSwipe(-1)
-                                scope.launch { dx.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f)) }
+                                val dir = if (v > trigger) 1 else if (v < -trigger) -1 else 0
+                                scope.launch {
+                                    if (dir != 0) {
+                                        // Slide it the rest of the way, do the action, then bring it back if it's still here.
+                                        dx.animateTo(dir * maxPx, androidx.compose.animation.core.tween(170))
+                                        onSwipe(dir)
+                                        kotlinx.coroutines.delay(160)
+                                    }
+                                    dx.animateTo(0f, spring(dampingRatio = 0.78f, stiffness = 420f))
+                                }
                             },
                             onDragCancel = { scope.launch { dx.animateTo(0f) } },
                         ) { ch, d ->
@@ -750,7 +771,7 @@ fun ConvRow(
                     },
             ) {
                 Row(
-                    Modifier.fillMaxWidth().padding(vertical = if (compact) 9.dp else 14.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = inset).padding(vertical = if (compact) 9.dp else 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     WhoAvatar(who, av, 17.sp)
