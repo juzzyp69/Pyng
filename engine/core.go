@@ -67,6 +67,7 @@ func NewMessenger(dataDir string, listener Listener) *Messenger {
 	} else {
 		m.log = zerolog.Nop()
 	}
+	probeLog = m.log.With().Str("component", "voice-probe").Logger()
 	// Fatal Go crashes (which would otherwise only reach logcat) are written to
 	// crash.txt. A crash from the previous run is kept as crash-last.txt.
 	crashPath := filepath.Join(dataDir, "crash.txt")

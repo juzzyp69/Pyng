@@ -13,9 +13,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	"go.mau.fi/mautrix-gmessages/pkg/libgm"
@@ -903,6 +906,50 @@ func convJSON(c *gmproto.Conversation) map[string]any {
 	}
 }
 
+// probeLog records everything that arrives with a voice message, including fields the known protocol
+// doesn't name, so we can see whether the phone ever sends its own transcript along with the audio.
+var (
+	probeLog  = zerolog.Nop()
+	probeMu   sync.Mutex
+	probeSeen = map[string]bool{}
+)
+
+func probeVoice(msg *gmproto.Message) {
+	id := msg.GetMessageID()
+	probeMu.Lock()
+	if probeSeen[id] || len(probeSeen) > 500 {
+		probeMu.Unlock()
+		return
+	}
+	probeSeen[id] = true
+	probeMu.Unlock()
+	c := proto.Clone(msg).(*gmproto.Message)
+	ev := probeLog.Info().Str("msg", id)
+	if u := c.ProtoReflect().GetUnknown(); len(u) > 0 {
+		ev = ev.Str("msgUnknown", base64.StdEncoding.EncodeToString(u))
+	}
+	for i, info := range c.GetMessageInfo() {
+		if u := info.ProtoReflect().GetUnknown(); len(u) > 0 {
+			ev = ev.Str(fmt.Sprintf("info%dUnknown", i), base64.StdEncoding.EncodeToString(u))
+		}
+		if mc := info.GetMediaContent(); mc != nil {
+			if u := mc.ProtoReflect().GetUnknown(); len(u) > 0 {
+				ev = ev.Str(fmt.Sprintf("media%dUnknown", i), base64.StdEncoding.EncodeToString(u))
+			}
+			mc.MediaData = nil // the audio itself isn't useful here
+			mc.DecryptionKey = nil
+			mc.ThumbnailDecryptionKey = nil
+		}
+	}
+	if j, err := protojson.Marshal(c); err == nil {
+		if len(j) > 6000 {
+			j = j[:6000]
+		}
+		ev = ev.Str("json", string(j))
+	}
+	ev.Msg("Voice message received")
+}
+
 // inlineDir is where attachments that arrive inside a message are written, so the app can show them.
 var inlineDir string
 
@@ -970,6 +1017,9 @@ func msgJSON(msg *gmproto.Message) map[string]any {
 			}
 		}
 		media = append(media, item)
+		if strings.HasPrefix(mime, "audio/") {
+			probeVoice(msg)
+		}
 	}
 	for _, info := range msg.GetMessageInfo() {
 		switch d := info.GetData().(type) {
