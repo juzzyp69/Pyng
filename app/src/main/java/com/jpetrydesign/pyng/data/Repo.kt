@@ -42,6 +42,16 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     val msgs = mutableStateMapOf<String, List<Msg>>()
     val hasMore = mutableStateMapOf<String, Boolean>()
     val typing = mutableStateMapOf<String, Long>()
+    /** Who is typing in each chat: their number and when that runs out. */
+    val typers = mutableStateMapOf<String, Map<String, Long>>()
+
+    /** The people typing in [c] right now, matched by number. Empty if the phone didn't say who. */
+    fun typingPeople(c: Conv, now: Long = System.currentTimeMillis()): List<Person> {
+        if ((typing[c.id] ?: 0L) <= now) return emptyList()
+        fun key(n: String) = n.filter(Char::isDigit).takeLast(10)
+        val nums = typers[c.id].orEmpty().filterValues { it > now }.keys.map(::key).filter { it.isNotEmpty() }
+        return c.others.filter { p -> key(p.number).let { it.isNotEmpty() && it in nums } }
+    }
     val avatars = mutableStateMapOf<String, String>()
     val media = mutableStateMapOf<String, String>()
     /** Attachments that still failed after a few tries; the bubble offers a retry instead of spinning forever. */
@@ -185,7 +195,16 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
             "conversation" -> putConv(Conv.from(e.data))
             "typing" -> {
                 val id = e.data.optString("conversationId")
-                if (e.data.optBoolean("typing")) typing[id] = System.currentTimeMillis() + 8000 else typing.remove(id)
+                val who = e.data.optString("participantId")
+                val until = System.currentTimeMillis() + 8000
+                val left = typers[id].orEmpty().filterKeys { it != who }.filterValues { it > System.currentTimeMillis() }
+                if (e.data.optBoolean("typing")) {
+                    typers[id] = if (who.isBlank()) left else left + (who to until)
+                    typing[id] = until
+                } else {
+                    // Someone stopped: the chat is still "typing" while anyone else is.
+                    if (left.isEmpty()) { typers.remove(id); typing.remove(id) } else { typers[id] = left; typing[id] = left.values.max() }
+                }
             }
             "settings" -> {
                 val arr = e.data.optJSONArray("sims") ?: JSONArray()

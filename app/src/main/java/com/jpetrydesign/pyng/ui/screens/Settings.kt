@@ -264,7 +264,7 @@ fun SectionScreen(nav: Nav, key: String) {
                         trailing = { Toggle(access) },
                     )
                     Hairline()
-                    TogRow("Hide Google Messages' alerts", "hideGmAlerts", "Clears Google Messages' copy so you only see Pyng's. Codes and other texts Android hides are always left alone")
+                    TogRow("Hide Google Messages' alerts", "hideGmAlerts", "Clears Google Messages' copy so you only see Pyng's. Keep Google Messages' notifications on (set them to Silent so your phone only buzzes once). Codes and other texts Android hides are always left alone")
                     Hairline()
                     TogRow("Offer Pyng for text links", "smsLinks", "Tapping a text link or a Text button in another app asks whether to open Google Messages or Pyng") { on ->
                         runCatching {

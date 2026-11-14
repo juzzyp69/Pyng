@@ -689,7 +689,9 @@ fun ConvRow(
     val scope = rememberCoroutineScope()
     val det = if (!c.fromMe && p.on("otpChip")) detect(c.preview) else Detected()
     val preview = when {
-        typing -> if (c.group) "Someone is typing…" else "typing…"
+        typing -> if (c.group) LocalRepo.current.typingPeople(c).let { who ->
+            when (who.size) { 0 -> "Someone is typing…"; 1 -> "${who[0].short} is typing…"; 2 -> "${who[0].short} and ${who[1].short} are typing…"; else -> "${who.size} people are typing…" }
+        } else "typing…"
         draft != null -> draft
         else -> (if (c.fromMe) "You: " else if (c.group && c.sender.isNotBlank()) c.sender.substringBefore(' ') + ": " else "") + repo.previewOf(c)
     }.replace(Regex("\\s*\\n\\s*"), " ")

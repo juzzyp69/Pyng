@@ -460,8 +460,25 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                     contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = topPad, bottom = with(density) { bottomH.toDp() } + 12.dp),
                 ) {
                     if (typing) item("typing") {
-                        Box(Modifier.padding(top = 10.dp).height(36.dp).clip(RoundedCornerShape(18.dp)).background(t.inBg).padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                            TypingDots(t.soft, 6.dp, 4.dp)
+                        // In a group, show who: their face and name, like one of their messages.
+                        val who = conv?.takeIf { it.group }?.let { repo.typingPeople(it) }.orEmpty()
+                        val first = who.firstOrNull()
+                        Column {
+                            if (first != null) T(
+                                when (who.size) { 1 -> first.short; 2 -> "${first.short} and ${who[1].short}"; else -> "${first.short} and ${who.size - 1} others" },
+                                size = 12.sp, weight = FontWeight.SemiBold,
+                                color = groupNameColor(t, conv!!.others.indexOfFirst { it.id == first.id }),
+                                modifier = Modifier.padding(start = 46.dp, top = 14.dp),
+                            )
+                            Row(Modifier.padding(top = if (first != null) 4.dp else 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                if (conv?.group == true) {
+                                    Box(Modifier.size(30.dp)) { if (first != null) WhoAvatar(personWho(first, repo, t), 30.dp, 11.sp) }
+                                    Spacer(Modifier.width(8.dp))
+                                }
+                                Box(Modifier.height(36.dp).clip(RoundedCornerShape(18.dp)).background(t.inBg).padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                                    TypingDots(t.soft, 6.dp, 4.dp)
+                                }
+                            }
                         }
                     }
                     itemsIndexed(reversed, key = { i, m -> listKeys.getOrElse(i) { m.key } }) { i, m0 ->
@@ -838,7 +855,14 @@ private fun ThreadHeader(t: Tok, c: Conv?, typing: Boolean, wide: Boolean, onBac
                     }
                     val enc = encryptionOf(c, LocalRepo.current.msgs[c.id].orEmpty())
                     val sub = when {
-                        typing -> "typing…"
+                        typing -> LocalRepo.current.typingPeople(c).let { who ->
+                            when {
+                                !c.group || who.isEmpty() -> "typing…"
+                                who.size == 1 -> "${who[0].short} is typing…"
+                                who.size == 2 -> "${who[0].short} and ${who[1].short} are typing…"
+                                else -> "${who.size} people are typing…"
+                            }
+                        }
                         c.group -> c.others.joinToString { it.short } + " and you"
                         enc == Enc.E2EE -> "Encrypted"
                         enc == Enc.SMS && !c.business -> "Text message"
