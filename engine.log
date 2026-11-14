@@ -1,0 +1,696 @@
+NDK: /usr/local/lib/android/sdk/ndk/30.0.16248370
+go version go1.27.4 linux/amd64
+go: downloading golang.org/x/mobile v0.0.0-20261011034528-197770444867
+go: downloading golang.org/x/mod v0.42.0
+go: downloading golang.org/x/sync v0.24.0
+go: downloading golang.org/x/tools v0.52.0
+go: downloading go.mau.fi/mautrix-gmessages v0.2610.1-0.20261105235548-9567716bccd9
+go: added go.mau.fi/mautrix-gmessages v0.2610.1-0.20261105235548-9567716bccd9
+go: added golang.org/x/mobile v0.0.0-20261011034528-197770444867
+go: added golang.org/x/tools v0.52.0
+go: downloading golang.org/x/tools/go/packages/packagestest v0.1.1-deprecated
+go: downloading github.com/google/uuid v1.6.0
+go: downloading github.com/rs/zerolog v1.35.1
+go: downloading go.mau.fi/util v0.11.0
+go: downloading google.golang.org/protobuf v1.36.12
+go: downloading github.com/google/go-cmp v0.6.0
+go: downloading golang.org/x/crypto v0.58.0
+go: downloading golang.org/x/exp v0.0.0-20261014143641-f0251eb4aa3e
+go: downloading github.com/stretchr/testify v1.12.0
+go: downloading golang.org/x/tools/go/expect v0.1.1-deprecated
+go: downloading github.com/mattn/go-colorable v0.1.14
+go: downloading golang.org/x/net v0.61.0
+go: downloading golang.org/x/sys v0.49.0
+go: downloading github.com/mattn/go-isatty v0.0.20
+go: downloading gopkg.in/yaml.v3 v3.0.1
+go: downloading golang.org/x/text v0.43.0
+go: downloading github.com/google/go-cmp v0.7.0
+18:	golang.org/x/mobile v0.0.0-20261011034528-197770444867 // indirect
+27:tool golang.org/x/mobile/cmd/gobind
+write /tmp/gomobile-work-1556929589/src-android-amd64/go.mod
+write /tmp/gomobile-work-1556929589/src-android-arm64/go.mod
+go: found pyng/engine in pyng/engine v0.0.0-00010101000000-000000000000
+go: found pyng/engine in pyng/engine v0.0.0-00010101000000-000000000000
+unused filippo.io/edwards25519
+unused github.com/DATA-DOG/go-sqlmock
+unused github.com/coder/websocket
+unused github.com/coreos/go-systemd/v22
+unused github.com/golang/protobuf
+unused github.com/google/go-cmp
+unused github.com/kr/pretty
+unused github.com/lib/pq
+unused github.com/mattn/go-sqlite3
+unused github.com/petermattis/goid
+unused github.com/pkg/errors
+unused github.com/rogpeppe/go-internal
+unused github.com/rs/xid
+unused github.com/skip2/go-qrcode
+unused github.com/stretchr/testify
+unused github.com/tidwall/gjson
+unused github.com/tidwall/match
+unused github.com/tidwall/pretty
+unused github.com/tidwall/sjson
+unused github.com/yuin/goldmark
+unused go.mau.fi/zeroconfig
+unused golang.org/x/exp/shiny
+unused golang.org/x/image
+unused golang.org/x/mod
+unused golang.org/x/sync
+unused golang.org/x/telemetry
+unused golang.org/x/term
+unused golang.org/x/tools
+unused golang.org/x/tools/go/expect
+unused golang.org/x/tools/go/packages/packagestest
+unused gopkg.in/check.v1
+unused gopkg.in/natefinch/lumberjack.v2
+unused gopkg.in/yaml.v3
+unused maunium.net/go/mauflag
+unused maunium.net/go/mautrix
+unused filippo.io/edwards25519
+unused github.com/DATA-DOG/go-sqlmock
+unused github.com/coder/websocket
+unused github.com/coreos/go-systemd/v22
+unused github.com/golang/protobuf
+unused github.com/google/go-cmp
+unused github.com/kr/pretty
+unused github.com/lib/pq
+unused github.com/mattn/go-sqlite3
+unused github.com/petermattis/goid
+unused github.com/pkg/errors
+unused github.com/rogpeppe/go-internal
+unused github.com/rs/xid
+unused github.com/skip2/go-qrcode
+unused github.com/stretchr/testify
+unused github.com/tidwall/gjson
+unused github.com/tidwall/match
+unused github.com/tidwall/pretty
+unused github.com/tidwall/sjson
+unused github.com/yuin/goldmark
+unused go.mau.fi/zeroconfig
+unused golang.org/x/exp/shiny
+unused golang.org/x/image
+unused golang.org/x/mod
+unused golang.org/x/sync
+unused golang.org/x/telemetry
+unused golang.org/x/term
+unused golang.org/x/tools
+unused golang.org/x/tools/go/expect
+unused golang.org/x/tools/go/packages/packagestest
+unused gopkg.in/check.v1
+unused gopkg.in/natefinch/lumberjack.v2
+unused gopkg.in/yaml.v3
+unused maunium.net/go/mauflag
+unused maunium.net/go/mautrix
+internal/goarch
+internal/unsafeheader
+internal/byteorder
+internal/cpu
+internal/goarch
+internal/unsafeheader
+internal/byteorder
+internal/cpu
+internal/abi
+internal/abi
+internal/coverage/rtcov
+internal/coverage/rtcov
+internal/godebugs
+internal/goexperiment
+internal/godebugs
+internal/goos
+internal/goexperiment
+internal/profilerecord
+internal/runtime/atomic
+internal/goos
+internal/profilerecord
+internal/runtime/syscall/linux
+internal/bytealg
+internal/chacha8rand
+internal/bytealg
+internal/runtime/atomic
+internal/chacha8rand
+math/bits
+internal/runtime/syscall/linux
+internal/runtime/exithook
+internal/strconv
+internal/runtime/gc
+math/bits
+internal/runtime/exithook
+internal/runtime/sys
+internal/asan
+internal/runtime/gc
+internal/runtime/sys
+internal/msan
+internal/asan
+internal/strconv
+internal/runtime/math
+internal/runtime/gc/scan
+internal/runtime/pprof/label
+internal/runtime/gc/scan
+internal/msan
+internal/stringslite
+internal/runtime/math
+internal/runtime/pprof/label
+internal/race
+internal/trace/tracev2
+internal/stringslite
+cmp
+internal/trace/tracev2
+internal/runtime/maps
+math
+unicode/utf8
+cmp
+math
+unicode/utf8
+internal/race
+sync/atomic
+internal/runtime/maps
+sync/atomic
+internal/runtime/cgroup
+internal/sync
+internal/sync
+internal/synctest
+internal/runtime/cgroup
+unicode
+log/internal
+unicode/utf16
+internal/synctest
+crypto/internal/fips140/alias
+unicode
+crypto/internal/fips140deps/byteorder
+crypto/internal/fips140deps/cpu
+runtime
+log/internal
+crypto/internal/constanttime
+crypto/internal/fips140deps/time
+crypto/internal/boring/sig
+unicode/utf16
+crypto/internal/fips140/subtle
+crypto/internal/fips140/alias
+crypto/internal/fips140deps/byteorder
+encoding
+crypto/internal/fips140deps/cpu
+database/sql/internal
+crypto/internal/constanttime
+crypto/subtle
+internal/nettrace
+crypto/internal/fips140deps/time
+log/slog/internal
+vendor/golang.org/x/crypto/cryptobyte/asn1
+crypto/internal/fips140/subtle
+google.golang.org/protobuf/internal/flags
+crypto/internal/boring/sig
+google.golang.org/protobuf/internal/set
+container/list
+vendor/golang.org/x/crypto/internal/alias
+crypto/subtle
+go.mau.fi/util/ptr
+encoding
+internal/nettrace
+database/sql/internal
+log/slog/internal
+vendor/golang.org/x/crypto/cryptobyte/asn1
+google.golang.org/protobuf/internal/flags
+google.golang.org/protobuf/internal/set
+container/list
+runtime
+vendor/golang.org/x/crypto/internal/alias
+go.mau.fi/util/ptr
+iter
+internal/reflectlite
+weak
+sync
+slices
+maps
+go.mau.fi/util/exmaps
+go.mau.fi/util/exslices
+golang.org/x/exp/slices
+internal/testlog
+internal/bisect
+errors
+internal/singleflight
+sync
+weak
+iter
+internal/reflectlite
+slices
+maps
+internal/godebug
+strconv
+go.mau.fi/util/exmaps
+io
+go.mau.fi/util/exslices
+golang.org/x/exp/slices
+internal/oserror
+path
+reflect
+errors
+sort
+internal/testlog
+syscall
+bytes
+internal/bisect
+strconv
+io
+strings
+reflect
+internal/oserror
+path
+syscall
+bytes
+bufio
+hash
+strings
+crypto
+crypto/internal/fips140deps/godebug
+time
+internal/syscall/unix
+internal/syscall/execenv
+crypto/internal/fips140
+crypto/internal/impl
+bufio
+crypto/internal/fips140/sha256
+crypto/internal/fips140/sha3
+hash
+crypto/internal/fips140/sha512
+crypto
+time
+internal/syscall/unix
+crypto/internal/fips140/hmac
+internal/syscall/execenv
+crypto/internal/fips140/check
+internal/godebug
+crypto/internal/fips140/aes
+internal/fmtsort
+crypto/internal/entropy/v1.0.0
+crypto/fips140
+io/fs
+internal/poll
+context
+crypto/internal/fips140deps/godebug
+crypto/internal/fips140
+crypto/internal/impl
+crypto/internal/fips140/sha256
+internal/filepathlite
+encoding/base64
+crypto/internal/fips140/sha3
+encoding/json/internal
+encoding/base32
+encoding/json/internal/jsonflags
+crypto/internal/fips140/sha512
+encoding/json/internal/jsonopts
+encoding/json/internal/jsonwire
+crypto/internal/fips140/hmac
+encoding/binary
+internal/fmtsort
+os
+io/fs
+internal/poll
+encoding/json/jsontext
+context
+internal/filepathlite
+crypto/internal/fips140/check
+math/rand/v2
+crypto/internal/entropy/v1.0.0
+crypto/internal/fips140/aes
+os
+crypto/fips140
+encoding/base64
+crypto/internal/randutil
+math/rand
+encoding/json/internal
+encoding/base32
+encoding/json/internal/jsonflags
+encoding/json/internal/jsonopts
+encoding/json/internal/jsonwire
+encoding/binary
+vendor/golang.org/x/net/dns/dnsmessage
+unique
+fmt
+encoding/json/jsontext
+os/signal
+crypto/internal/sysrand
+crypto/internal/fips140/drbg
+net/netip
+crypto/internal/fips140/aes/gcm
+fmt
+log
+log
+os/signal
+crypto/internal/fips140only
+crypto/internal/sysrand
+encoding/hex
+math/big
+runtime/cgo
+crypto/cipher
+encoding/hex
+runtime/cgo
+crypto/internal/fips140/drbg
+math/rand/v2
+encoding/json/v2
+encoding/json/v2
+crypto/internal/fips140/aes/gcm
+crypto/internal/fips140only
+crypto/internal/boring
+crypto/md5
+crypto/cipher
+crypto/sha256
+crypto/md5
+crypto/internal/randutil
+crypto/internal/boring
+math/rand
+crypto/sha256
+crypto/internal/rand
+crypto/internal/rand
+crypto/sha1
+crypto/sha1
+math/big
+vendor/golang.org/x/net/dns/dnsmessage
+crypto/rand
+internal/singleflight
+unique
+golang.org/x/mobile/internal/mobileinit
+uuid
+golang.org/x/mobile/internal/mobileinit
+database/sql/driver
+golang.org/x/mobile/bind/seq
+net/netip
+golang.org/x/mobile/bind/seq
+sort
+net
+encoding/json
+golang.org/x/mobile/bind/java
+crypto/rand
+golang.org/x/mobile/bind/java
+uuid
+golang.org/x/sys/unix
+encoding/json
+database/sql/driver
+log/slog/internal/buffer
+path/filepath
+log/slog
+golang.org/x/sys/unix
+log/slog/internal/buffer
+crypto/internal/fips140/nistec/fiat
+path/filepath
+log/slog
+crypto/internal/fips140/nistec/fiat
+crypto/internal/fips140/edwards25519/field
+crypto/internal/fips140/edwards25519/field
+crypto/internal/boring/bbig
+crypto/internal/fips140/bigmod
+net
+crypto/internal/boring/bbig
+crypto/internal/fips140/nistec
+crypto/internal/fips140/bigmod
+crypto/internal/fips140cache
+crypto/sha3
+github.com/mattn/go-isatty
+crypto/internal/fips140/nistec
+crypto/internal/fips140hash
+github.com/mattn/go-colorable
+crypto/sha512
+crypto/internal/fips140cache
+internal/saferio
+crypto/aes
+crypto/sha3
+encoding/asn1
+crypto/des
+crypto/internal/fips140hash
+crypto/sha512
+github.com/mattn/go-isatty
+crypto/dsa
+internal/saferio
+github.com/mattn/go-colorable
+encoding/asn1
+crypto/internal/fips140/edwards25519
+crypto/aes
+crypto/des
+crypto/dsa
+github.com/google/uuid
+crypto/internal/fips140/edwards25519
+vendor/golang.org/x/crypto/cryptobyte
+github.com/rs/zerolog/internal/json
+vendor/golang.org/x/crypto/cryptobyte
+crypto/internal/fips140/ed25519
+crypto/internal/fips140/ed25519
+crypto/ed25519
+crypto/ed25519
+crypto/internal/fips140/mldsa
+github.com/rs/zerolog
+crypto/internal/fips140/mldsa
+crypto/internal/fips140/ecdh
+crypto/internal/fips140/ecdh
+crypto/elliptic
+crypto/ecdh
+crypto/elliptic
+crypto/ecdh
+crypto/internal/fips140/ecdsa
+crypto/internal/fips140/ecdsa
+crypto/internal/fips140/rsa
+crypto/mldsa
+crypto/mldsa
+crypto/internal/fips140/rsa
+crypto/x509/pkix
+crypto/x509/pkix
+crypto/ecdsa
+encoding/pem
+encoding/pem
+crypto/rsa
+crypto/ecdsa
+net/url
+net/url
+github.com/google/uuid
+crypto/hmac
+go.mau.fi/util/exerrors
+github.com/rs/zerolog/internal/json
+embed
+hash/fnv
+crypto/rsa
+google.golang.org/protobuf/internal/pragma
+go/token
+google.golang.org/protobuf/internal/editiondefaults
+crypto/hmac
+google.golang.org/protobuf/internal/detrand
+compress/flate
+github.com/rs/zerolog
+google.golang.org/protobuf/internal/errors
+go.mau.fi/util/exerrors
+embed
+go.mau.fi/mautrix-gmessages/pkg/libgm/crypto
+google.golang.org/protobuf/encoding/protowire
+hash/fnv
+hash/crc32
+google.golang.org/protobuf/reflect/protoreflect
+crypto/x509
+google.golang.org/protobuf/internal/pragma
+google.golang.org/protobuf/internal/version
+go/token
+crypto/internal/fips140/hkdf
+google.golang.org/protobuf/internal/detrand
+crypto/hkdf
+google.golang.org/protobuf/internal/errors
+crypto/internal/fips140/mlkem
+google.golang.org/protobuf/encoding/protowire
+crypto/x509
+google.golang.org/protobuf/internal/editiondefaults
+compress/flate
+google.golang.org/protobuf/reflect/protoreflect
+go.mau.fi/mautrix-gmessages/pkg/libgm/crypto
+compress/gzip
+google.golang.org/protobuf/internal/encoding/messageset
+google.golang.org/protobuf/internal/genid
+google.golang.org/protobuf/internal/order
+google.golang.org/protobuf/internal/strs
+google.golang.org/protobuf/reflect/protoregistry
+google.golang.org/protobuf/runtime/protoiface
+google.golang.org/protobuf/internal/descfmt
+google.golang.org/protobuf/internal/descopts
+google.golang.org/protobuf/internal/encoding/messageset
+google.golang.org/protobuf/internal/genid
+google.golang.org/protobuf/internal/encoding/text
+google.golang.org/protobuf/internal/order
+google.golang.org/protobuf/internal/strs
+google.golang.org/protobuf/reflect/protoregistry
+google.golang.org/protobuf/runtime/protoiface
+google.golang.org/protobuf/proto
+google.golang.org/protobuf/internal/descfmt
+google.golang.org/protobuf/internal/protolazy
+google.golang.org/protobuf/internal/encoding/defval
+google.golang.org/protobuf/internal/descopts
+google.golang.org/protobuf/internal/encoding/text
+hash/crc32
+crypto/mlkem
+google.golang.org/protobuf/proto
+vendor/golang.org/x/crypto/chacha20
+google.golang.org/protobuf/internal/protolazy
+vendor/golang.org/x/crypto/internal/poly1305
+compress/gzip
+google.golang.org/protobuf/internal/version
+crypto/internal/fips140/hkdf
+crypto/internal/fips140/tls12
+crypto/hkdf
+google.golang.org/protobuf/internal/filedesc
+crypto/internal/fips140/mlkem
+google.golang.org/protobuf/encoding/prototext
+google.golang.org/protobuf/internal/encoding/defval
+vendor/golang.org/x/crypto/chacha20poly1305
+vendor/golang.org/x/crypto/chacha20
+vendor/golang.org/x/crypto/internal/poly1305
+crypto/hpke
+crypto/mlkem
+vendor/golang.org/x/sys/cpu
+crypto/internal/fips140/tls12
+crypto/internal/fips140/tls13
+crypto/rc4
+crypto/tls/internal/fips140tls
+google.golang.org/protobuf/internal/filedesc
+google.golang.org/protobuf/encoding/prototext
+vendor/golang.org/x/text/transform
+vendor/golang.org/x/crypto/chacha20poly1305
+crypto/internal/fips140/tls13
+crypto/rc4
+crypto/tls/internal/fips140tls
+vendor/golang.org/x/text/transform
+vendor/golang.org/x/text/unicode/bidi
+vendor/golang.org/x/text/unicode/bidi
+crypto/tls
+crypto/hpke
+vendor/golang.org/x/text/unicode/norm
+vendor/golang.org/x/text/unicode/norm
+crypto/tls
+vendor/golang.org/x/text/secure/bidirule
+google.golang.org/protobuf/internal/encoding/tag
+vendor/golang.org/x/text/secure/bidirule
+net/textproto
+net/textproto
+google.golang.org/protobuf/internal/impl
+mime
+google.golang.org/protobuf/internal/encoding/tag
+mime
+google.golang.org/protobuf/internal/impl
+vendor/golang.org/x/net/idna
+vendor/golang.org/x/net/idna
+mime/quotedprintable
+mime/quotedprintable
+mime/multipart
+mime/multipart
+vendor/golang.org/x/net/http/httpguts
+vendor/golang.org/x/net/http/httpguts
+vendor/golang.org/x/net/http/httpproxy
+vendor/golang.org/x/net/http/httpproxy
+net/http/internal
+net/http/internal
+net/http/internal/ascii
+vendor/golang.org/x/net/http2/hpack
+net/http/internal/ascii
+net/http/internal/httpsfv
+vendor/golang.org/x/net/http2/hpack
+net/http/internal/httpsfv
+golang.org/x/text/transform
+golang.org/x/text/transform
+golang.org/x/text/unicode/bidi
+golang.org/x/text/unicode/bidi
+golang.org/x/text/unicode/norm
+golang.org/x/text/unicode/norm
+golang.org/x/text/secure/bidirule
+golang.org/x/text/secure/bidirule
+golang.org/x/net/http2/hpack
+golang.org/x/net/http2/hpack
+golang.org/x/net/internal/httpsfv
+golang.org/x/net/internal/httpsfv
+golang.org/x/net/internal/socks
+golang.org/x/net/internal/socks
+golang.org/x/net/idna
+golang.org/x/net/proxy
+golang.org/x/net/idna
+net/http/httptrace
+go.mau.fi/util/exsync
+golang.org/x/net/proxy
+net/http/internal/httpcommon
+go.mau.fi/util/exbytes
+go.mau.fi/util/random
+golang.org/x/crypto/hkdf
+go.mau.fi/util/exsync
+regexp/syntax
+net/http/internal/http2
+net/http/httptrace
+golang.org/x/net/http/httpguts
+go.mau.fi/util/exbytes
+net/http/internal/httpcommon
+golang.org/x/net/internal/httpcommon
+go.mau.fi/util/random
+golang.org/x/net/http/httpguts
+golang.org/x/crypto/hkdf
+golang.org/x/net/internal/httpcommon
+google.golang.org/protobuf/internal/filetype
+runtime/debug
+regexp/syntax
+net/http/internal/http2
+google.golang.org/protobuf/runtime/protoimpl
+runtime/debug
+google.golang.org/protobuf/types/descriptorpb
+regexp
+regexp
+google.golang.org/protobuf/internal/filetype
+google.golang.org/protobuf/runtime/protoimpl
+google.golang.org/protobuf/types/descriptorpb
+go.mau.fi/util/pblite
+google.golang.org/protobuf/internal/encoding/json
+google.golang.org/protobuf/internal/encoding/json
+go.mau.fi/mautrix-gmessages/pkg/libgm/gmproto
+google.golang.org/protobuf/encoding/protojson
+google.golang.org/protobuf/encoding/protojson
+net/http
+net/http
+go.mau.fi/util/pblite
+go.mau.fi/mautrix-gmessages/pkg/libgm/gmproto
+go.mau.fi/mautrix-gmessages/pkg/libgm/events
+go.mau.fi/mautrix-gmessages/pkg/libgm/util
+golang.org/x/net/http2
+go.mau.fi/mautrix-gmessages/pkg/libgm/events
+golang.org/x/net/http2
+go.mau.fi/mautrix-gmessages/pkg/libgm/util
+go.mau.fi/util/exhttp
+go.mau.fi/util/exhttp
+go.mau.fi/mautrix-gmessages/pkg/libgm
+go.mau.fi/mautrix-gmessages/pkg/libgm
+pyng/engine
+pyng/engine
+gobind/gobind
+gobind/gobind
+aar: AndroidManifest.xml
+aar: proguard.txt
+aar: classes.jar
+jar: META-INF/MANIFEST.MF
+jar: com/jpetrydesign/pyng/core/Core$proxyListener.class
+jar: com/jpetrydesign/pyng/core/Core.class
+jar: com/jpetrydesign/pyng/core/Listener.class
+jar: com/jpetrydesign/pyng/core/Messenger.class
+jar: go/Seq$GoObject.class
+jar: go/Seq$GoRef.class
+jar: go/Seq$GoRefQueue$1.class
+jar: go/Seq$GoRefQueue.class
+jar: go/Seq$Proxy.class
+jar: go/Seq$Ref.class
+jar: go/Seq$RefMap.class
+jar: go/Seq$RefTracker.class
+jar: go/Seq.class
+jar: go/Universe$proxyerror.class
+jar: go/Universe.class
+jar: go/error.class
+aar: jni/arm64-v8a/libgojni.so
+aar: jni/x86_64/libgojni.so
+aar: R.txt
+aar: res/
+jar: META-INF/MANIFEST.MF
+jar: com/jpetrydesign/pyng/core/Core.java
+jar: com/jpetrydesign/pyng/core/Listener.java
+jar: com/jpetrydesign/pyng/core/Messenger.java
+jar: go/Seq.java
+jar: go/Universe.java
+jar: go/error.java
+total 7756
+drwxr-xr-x 2 runner runner    4096 Nov 14 04:39 .
+drwxr-xr-x 4 runner runner    4096 Nov 14 04:38 ..
+-rw-r--r-- 1 runner runner    9022 Nov 14 04:39 engine-sources.jar
+-rw-r--r-- 1 runner runner 7918756 Nov 14 04:39 engine.aar
