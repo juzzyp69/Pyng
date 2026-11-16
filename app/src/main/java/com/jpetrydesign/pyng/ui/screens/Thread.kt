@@ -271,7 +271,10 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
 
     // Messages from Google Messages, plus your scheduled ones shown faded at the end.
     // Truly empty ones are skipped; a picture still on its way shows as a placeholder instead.
-    val msgs = repo.msgs[convId].orEmpty().filter { it.visible } + p.scheduled.filter { it.convId == convId }.sortedBy { it.at }.map { s ->
+    // iPhone reactions and replies that came as text ("Loved an image") go back onto the message they're about.
+    val raw = repo.msgs[convId].orEmpty()
+    val folded = remember(raw) { com.jpetrydesign.pyng.data.Tapbacks.fold(raw) }
+    val msgs = folded.filter { it.visible } + p.scheduled.filter { it.convId == convId }.sortedBy { it.at }.map { s ->
         Msg("", "sched-" + s.id, convId, "", "", "", true, "OUTGOING_SCHEDULED", s.label, s.text, emptyList(), s.at, emptyList(), "", 0, "text")
     }
     val loaded = repo.msgs.containsKey(convId)
@@ -516,7 +519,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                 }
                                 val quote = m.replyTo.takeIf { it.isNotEmpty() }?.let { rid ->
                                     val r = byId[rid]
-                                    if (r == null) "Reply" to "Original message" else (if (r.fromMe) "You" else r.sender.ifBlank { conv?.shortTitle ?: "" }) to msgPreview(r)
+                                    if (rid == "?") "Reply" to "Replied to an earlier message" else if (r == null) "Reply" to "Original message" else (if (r.fromMe) "You" else r.sender.ifBlank { conv?.shortTitle ?: "" }) to msgPreview(r)
                                 }
                                 val sender = if (conv?.group == true && !m.fromMe) conv.people.firstOrNull { it.id == m.participantId } else null
                                 val rc = RowCtx(

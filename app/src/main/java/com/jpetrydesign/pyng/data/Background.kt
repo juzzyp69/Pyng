@@ -105,7 +105,7 @@ object Notifier {
     private val placeholders = mutableMapOf<String, String>()
 
     private fun notifText(m: Msg): String = when {
-        m.text.isNotEmpty() -> m.text
+        m.text.isNotEmpty() -> Tapbacks.summary(m.text) ?: m.text.removePrefix("Replied to a message:").trim().ifEmpty { m.text }
         m.summary == "Photo" || m.summary == "GIF" -> "📷 " + m.summary
         m.summary == "Video" -> "🎬 Video"
         m.summary == "Voice message" -> "🎤 Voice message"

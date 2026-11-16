@@ -693,7 +693,8 @@ fun ConvRow(
             when (who.size) { 0 -> "Someone is typing…"; 1 -> "${who[0].short} is typing…"; 2 -> "${who[0].short} and ${who[1].short} are typing…"; else -> "${who.size} people are typing…" }
         } else "typing…"
         draft != null -> draft
-        else -> (if (c.fromMe) "You: " else if (c.group && c.sender.isNotBlank()) c.sender.substringBefore(' ') + ": " else "") + repo.previewOf(c)
+        else -> (if (c.fromMe) "You: " else if (c.group && c.sender.isNotBlank()) c.sender.substringBefore(' ') + ": " else "") +
+            repo.previewOf(c).let { com.jpetrydesign.pyng.data.Tapbacks.summary(it) ?: it }
     }.replace(Regex("\\s*\\n\\s*"), " ")
     val action = if (dx.value > 0) p.opt("swipeR") else p.opt("swipe")
     val cfg = swipeCfg(action, c, p.isPinned(c.id), p.isMuted(c.id), unread, t)
