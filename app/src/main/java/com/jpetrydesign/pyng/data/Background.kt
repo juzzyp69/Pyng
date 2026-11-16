@@ -123,6 +123,26 @@ object Notifier {
         }
     }
 
+    /** Photos Google Messages' own alert carried, by chat, for when Pyng has none of its own yet. */
+    private val googlePhotos = mutableMapOf<String, Bitmap>()
+
+    /**
+     * The photo for a person or chat, as a circle: one you picked in Pyng, then their contact card's photo,
+     * then the one Google Messages has, then the one from Google's alert. Null when there isn't one.
+     */
+    private fun photoFor(ctx: Context, repo: Repo, conv: Conv, personId: String? = null): Bitmap? {
+        val p = repo.prefs.state
+        if (personId == null && conv.group) return circle(loadBitmap(ctx, p.opt("gphoto:" + conv.id))) ?: googlePhotos[conv.id]
+        val id = personId ?: conv.avatarId
+        val person = conv.people.firstOrNull { it.id == id }
+        val paths = listOf(p.opt("cphoto:$id"), repo.avatars[id].orEmpty()) +
+            listOfNotNull(person?.let { repo.contactPhoto(it.number.ifBlank { it.formatted }) })
+        paths.forEach { path -> circle(loadBitmap(ctx, path))?.let { return it } }
+        return if (personId == null) googlePhotos[conv.id] else null
+    }
+
+    fun rememberGooglePhoto(convId: String, photo: Bitmap?) { if (photo != null) googlePhotos[convId] = circle(photo) ?: photo }
+
     fun show(ctx: Context, repo: Repo, conv: Conv, m: Msg) {
         val p = repo.prefs.state
         // A new code goes straight to the clipboard if you turned that on, so the keyboard can offer it.
@@ -144,15 +164,15 @@ object Notifier {
         list += senderName to m
         while (list.size > 7) list.removeAt(0)
 
-        val avatarPath = if (conv.group) repo.prefs.state.opt("gphoto:" + conv.id) else repo.prefs.state.opt("cphoto:" + conv.avatarId).ifBlank { repo.avatars[conv.avatarId].orEmpty() }
-        val photo = circle(loadBitmap(ctx, avatarPath))
-        // No photo: their initials, never a blank or a plus sign.
+        val photo = photoFor(ctx, repo, conv)
+        // No photo: their initials in a circle, never a blank or a plus sign.
         val icon = photo ?: initials(conv.title)
         val me = NPerson.Builder().setName("You").build()
         val style = NotificationCompat.MessagingStyle(me).setConversationTitle(if (conv.group) conv.title else null).setGroupConversation(conv.group)
         list.forEach { (who, msg) ->
             val pb = NPerson.Builder().setName(who).setKey(msg.participantId.ifEmpty { who })
-            if (!conv.group) pb.setIcon(IconCompat.createWithBitmap(icon))
+            // In a group, each line shows who sent it: their photo, or their initials.
+            pb.setIcon(IconCompat.createWithBitmap(if (!conv.group) icon else photoFor(ctx, repo, conv, msg.participantId.ifEmpty { "-" }) ?: initials(who)))
             style.addMessage(
                 notifText(msg).ifEmpty { "📎 Attachment" },
                 if (msg.ts > 0) msg.ts else System.currentTimeMillis(), pb.build(),
@@ -207,7 +227,8 @@ object Notifier {
             val person = NPerson.Builder().setName(conv.title).setKey(conv.id).setIcon(IconCompat.createWithBitmap(icon)).build()
             val sc = androidx.core.content.pm.ShortcutInfoCompat.Builder(ctx, conv.id)
                 .setShortLabel(conv.shortTitle.ifBlank { conv.title }).setLongLabel(conv.title)
-                .setIcon(IconCompat.createWithAdaptiveBitmap(photo ?: initials(conv.title, square = true)))
+                // A plain round picture: an "adaptive" one gets reshaped into the phone's app-icon squircle.
+                .setIcon(IconCompat.createWithBitmap(icon))
                 .setIntent(Intent(ctx, MainActivity::class.java).setAction("open").putExtra("chat", conv.id))
                 .setLongLived(true).setPerson(person)
                 .setCategories(setOf(com.jpetrydesign.pyng.ui.screens.SHARE_CATEGORY, "android.shortcut.conversation"))
@@ -229,8 +250,9 @@ object Notifier {
      * Shows a text using what Google Messages' own notification said, for when Pyng isn't
      * connected. Finds the matching chat so mute, photos and reply all work.
      */
-    fun showFromGoogle(ctx: Context, repo: Repo, conv: Conv?, title: String, sender: String, text: String, ts: Long) {
+    fun showFromGoogle(ctx: Context, repo: Repo, conv: Conv?, title: String, sender: String, text: String, ts: Long, photo: Bitmap? = null) {
         val c = conv ?: Conv.placeholder("gm:" + title, title)
+        rememberGooglePhoto(c.id, photo)
         val m = Msg("", "gm-" + ts, c.id, "", sender, sender.substringBefore(' '), false, "INCOMING_COMPLETE", "", text, emptyList(), ts, emptyList(), "", 0, "text")
         show(ctx, repo, c, m)
     }
@@ -418,7 +440,14 @@ class GmListener : android.service.notification.NotificationListenerService() {
 
         // Pyng shows its own version. Google Messages' copy goes away only if you turned that on.
         val live = app.hub.engine.isConnected
-        if (!live) Notifier.showFromGoogle(this, repo, conv, if (style?.isGroupConversation == true) title else sender.ifBlank { title }, sender, text, last?.timestamp ?: System.currentTimeMillis())
+        // The photo Google's alert shows (the contact's picture), kept for Pyng's own alert.
+        val pic = if (style?.isGroupConversation == true) null else runCatching {
+            val ic = last?.person?.icon?.toIcon(this) ?: n.getLargeIcon()
+            (ic?.loadDrawable(this) as? android.graphics.drawable.BitmapDrawable)?.bitmap
+                ?: ic?.loadDrawable(this)?.let { d -> android.graphics.Bitmap.createBitmap(192, 192, android.graphics.Bitmap.Config.ARGB_8888).also { b -> val cv = android.graphics.Canvas(b); d.setBounds(0, 0, 192, 192); d.draw(cv) } }
+        }.getOrNull()
+        conv?.let { Notifier.rememberGooglePhoto(it.id, pic) }
+        if (!live) Notifier.showFromGoogle(this, repo, conv, if (style?.isGroupConversation == true) title else sender.ifBlank { title }, sender, text, last?.timestamp ?: System.currentTimeMillis(), pic)
         if (repo.prefs.state.on("hideGmAlerts") && Notifier.canPost(this)) runCatching { cancelNotification(sbn.key) }
         Link.wake(app, "text from Google Messages")
     }

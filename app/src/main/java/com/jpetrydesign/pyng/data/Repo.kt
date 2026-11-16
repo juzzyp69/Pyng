@@ -499,7 +499,7 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     }
 
     /** Looks up a phone number in this phone's contacts and returns its photo, if it has one. */
-    private fun contactPhoto(number: String): String? {
+    fun contactPhoto(number: String): String? {
         if (number.isBlank()) return null
         if (androidx.core.content.ContextCompat.checkSelfPermission(app, android.Manifest.permission.READ_CONTACTS) != android.content.pm.PackageManager.PERMISSION_GRANTED) return null
         return runCatching {
