@@ -131,6 +131,25 @@ fun TranslateBlock(key: String, text: String, t: Tok, convId: String = "") {
 
 // ---------- sticker maker ----------
 
+/** [b] turned the way the photo's orientation tag says (camera photos are often saved sideways). */
+fun upright(ctx: Context, uri: Uri, b: Bitmap): Bitmap {
+    val o = runCatching {
+        ctx.contentResolver.openInputStream(uri)?.use { androidx.exifinterface.media.ExifInterface(it).getAttributeInt(androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION, 1) }
+    }.getOrNull() ?: 1
+    val m = android.graphics.Matrix()
+    when (o) {
+        2 -> m.setScale(-1f, 1f)
+        3 -> m.setRotate(180f)
+        4 -> m.setScale(1f, -1f)
+        5 -> { m.setRotate(90f); m.postScale(-1f, 1f) }
+        6 -> m.setRotate(90f)
+        7 -> { m.setRotate(270f); m.postScale(-1f, 1f) }
+        8 -> m.setRotate(270f)
+        else -> return b
+    }
+    return Bitmap.createBitmap(b, 0, 0, b.width, b.height, m, true)
+}
+
 /** Cuts a photo into a sticker shape with an optional white outline, as a PNG. */
 suspend fun makeSticker(ctx: Context, uri: Uri, shape: String, outline: Boolean, out: java.io.File): Bitmap? = withContext(Dispatchers.IO) {
     runCatching {
@@ -138,7 +157,9 @@ suspend fun makeSticker(ctx: Context, uri: Uri, shape: String, outline: Boolean,
         ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
         var sample = 1
         while (bounds.outWidth / (sample * 2) >= 512 && bounds.outHeight / (sample * 2) >= 512) sample *= 2
-        val src = ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) } ?: return@runCatching null
+        val raw = ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) } ?: return@runCatching null
+        // Camera photos are often stored sideways with a note saying which way is up: turn them upright.
+        val src = upright(ctx, uri, raw)
         val side = minOf(src.width, src.height)
         val square = Bitmap.createBitmap(src, (src.width - side) / 2, (src.height - side) / 2, side, side)
         val size = 512

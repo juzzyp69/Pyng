@@ -84,7 +84,44 @@ class Bundles(
 )
 
 private fun Msg.mediaOnly() = !isSys && text.isBlank() && replyTo.isEmpty() && media.isNotEmpty() &&
-    media.all { it.isImage || it.isVideo } && status != "OUTGOING_SCHEDULED"
+    media.all { it.isImage || it.isVideo } && media.none { Stickers.isSticker(it) } && status != "OUTGOING_SCHEDULED"
+
+/**
+ * Stickers: see-through pictures (Gboard's Emoji Kitchen, sticker packs, cutouts). They show on their own,
+ * whole and with no box behind them, never cropped into a photo strip.
+ */
+object Stickers {
+    /** Checked files: true when the picture really is see-through. Read by the strip so it regroups once known. */
+    val known = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+
+    /** Before the file is checked, a square-ish PNG or WebP is taken to be a sticker; screenshots are tall. */
+    fun isSticker(r: com.jpetrydesign.pyng.data.MediaRef): Boolean {
+        known[r.id]?.let { return it }
+        if (!r.isImage || !(r.mime.contains("png") || r.mime.contains("webp"))) return false
+        if (r.w <= 0 || r.h <= 0) return true
+        val ratio = r.h.toFloat() / r.w
+        return ratio in 0.6f..1.6f && maxOf(r.w, r.h) <= 1600
+    }
+
+    /** Looks at the downloaded file: see-through if a good share of it (or a corner) is clear. */
+    suspend fun check(r: com.jpetrydesign.pyng.data.MediaRef, path: String) {
+        if (r.id.isEmpty() || known.containsKey(r.id) || !(r.mime.contains("png") || r.mime.contains("webp"))) return
+        val clear = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                val b = android.graphics.BitmapFactory.decodeFile(path, android.graphics.BitmapFactory.Options().apply { inSampleSize = 8 }) ?: return@runCatching false
+                if (!b.hasAlpha()) return@runCatching false
+                val w = b.width; val h = b.height
+                val corners = listOf(0 to 0, w - 1 to 0, 0 to h - 1, w - 1 to h - 1).count { (x, y) -> (b.getPixel(x, y) ushr 24) < 24 }
+                var seeThrough = 0
+                val step = maxOf(1, minOf(w, h) / 24)
+                var total = 0
+                for (y in 0 until h step step) for (x in 0 until w step step) { total++; if ((b.getPixel(x, y) ushr 24) < 24) seeThrough++ }
+                corners >= 2 || seeThrough > total * 0.08f
+            }.getOrDefault(false)
+        }
+        known[r.id] = clear
+    }
+}
 
 /** [msgs] in time order, oldest first. */
 fun mediaBundles(msgs: List<Msg>): Bundles {

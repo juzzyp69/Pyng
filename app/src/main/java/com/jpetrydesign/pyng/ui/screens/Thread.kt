@@ -279,7 +279,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     val myId = conv?.me?.id.orEmpty()
     val byId = remember(msgs) { msgs.associateBy { it.id } }
     // Photos and videos sent together (or back to back) sit in one swipeable strip.
-    val bundles = remember(msgs) { mediaBundles(msgs) }
+    val bundles = remember(msgs, Stickers.known.size) { mediaBundles(msgs) }
 
     // New messages arriving while open: mark read, fire effects.
     LaunchedEffect(msgs.size) {

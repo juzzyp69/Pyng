@@ -466,7 +466,23 @@ private fun MediaView(m: Msg, ref: MediaRef, shape: RoundedCornerShape, me: Bool
     // Only spin while something is actually downloading.
     val busy = repo.mediaBusy[ref.id] == true || (ref.id.isEmpty() && repo.mediaBusy[ref.thumbId] == true)
     val failed = repo.mediaFailed[ref.id] == true && !busy
+    val sticker = Stickers.isSticker(ref)
+    // Stickers are small: always fetch the real file (the preview Google sends has a black box behind it).
+    LaunchedEffect(ref.id, sticker, repo.connEpoch.intValue) { if (sticker && ref.localPath.isEmpty() && full.isEmpty()) repo.ensureMedia(ref) }
+    LaunchedEffect(ref.id, full) { if (full.isNotEmpty()) Stickers.check(ref, full) }
     when {
+        sticker -> {
+            // Whole, see-through, no box and no rounded corners cutting into it.
+            val ratio = if (ref.w > 0 && ref.h > 0) ref.h.toFloat() / ref.w else 1f
+            val w = (if (ratio > 1f) 176f / ratio else 176f).dp
+            val h = (if (ratio > 1f) 176f else 176f * ratio).dp
+            Box(Modifier.size(w, h).holdable(a.onLong) { if (full.isEmpty()) repo.ensureMedia(ref, manual = true) else a.onOpenMedia(ref) }, contentAlignment = Alignment.Center) {
+                if (full.isNotEmpty()) AsyncImage(model = File(full), contentDescription = "Sticker", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                else Box(Modifier.size(56.dp).clip(CircleShape).background(t.tone).clickable(enabled = !busy) { repo.ensureMedia(ref, manual = true) }, contentAlignment = Alignment.Center) {
+                    if (busy || !failed) CircularProgressIndicator(Modifier.size(22.dp), color = t.p, strokeWidth = 2.dp) else Ico(Icons.refresh, t.soft, 20.dp, 2f)
+                }
+            }
+        }
         ref.isImage || ref.isVideo -> {
             val ratio = if (ref.w > 0 && ref.h > 0) ref.h.toFloat() / ref.w else 1f
             val w = 232.dp
@@ -679,16 +695,22 @@ fun LinkCard(url: String, me: Boolean, modifier: Modifier = Modifier, onLong: ((
 
 @Composable
 private fun LinkText(text: String, size: Float, color: Color, weight: FontWeight) {
-    val links = remember(text) { Regex("https?://[^\\s]+").findAll(text).toList() }
+    // Web links, and street addresses (they open in your maps app).
+    val links = remember(text) {
+        val web = Regex("https?://[^\\s]+").findAll(text).map { it.range to it.value }.toList()
+        val places = AddressRx.findAll(text).filter { a -> web.none { it.first.first <= a.range.last && a.range.first <= it.first.last } }
+            .map { it.range to "geo:0,0?q=" + android.net.Uri.encode(it.value) }
+        (web + places).sortedBy { it.first.first }
+    }
     val annotated = remember(text, color) {
         androidx.compose.ui.text.buildAnnotatedString {
             var i = 0
-            links.forEach { mr ->
-                append(text.substring(i, mr.range.first))
-                withLink(androidx.compose.ui.text.LinkAnnotation.Url(mr.value, androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)))) {
-                    append(mr.value)
+            links.forEach { (range, target) ->
+                append(text.substring(i, range.first))
+                withLink(androidx.compose.ui.text.LinkAnnotation.Url(target, androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)))) {
+                    append(text.substring(range))
                 }
-                i = mr.range.last + 1
+                i = range.last + 1
             }
             append(text.substring(i))
         }

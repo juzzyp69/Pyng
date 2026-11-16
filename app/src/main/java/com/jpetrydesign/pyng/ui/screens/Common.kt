@@ -197,11 +197,24 @@ fun msgPreview(m: Msg): String = m.summary
 /** Pulls handy things out of a message: a code, a tracking number, an address, a date, a link. */
 data class Detected(val code: String? = null, val track: String? = null, val addr: String? = null, val date: String? = null, val url: String? = null)
 
+/**
+ * A street address: "8300 Sheridan Blvd Apt 22B Arvada, CO 80003", "12 N 5th Ave", "400 Main Street".
+ * The street name starts with a capital or a number (so "2 dogs on the way" isn't one); the unit, city,
+ * state and ZIP come along when they're there.
+ */
+val AddressRx = Regex(
+    "\\b\\d{1,6}\\s+(?:(?:N|S|E|W|NE|NW|SE|SW)\\.?\\s+)?(?:[A-Z0-9][A-Za-z0-9.'-]*\\s+){1,4}?" +
+        "(?i:St|Street|Ave|Avenue|Rd|Road|Blvd|Boulevard|Dr|Drive|Way|Ln|Lane|Ct|Court|Pl|Place|Pkwy|Parkway|Hwy|Highway|Cir|Circle|Ter|Terrace|Trl|Trail|Sq|Square|Loop|Pike)\\b\\.?" +
+        "(?:\\s+(?:N|S|E|W|NE|NW|SE|SW)\\b)?" +
+        "(?:,?\\s+(?i:Apt|Apartment|Unit|Suite|Ste|Bldg)\\.?\\s*#?[A-Za-z0-9-]+|,?\\s+#\\s?[A-Za-z0-9-]+)?" +
+        "(?:,?\\s+[A-Z][A-Za-z.]+(?:\\s+[A-Z][A-Za-z.]+){0,2},?\\s+[A-Z]{2}(?:\\s+\\d{5}(?:-\\d{4})?)?)?"
+)
+
 fun detect(text: String): Detected {
     if (text.isEmpty()) return Detected()
     val code = Regex("\\b(\\d{4,8})\\b").find(text)?.groupValues?.get(1)?.takeIf { Regex("(?i)code|verif|otp|pin").containsMatchIn(text) }
     val track = Regex("\\b1Z[0-9A-Z]{16}\\b").find(text)?.value
-    val addr = Regex("\\b\\d{2,5}\\s+[A-Z][a-z]+\\s+(St|Street|Ave|Avenue|Rd|Road|Blvd|Dr|Way|Ln|Lane|Ct|Pl)\\b").find(text)?.value
+    val addr = AddressRx.find(text)?.value
     val dm = Regex("(?i)\\b(today|tomorrow|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\\b[^.?!]*?\\b(\\d{1,2}(:\\d{2})?\\s?(am|pm))").find(text)
     val date = dm?.let { it.groupValues[1].replaceFirstChar { c -> c.uppercase() }.let { d -> d.take(1) + d.drop(1).lowercase() } + " at " + it.groupValues[2].uppercase() }
     val url = Regex("https?://[^\\s]+").find(text)?.value
