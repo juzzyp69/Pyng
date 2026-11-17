@@ -211,6 +211,17 @@ fun Composer(
         val f = camFile
         if (ok && f != null) add(listOf(Uri.fromFile(f)))
     }
+    // Pyng lists the camera permission (Google's sign-in can use it), and Android then refuses to open the
+    // camera app for us until that permission is granted. So ask first, then open it.
+    val openCamera: () -> Unit = {
+        val f = repo.newFile("jpg"); camFile = f
+        runCatching { camera.launch(FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)) }
+            .onFailure { android.widget.Toast.makeText(ctx, "Couldn't open the camera", android.widget.Toast.LENGTH_SHORT).show() }
+    }
+    val askCamera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) openCamera()
+        else android.widget.Toast.makeText(ctx, "Allow the camera in Settings to take photos from Pyng", android.widget.Toast.LENGTH_LONG).show()
+    }
     val pickContact = rememberLauncherForActivityResult(ActivityResultContracts.PickContact()) { uri ->
         if (uri != null) scope.launch {
             vcardFor(ctx, uri, repo.newFile("vcf"))?.let { (f, name) -> attachments.add(Pending(f.path, "text/vcard", "$name.vcf")) }
@@ -427,7 +438,10 @@ fun Composer(
                     "plus" -> PlusGrid(t, translating = conv != null && repo.prefs.state.opt("tr:" + conv.id) == "1") { what ->
                         when (what) {
                             "Gallery" -> pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
-                            "Camera" -> { val f = repo.newFile("jpg"); camFile = f; runCatching { camera.launch(FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)) } }
+                            "Camera" -> {
+                                if (androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) openCamera()
+                                else askCamera.launch(android.Manifest.permission.CAMERA)
+                            }
                             "GIFs" -> panel = "gifs"
                             "Stickers" -> panel = "stickers"
                             "Files" -> pickFiles.launch(arrayOf("*/*"))
