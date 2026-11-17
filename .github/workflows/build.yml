@@ -55,7 +55,7 @@ jobs:
             export PATH="$PATH:$(go env GOPATH)/bin"
             gomobile init
             cd engine
-            go get go.mau.fi/mautrix-gmessages@9567716bccd9da0d626a293d799629fec0ad6afd
+            go get go.mau.fi/mautrix-gmessages@3c3a87849d0a1bebc415493927be0314ec7e245b
             go get -tool golang.org/x/mobile/cmd/gobind
             go mod tidy
             grep -n "mobile" go.mod
