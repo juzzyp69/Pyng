@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package com.jpetrydesign.pyng.ui.screens
 
 import android.content.Context
@@ -13,6 +15,7 @@ import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,6 +54,7 @@ import com.jpetrydesign.pyng.ui.kit.Ico
 import com.jpetrydesign.pyng.ui.kit.Icons
 import com.jpetrydesign.pyng.ui.kit.LocalRepo
 import com.jpetrydesign.pyng.ui.kit.PillButton
+import com.jpetrydesign.pyng.ui.kit.Chips
 import com.jpetrydesign.pyng.ui.kit.Seg
 import com.jpetrydesign.pyng.ui.kit.T
 import com.jpetrydesign.pyng.ui.theme.LocalTok
@@ -150,41 +154,153 @@ fun upright(ctx: Context, uri: Uri, b: Bitmap): Bitmap {
     return Bitmap.createBitmap(b, 0, 0, b.width, b.height, m, true)
 }
 
-/** Cuts a photo into a sticker shape with an optional white outline, as a PNG. */
-suspend fun makeSticker(ctx: Context, uri: Uri, shape: String, outline: Boolean, out: java.io.File): Bitmap? = withContext(Dispatchers.IO) {
+/** Loads a photo at about 1024px, turned upright. */
+private fun loadUpright(ctx: Context, uri: Uri): Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+    var sample = 1
+    while (bounds.outWidth / (sample * 2) >= 1024 && bounds.outHeight / (sample * 2) >= 1024) sample *= 2
+    val raw = ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) } ?: return null
+    // Camera photos are often stored sideways with a note saying which way is up: turn them upright.
+    return upright(ctx, uri, raw)
+}
+
+/**
+ * Finds the subject of a photo (a person, pet or thing) and cuts it out, right on the phone.
+ * Null when there's nothing clear to cut out or the cutter isn't ready yet.
+ */
+private suspend fun cutOut(src: Bitmap): Bitmap? = kotlinx.coroutines.suspendCancellableCoroutine { cont ->
     runCatching {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-        var sample = 1
-        while (bounds.outWidth / (sample * 2) >= 512 && bounds.outHeight / (sample * 2) >= 512) sample *= 2
-        val raw = ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) } ?: return@runCatching null
-        // Camera photos are often stored sideways with a note saying which way is up: turn them upright.
-        val src = upright(ctx, uri, raw)
-        val side = minOf(src.width, src.height)
-        val square = Bitmap.createBitmap(src, (src.width - side) / 2, (src.height - side) / 2, side, side)
+        val seg = com.google.mlkit.vision.segmentation.subject.SubjectSegmentation.getClient(
+            com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions.Builder().enableForegroundBitmap().build(),
+        )
+        seg.process(com.google.mlkit.vision.common.InputImage.fromBitmap(src, 0))
+            .addOnSuccessListener { r -> seg.close(); if (cont.isActive) cont.resumeWith(Result.success(r.foregroundBitmap)) }
+            .addOnFailureListener { seg.close(); if (cont.isActive) cont.resumeWith(Result.success(null)) }
+    }.onFailure { if (cont.isActive) cont.resumeWith(Result.success(null)) }
+}
+
+/** The smallest box around everything that isn't see-through. */
+private fun trimmed(b: Bitmap): Bitmap {
+    val w = b.width; val h = b.height
+    val px = IntArray(w * h); b.getPixels(px, 0, w, 0, 0, w, h)
+    var l = w; var r = -1; var top = h; var bot = -1
+    for (y in 0 until h) for (x in 0 until w) if ((px[y * w + x] ushr 24) > 24) { if (x < l) l = x; if (x > r) r = x; if (y < top) top = y; if (y > bot) bot = y }
+    return if (r < l || bot < top) b else Bitmap.createBitmap(b, l, top, r - l + 1, bot - top + 1)
+}
+
+/** A solid copy of [b]'s shape, grown by [radius] in every direction (the base of an outline). */
+private fun grown(b: Bitmap, radius: Float, color: Int): Bitmap {
+    val out = Bitmap.createBitmap(b.width, b.height, Bitmap.Config.ARGB_8888)
+    val c = Canvas(out)
+    val tint = Paint(Paint.ANTI_ALIAS_FLAG).apply { colorFilter = android.graphics.PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN) }
+    val steps = 36
+    for (ring in listOf(radius, radius * 0.6f, radius * 0.3f)) for (i in 0 until steps) {
+        val a = i * (2 * Math.PI / steps)
+        c.drawBitmap(b, (Math.cos(a) * ring).toFloat(), (Math.sin(a) * ring).toFloat(), tint)
+    }
+    c.drawBitmap(b, 0f, 0f, tint)
+    return out
+}
+
+/**
+ * Makes a 512px see-through PNG sticker: the subject cut out (or a circle or rounded square), with an
+ * effect: Outline (white edge), Puffy (thick edge, soft shadow, a little shine), Comic (black and white
+ * edge), Holo (rainbow sheen) or Glitter (sparkles). Saved to [out].
+ */
+suspend fun makeSticker(ctx: Context, uri: Uri, shape: String, effect: String, out: java.io.File): Bitmap? = withContext(Dispatchers.IO) {
+    runCatching {
+        val src = loadUpright(ctx, uri) ?: return@runCatching null
         val size = 512
-        val pad = if (outline) 18f else 4f
-        val inner = RectF(pad, pad, size - pad, size - pad)
-        val path = Path().apply {
-            when (shape) {
-                "Circle" -> addOval(inner, Path.Direction.CW)
-                "Rounded" -> addRoundRect(inner, size * 0.24f, size * 0.24f, Path.Direction.CW)
-                else -> addOval(RectF(size * 0.1f + pad / 2, size * 0.06f + pad / 2, size * 0.9f - pad / 2, size - pad), Path.Direction.CW)
+        val pad = when (effect) { "None" -> 6f; "Comic" -> 30f; "Puffy" -> 34f; else -> 24f }
+        val inner = (size - pad * 2).toInt()
+        // The subject on its own, scaled to fit with room for the edge.
+        val subject: Bitmap = run {
+            val cut = if (shape == "Cutout") cutOut(src)?.let { trimmed(it) } else null
+            val base = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            val c = Canvas(base)
+            if (cut != null) {
+                val k = minOf(inner.toFloat() / cut.width, inner.toFloat() / cut.height)
+                val w = cut.width * k; val h = cut.height * k
+                c.drawBitmap(cut, null, RectF((size - w) / 2, (size - h) / 2, (size + w) / 2, (size + h) / 2), Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+            } else {
+                // No clear subject (or a shape was picked): a circle or rounded square from the middle of the photo.
+                val side = minOf(src.width, src.height)
+                val sq = Bitmap.createBitmap(src, (src.width - side) / 2, (src.height - side) / 2, side, side)
+                val rect = RectF(pad, pad, size - pad, size - pad)
+                val path = Path().apply { if (shape == "Rounded") addRoundRect(rect, size * 0.22f, size * 0.22f, Path.Direction.CW) else addOval(rect, Path.Direction.CW) }
+                c.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.BLACK })
+                c.drawBitmap(Bitmap.createScaledBitmap(sq, size, size, true), 0f, 0f, Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN) })
             }
+            base
         }
         val result = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val c = Canvas(result)
-        if (outline) {
-            c.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE; style = Paint.Style.STROKE; strokeWidth = pad * 2 })
+        val white = android.graphics.Color.WHITE
+        when (effect) {
+            "Outline" -> c.drawBitmap(grown(subject, 14f, white), 0f, 0f, null)
+            "Puffy" -> {
+                val edge = grown(subject, 22f, white)
+                // A soft shadow under the whole sticker, then the thick white edge.
+                val shadow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    colorFilter = android.graphics.PorterDuffColorFilter(android.graphics.Color.argb(70, 0, 0, 0), PorterDuff.Mode.SRC_IN)
+                    maskFilter = android.graphics.BlurMaskFilter(14f, android.graphics.BlurMaskFilter.Blur.NORMAL)
+                }
+                c.drawBitmap(edge.extractAlpha(), 0f, 8f, shadow)
+                c.drawBitmap(edge, 0f, 0f, null)
+            }
+            "Comic" -> {
+                c.drawBitmap(grown(subject, 24f, android.graphics.Color.BLACK), 0f, 0f, null)
+                c.drawBitmap(grown(subject, 12f, white), 0f, 0f, null)
+            }
+            "Holo", "Glitter" -> c.drawBitmap(grown(subject, 12f, white), 0f, 0f, null)
         }
-        val layer = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val lc = Canvas(layer)
-        lc.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.BLACK })
-        lc.drawBitmap(Bitmap.createScaledBitmap(square, size, size, true), 0f, 0f, Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN) })
-        c.drawBitmap(layer, 0f, 0f, null)
+        c.drawBitmap(subject, 0f, 0f, null)
+        when (effect) {
+            // A shine across the top of the puffy sticker, only where the sticker is.
+            "Puffy" -> c.drawRect(0f, 0f, size.toFloat(), size * 0.55f, Paint().apply {
+                shader = android.graphics.LinearGradient(0f, 0f, 0f, size * 0.55f, android.graphics.Color.argb(70, 255, 255, 255), android.graphics.Color.TRANSPARENT, android.graphics.Shader.TileMode.CLAMP)
+                xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
+            })
+            // Rainbow foil: soft bands of color at an angle, with a bright streak.
+            "Holo" -> {
+                val colors = intArrayOf(0x66FF6FAE, 0x66FFD36F, 0x666FFFC8, 0x666FB8FF, 0x66B98CFF, 0x66FF6FAE)
+                c.drawRect(0f, 0f, size.toFloat(), size.toFloat(), Paint().apply {
+                    shader = android.graphics.LinearGradient(0f, 0f, size.toFloat(), size.toFloat(), colors, null, android.graphics.Shader.TileMode.MIRROR)
+                    xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
+                })
+                c.drawRect(0f, 0f, size.toFloat(), size.toFloat(), Paint().apply {
+                    shader = android.graphics.LinearGradient(size * 0.25f, 0f, size * 0.75f, size.toFloat(), intArrayOf(0, 0x80FFFFFF.toInt(), 0), floatArrayOf(0.35f, 0.5f, 0.65f), android.graphics.Shader.TileMode.CLAMP)
+                    xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
+                })
+            }
+            // Little four-point sparkles scattered over the sticker, the same each time for the same photo.
+            "Glitter" -> {
+                val rnd = java.util.Random(uri.hashCode().toLong())
+                val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP) }
+                repeat(46) {
+                    val x = rnd.nextFloat() * size; val y = rnd.nextFloat() * size; val r = 3f + rnd.nextFloat() * 7f
+                    p.color = if (rnd.nextBoolean()) android.graphics.Color.WHITE else android.graphics.Color.argb(255, 255, 226, 140)
+                    p.alpha = 150 + rnd.nextInt(105)
+                    val star = Path().apply {
+                        moveTo(x, y - r); quadTo(x, y, x + r, y); quadTo(x, y, x, y + r); quadTo(x, y, x - r, y); quadTo(x, y, x, y - r); close()
+                    }
+                    c.drawPath(star, p)
+                }
+            }
+        }
         FileOutputStream(out).use { result.compress(Bitmap.CompressFormat.PNG, 100, it) }
         result
     }.getOrNull()
+}
+
+/** Your saved stickers, newest first. */
+fun myStickers(ctx: Context): List<java.io.File> =
+    java.io.File(ctx.filesDir, "stickers").listFiles { f -> f.extension == "png" }?.sortedByDescending { it.lastModified() } ?: emptyList()
+
+private fun keepSticker(ctx: Context, f: java.io.File): java.io.File {
+    val dir = java.io.File(ctx.filesDir, "stickers").apply { mkdirs() }
+    return java.io.File(dir, "sticker-" + System.currentTimeMillis() + ".png").also { f.copyTo(it, overwrite = true) }
 }
 
 @Composable
@@ -192,36 +308,57 @@ fun StickerMaker(t: Tok, uri: Uri?, onPick: () -> Unit, onBack: () -> Unit, onDo
     val ctx = LocalContext.current
     val repo = LocalRepo.current
     var shape by remember { mutableStateOf("Cutout") }
-    var outline by remember { mutableStateOf("White") }
+    var effect by remember { mutableStateOf("Outline") }
     var preview by remember { mutableStateOf<Bitmap?>(null) }
     var file by remember { mutableStateOf<java.io.File?>(null) }
-    LaunchedEffect(uri, shape, outline) {
+    var working by remember { mutableStateOf(false) }
+    var mine by remember { mutableStateOf(myStickers(ctx)) }
+    LaunchedEffect(uri, shape, effect) {
         if (uri == null) return@LaunchedEffect
+        working = true
         val f = repo.newFile("png")
-        preview = makeSticker(ctx, uri, shape, outline == "White", f)
+        preview = makeSticker(ctx, uri, shape, effect, f)
         file = f
+        working = false
     }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(36.dp).clip(CircleShape).clickable(onClick = onBack), contentAlignment = Alignment.Center) { Ico(Icons.back, t.ink, 20.dp, 2f) }
+            Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onBack), contentAlignment = Alignment.Center) { Ico(Icons.back, t.ink, 20.dp, 2f) }
             Spacer(Modifier.width(6.dp))
-            T("Make a sticker", size = 15.sp, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            if (preview != null) PillButton("Send", { file?.let { onDone(Pending(it.path, "image/png", "Sticker.png")) } }, height = 34.dp)
+            T("Make a sticker", size = 15.sp, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f), maxLines = 1)
+            if (preview != null && !working) PillButton("Send", {
+                file?.let { f -> mine = listOf(keepSticker(ctx, f)) + mine; onDone(Pending(f.path, "image/png", "Sticker.png")) }
+            }, height = 36.dp)
         }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+            // The preview sits on a checkerboard so you can see what's see-through.
             Box(Modifier.size(150.dp).clip(RoundedCornerShape(20.dp)).background(t.surface).clickable(onClick = onPick), contentAlignment = Alignment.Center) {
                 val b = preview
-                if (b != null) Image(b.asImageBitmap(), "Sticker preview", Modifier.size(132.dp))
-                else Column(horizontalAlignment = Alignment.CenterHorizontally) { Ico(Icons.gallery, t.p, 26.dp); Spacer(Modifier.height(6.dp)); T("Pick a photo", size = 12.5.sp, color = t.soft) }
+                if (b != null) Image(b.asImageBitmap(), "Sticker preview", Modifier.size(136.dp))
+                else if (!working) Column(horizontalAlignment = Alignment.CenterHorizontally) { Ico(Icons.gallery, t.p, 26.dp); Spacer(Modifier.height(6.dp)); T("Pick a photo", size = 12.5.sp, color = t.soft) }
+                if (working) CircularProgressIndicator(color = t.p, strokeWidth = 2.dp, modifier = Modifier.size(26.dp))
             }
             Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 T("Shape", size = 12.5.sp, weight = FontWeight.SemiBold, color = t.soft)
-                Seg(listOf("Cutout", "Circle", "Rounded"), shape, { shape = it }, height = 36.dp)
-                T("Outline", size = 12.5.sp, weight = FontWeight.SemiBold, color = t.soft)
-                Seg(listOf("White", "None"), outline, { outline = it }, height = 36.dp)
+                Chips(listOf("Cutout", "Circle", "Rounded"), shape, { shape = it })
+                T("Effect", size = 12.5.sp, weight = FontWeight.SemiBold, color = t.soft)
+                Chips(listOf("None", "Outline", "Puffy", "Comic", "Holo", "Glitter"), effect, { effect = it })
+            }
+        }
+        if (shape == "Cutout" && uri != null && !working && preview != null) T("Cut out automatically. If it missed, try Circle or Rounded.", size = 11.5.sp, color = t.faint, modifier = Modifier.padding(top = 8.dp))
+        if (mine.isNotEmpty()) {
+            T("My stickers", size = 12.5.sp, weight = FontWeight.SemiBold, color = t.soft, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp))
+            androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(mine.size) { i ->
+                    val f = mine[i]
+                    val bmp = remember(f.path) { BitmapFactory.decodeFile(f.path) }
+                    if (bmp != null) Box(Modifier.size(72.dp).clip(RoundedCornerShape(16.dp)).background(t.surface).combinedClickable(
+                        onClick = { onDone(Pending(f.path, "image/png", "Sticker.png")) },
+                        onLongClick = { f.delete(); mine = myStickers(ctx); repo.toast("Sticker removed") },
+                    ), contentAlignment = Alignment.Center) { Image(bmp.asImageBitmap(), "Sticker", Modifier.size(62.dp)) }
+                }
             }
         }
     }
-    @Suppress("UNUSED_EXPRESSION") LocalTok
 }

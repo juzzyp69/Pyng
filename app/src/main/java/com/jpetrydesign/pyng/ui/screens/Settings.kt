@@ -358,7 +358,11 @@ fun SectionScreen(nav: Nav, key: String) {
                 Group("Alerts") {
                     TogRow("Notifications", "notif", "Alerts for new messages"); Hairline()
                     TogRow("Vibrate", "vibrate"); Hairline()
-                    TogRow("Reply and mark as read from notifications", "quick")
+                    TogRow("Reply and mark as read from notifications", "quick"); Hairline()
+                    TogRow("Chat bubbles", "bubbles", "Chats can float as bubbles over other apps. Tap the bubble icon on a notification to start one."); Hairline()
+                    ListRow("Bubble settings", "Choose which chats can bubble in Android settings", onClick = {
+                        runCatching { ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_BUBBLE_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, ctx.packageName)) }
+                    })
                 }
                 Group("Quiet hours") {
                     TogRow("Quiet hours", "quiet", "No sound or vibration while you sleep. Texts still arrive."); Hairline()
@@ -470,7 +474,8 @@ fun SectionScreen(nav: Nav, key: String) {
                     TogRow("Reduce motion", "reduceMotion", "Turns off animations like typing dots and effects")
                 }
                 Group("Audio") {
-                    TogRow("Read messages aloud", "readAloud", "Adds \"Read aloud\" when you long-press a message")
+                    TogRow("Read messages aloud", "readAloud", "Adds \"Read aloud\" when you long-press a message"); Hairline()
+                    TogRow("Raise to listen", "raiseListen", "Lift your phone to your ear while a voice message plays to hear it through the earpiece")
                 }
                 val scale = remember { runCatching { SysSettings.Global.getFloat(ctx.contentResolver, SysSettings.Global.ANIMATOR_DURATION_SCALE, 1f) }.getOrDefault(1f) }
                 if (scale == 0f) {
@@ -491,6 +496,26 @@ fun SectionScreen(nav: Nav, key: String) {
                 Group("Usage") {
                     ListRow("Cached photos and files", if (size < 0) "Calculating…" else sizeText(size).ifEmpty { "Nothing cached" }, icon = Icons.storage, trailing = null); Hairline()
                     ListRow("Clear cache", "Photos download again when you open them", onClick = { repo.clearCache(); size = 0 })
+                }
+                val ctxB = LocalContext.current
+                val saveTo = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")) { uri ->
+                    if (uri != null) {
+                        val ok = runCatching { ctxB.contentResolver.openOutputStream(uri)?.use { it.write(repo.prefs.exportJson().toByteArray()) } != null }.getOrDefault(false)
+                        if (ok) { repo.prefs.setOpt("lastBackup", System.currentTimeMillis().toString()); repo.toast("Backed up") } else repo.toast("Couldn't save the backup")
+                    }
+                }
+                val openFrom = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+                    if (uri != null) {
+                        val text = runCatching { ctxB.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() } }.getOrNull()
+                        repo.toast(if (text != null && repo.prefs.importJson(text)) "Restored from your backup" else "That file isn't a Pyng backup")
+                    }
+                }
+                Group("Backup") {
+                    val last = p.opt("lastBackup").toLongOrNull()
+                    ListRow("Back up now", if (last == null) "Saves your settings, looks, categories, stars and Trash to a file" else "Last backup: " + java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault()).format(java.util.Date(last)), icon = Icons.download, onClick = {
+                        saveTo.launch("pyng-backup-" + java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date()) + ".json")
+                    }); Hairline()
+                    ListRow("Restore from backup", "Pick a Pyng backup file to bring everything back", icon = Icons.restore, onClick = { openFrom.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) })
                 }
                 Group("Trash") {
                     ListRow("Trash", if (p.trash.isEmpty()) "Empty · deleted things wait here 30 days" else "${p.trash.size} item" + (if (p.trash.size > 1) "s" else "") + " · kept 30 days", icon = Icons.trash, onClick = { nav.go(Route.Lists("trash")) })

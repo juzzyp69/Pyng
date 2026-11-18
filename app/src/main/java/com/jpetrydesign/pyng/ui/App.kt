@@ -155,7 +155,9 @@ fun rememberTok(repo: Repo): Tok {
     val sysDark = isSystemInDarkTheme()
     val dark = p.mode == "Dark" || (p.mode == "Match system" && sysDark)
     val pal = Palettes.byKey(p.themeKey, p.c1, p.c2)
-    return remember(pal, dark, p.on("reduceBlur"), p.on("highContrast")) { tok(pal, dark, p.on("reduceBlur"), p.on("highContrast")) }
+    // Solid glass (or Reduce transparency) draws plain surfaces instead of blurring what's behind.
+    val solid = p.on("reduceBlur") || p.opt("glass") == "Solid"
+    return remember(pal, dark, solid, p.on("highContrast")) { tok(pal, dark, solid, p.on("highContrast")) }
 }
 
 @Composable
@@ -201,7 +203,7 @@ fun PyngRoot(repo: Repo, nav: Nav) {
         val textScale = com.jpetrydesign.pyng.ui.kit.textScaleOf(repo.prefs.state.textSize)
         val scaled = androidx.compose.ui.unit.Density(baseDensity.density, baseDensity.fontScale * textScale)
         val peek = remember { PeekState() }
-        CompositionLocalProvider(LocalTok provides t, LocalRepo provides repo, LocalMotion provides motion, androidx.compose.ui.platform.LocalDensity provides scaled, LocalNav provides nav, LocalPeek provides peek) {
+        CompositionLocalProvider(com.jpetrydesign.pyng.ui.kit.LocalGlass provides (repo.prefs.state.opt("glass") == "Liquid Glass"), LocalTok provides t, LocalRepo provides repo, LocalMotion provides motion, androidx.compose.ui.platform.LocalDensity provides scaled, LocalNav provides nav, LocalPeek provides peek) {
             // Everything on screen feeds the in-app banner's frosted glass, but only while a banner
             // is up (and a moment after, while it slides away), so normal scrolling costs nothing extra.
             val appHaze = remember { dev.chrisbanes.haze.HazeState() }

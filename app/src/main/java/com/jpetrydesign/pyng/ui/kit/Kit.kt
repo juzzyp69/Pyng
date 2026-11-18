@@ -74,6 +74,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
@@ -119,6 +120,8 @@ import kotlin.math.roundToInt
 val LocalRepo = compositionLocalOf<Repo> { error("no repo") }
 val LocalHaze = compositionLocalOf<HazeState?> { null }
 val LocalMotion = compositionLocalOf { true }
+/** True when the glass style is Liquid Glass: clearer surfaces with a lit edge. */
+val LocalGlass = compositionLocalOf { false }
 
 val Repo.p get() = prefs.state
 val Prefs.s get() = state
@@ -170,7 +173,20 @@ fun Ico(d: String, tint: Color = LocalTok.current.ink, size: Dp = 20.dp, stroke:
 fun Modifier.frost(shape: Shape, tint: Color, blur: Dp = 26.dp): Modifier = composed {
     val t = LocalTok.current
     val hz = LocalHaze.current
-    if (hz != null && !t.solid) {
+    if (hz != null && !t.solid && LocalGlass.current) {
+        // Liquid Glass: less tint and a lighter blur so more shows through, a lit rim along the top,
+        // and a soft sheen across the upper half, like light on a curved surface.
+        val rimTop = Color.White.copy(alpha = if (t.dark) 0.26f else 0.62f)
+        val rimLow = Color.White.copy(alpha = if (t.dark) 0.04f else 0.12f)
+        val sheen = Color.White.copy(alpha = if (t.dark) 0.06f else 0.16f)
+        this.clip(shape)
+            .hazeEffect(state = hz, style = HazeStyle(backgroundColor = t.bg, tint = HazeTint(tint.copy(alpha = tint.alpha * 0.55f)), blurRadius = blur * 0.72f, noiseFactor = 0f))
+            .drawWithContent {
+                drawContent()
+                drawRect(Brush.verticalGradient(0f to sheen, 0.5f to Color.Transparent))
+            }
+            .border(1.dp, Brush.verticalGradient(listOf(rimTop, rimLow, rimLow, rimTop.copy(alpha = rimTop.alpha * 0.4f))), shape)
+    } else if (hz != null && !t.solid) {
         this.clip(shape).hazeEffect(state = hz, style = HazeStyle(backgroundColor = t.bg, tint = HazeTint(tint), blurRadius = blur, noiseFactor = 0f))
     } else {
         this.clip(shape).background(tint)

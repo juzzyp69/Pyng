@@ -47,7 +47,10 @@ fun shareFiles(ctx: Context, files: List<Pair<String, MediaRef>>) {
 fun saveFiles(ctx: Context, files: List<Pair<String, MediaRef>>) {
     if (files.isEmpty()) return
     var ok = 0
-    files.forEach { (p, r) -> if (saveOne(ctx, p, r.mime, r.name)) ok++ }
+    val saved = files.mapNotNull { (p, r) -> saveOne(ctx, p, r.mime, r.name)?.let { r to it } }
+    ok = saved.size
+    // Files (not photos or videos) land in Downloads with a notification to open them.
+    saved.filter { (r, _) -> !r.isImage && !r.isVideo }.forEach { (r, uri) -> savedFileNotice(ctx, uri, r.mime, r.name.ifBlank { "File" }) }
     val kinds = files.map { it.second }
     val what = when {
         kinds.all { it.isImage } -> if (ok == 1) "photo" else "photos"
@@ -57,7 +60,27 @@ fun saveFiles(ctx: Context, files: List<Pair<String, MediaRef>>) {
     Toast.makeText(ctx, if (ok == 0) "Couldn't save" else if (ok < files.size) "Saved $ok of ${files.size}" else "Saved $ok $what", Toast.LENGTH_SHORT).show()
 }
 
-private fun saveOne(ctx: Context, path: String, mime: String, name: String): Boolean = runCatching {
+private fun savedFileNotice(ctx: Context, uri: Uri, mime: String, name: String) = runCatching {
+    val nm = ctx.getSystemService(android.app.NotificationManager::class.java)
+    nm.createNotificationChannel(android.app.NotificationChannel("saves", "Saved files", android.app.NotificationManager.IMPORTANCE_LOW).apply { description = "Files you save from a chat" })
+    val open = android.app.PendingIntent.getActivity(
+        ctx, uri.hashCode(), android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+        android.app.PendingIntent.FLAG_IMMUTABLE,
+    )
+    val folder = android.app.PendingIntent.getActivity(
+        ctx, uri.hashCode() + 1, android.content.Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+        android.app.PendingIntent.FLAG_IMMUTABLE,
+    )
+    val n = androidx.core.app.NotificationCompat.Builder(ctx, "saves")
+        .setSmallIcon(com.jpetrydesign.pyng.R.drawable.ic_stat_check)
+        .setContentTitle(name).setContentText("Saved to Downloads")
+        .setContentIntent(open).setAutoCancel(true)
+        .addAction(0, "Open", open).addAction(0, "Show in folder", folder)
+        .build()
+    androidx.core.app.NotificationManagerCompat.from(ctx).notify(uri.hashCode(), n)
+}
+
+private fun saveOne(ctx: Context, path: String, mime: String, name: String): Uri? = runCatching {
     val video = mime.startsWith("video/")
     val image = mime.startsWith("image/")
     val ext = mime.substringAfter('/').substringBefore(';').substringBefore('+').ifBlank { if (video) "mp4" else "jpg" }
@@ -69,8 +92,8 @@ private fun saveOne(ctx: Context, path: String, mime: String, name: String): Boo
     val where: Uri = if (video) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else if (image) MediaStore.Images.Media.EXTERNAL_CONTENT_URI else MediaStore.Downloads.EXTERNAL_CONTENT_URI
     val uri = ctx.contentResolver.insert(where, values)!!
     ctx.contentResolver.openOutputStream(uri)!!.use { out -> File(path).inputStream().use { it.copyTo(out) } }
-    true
-}.getOrDefault(false)
+    uri
+}.getOrNull()
 
 /** Web links in a message's text, cleaned of trailing punctuation. */
 fun linksIn(text: String): List<String> =

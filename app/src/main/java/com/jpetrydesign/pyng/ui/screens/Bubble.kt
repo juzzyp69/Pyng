@@ -30,6 +30,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
@@ -141,6 +144,8 @@ class RowActs(
     val onPlacedKey: ((String, androidx.compose.ui.layout.LayoutCoordinates) -> Unit)? = null,
     /** Tap the reactions under a message to see who reacted. */
     val onReactions: (() -> Unit)? = null,
+    /** The little save button beside photos and videos someone sent you. */
+    val onSave: (() -> Unit)? = null,
 )
 
 fun bubbleShape(me: Boolean, prev: Boolean, next: Boolean, big: Dp, small: Dp): RoundedCornerShape =
@@ -265,6 +270,10 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
                                 val txt = m.reactions.joinToString("") { it.emoji } + if (all > 1) " $all" else ""
                                 ReactionPill(txt, t, Modifier.align(if (me) Alignment.BottomStart else Alignment.BottomEnd).padding(horizontal = 8.dp).offset(y = 2.dp), a.onReactions)
                             }
+                        }
+                        if (!me && a.onSave != null && !x.selecting && m.media.any { (it.isImage || it.isVideo) && !Stickers.isSticker(it) }) {
+                            Spacer(Modifier.width(8.dp))
+                            SaveDot(t, a.onSave, Modifier.padding(bottom = if (m.reactions.isNotEmpty()) 16.dp else 0.dp))
                         }
                     }
                     if (m.failed) {
@@ -814,4 +823,39 @@ fun Modifier.holdable(onLong: (() -> Unit)?, onClick: () -> Unit): Modifier = co
         onClick = onClick,
         onLongClick = onLong?.let { l -> { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); l() } },
     )
+}
+
+/**
+ * Save, beside a photo or video someone sent: tap and it fills with color from the bottom like liquid
+ * rising, then turns into a check.
+ */
+@Composable
+private fun SaveDot(t: Tok, onSave: () -> Unit, modifier: Modifier = Modifier) {
+    val fill = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    var done by remember { mutableStateOf(false) }
+    Box(
+        modifier.size(36.dp).clip(CircleShape).background(t.surface)
+            .drawBehind {
+                val h = size.height * fill.value
+                // A gently curved surface on top of the rising color.
+                val path = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(0f, size.height); lineTo(0f, size.height - h)
+                    quadraticTo(size.width / 2f, size.height - h - size.height * 0.12f * (1f - fill.value), size.width, size.height - h)
+                    lineTo(size.width, size.height); close()
+                }
+                drawPath(path, t.p)
+            }
+            .clickable(enabled = !done) {
+                onSave()
+                scope.launch {
+                    fill.animateTo(1f, tween(520, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+                    done = true
+                }
+            }
+            .semantics { contentDescription = "Save" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Ico(if (done) Icons.check else Icons.download, if (fill.value > 0.55f) t.onFill else t.soft, 17.dp, 2.2f)
+    }
 }

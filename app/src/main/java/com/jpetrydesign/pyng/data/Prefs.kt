@@ -90,13 +90,13 @@ val DEFAULT_TOGGLES = mapOf(
     "quick" to true, "counter" to true, "spam" to true, "otpChip" to true, "otpAuto" to true, "bioLock" to false, "hideSwitcher" to false,
     "reduceBlur" to false, "reduceMotion" to false, "boldText" to false, "highContrast" to false, "effects" to true,
     "alwaysOn" to false, "hideGmAlerts" to false, "smsLinks" to false,
-    "undoSend" to true, "cats" to false, "catPriority" to true, "catFavs" to true, "quiet" to false, "quietFavs" to true, "autoDelCodes" to false,
+    "undoSend" to true, "raiseListen" to true, "bubbles" to true, "cats" to false, "catPriority" to true, "catFavs" to true, "quiet" to false, "quietFavs" to true, "autoDelCodes" to false,
 )
 
 val DEFAULT_OPTS = mapOf(
     "autoDl" to "Always", "quality" to "High", "swipe" to "Archive", "swipeR" to "Read/Unread",
     "stamps" to "Grouped", "gifRating" to "pg", "gradient" to "Across the screen", "statusStyle" to "Icon and text", "sendStyle" to "Jelly", "photoGroups" to "Peek", "font" to "Google",
-    "quietFrom" to "22:00", "quietTo" to "07:00",
+    "quietFrom" to "22:00", "quietTo" to "07:00", "glass" to "Frost",
 )
 
 /** A theme you made and named, kept to use again for the app or any chat. */
@@ -272,5 +272,17 @@ class Prefs(context: Context) {
     }
 
     fun toggle(key: String) = edit { it.copy(toggles = it.toggles + (key to !it.on(key))) }
+
+    /** Everything Pyng keeps on its own (settings, looks, categories, stars, Trash), as a file you can save. */
+    fun exportJson(): String = state.toJson().put("pyngBackup", 1).put("savedAt", System.currentTimeMillis()).toString(2)
+
+    /** Brings back a backup made by [exportJson]. False when the file isn't one. */
+    fun importJson(text: String): Boolean = runCatching {
+        val o = JSONObject(text)
+        require(o.optInt("pyngBackup") == 1)
+        val next = fromJson(o).copy(setupDone = true)
+        edit { next }
+        true
+    }.getOrDefault(false)
     fun setOpt(key: String, value: String) = edit { it.copy(opts = it.opts + (key to value)) }
 }

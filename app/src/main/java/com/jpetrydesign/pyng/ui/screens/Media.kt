@@ -98,6 +98,46 @@ object Voice {
     var speed by mutableFloatStateOf(1f)
         private set
     private var mp: MediaPlayer? = null
+    private var curPath: String? = null
+    /** True while the phone is at your ear and the message plays through the earpiece. */
+    var onEar by mutableStateOf(false)
+        private set
+    private var audio: android.media.AudioManager? = null
+
+    private fun player(path: String, ear: Boolean): MediaPlayer = MediaPlayer().apply {
+        setAudioAttributes(
+            android.media.AudioAttributes.Builder()
+                .setUsage(if (ear) android.media.AudioAttributes.USAGE_VOICE_COMMUNICATION else android.media.AudioAttributes.USAGE_MEDIA)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build(),
+        )
+        setDataSource(path); prepare()
+        setOnCompletionListener { playing = false; pos = 0; runCatching { it.seekTo(0) }; if (onEar) toEar(null, false) }
+    }
+
+    /**
+     * Raise to listen: with the phone at your ear the message moves to the earpiece, quietly, and back
+     * to the speaker when you lower it. Picks up from the same spot.
+     */
+    fun toEar(ctx: Context?, ear: Boolean) {
+        if (ear == onEar) return
+        ctx?.let { audio = it.applicationContext.getSystemService(android.media.AudioManager::class.java) }
+        onEar = ear
+        runCatching {
+            audio?.mode = if (ear) android.media.AudioManager.MODE_IN_COMMUNICATION else android.media.AudioManager.MODE_NORMAL
+            @Suppress("DEPRECATION") audio?.isSpeakerphoneOn = !ear
+        }
+        val cur = mp ?: return
+        val path = curPath ?: return
+        val at = runCatching { cur.currentPosition }.getOrDefault(pos)
+        val was = playing
+        runCatching { cur.release() }
+        mp = null
+        runCatching {
+            val p = player(path, ear)
+            p.seekTo(at); mp = p
+            if (was) { p.start(); applySpeed() }
+        }.onFailure { playing = false }
+    }
 
     /** Waveforms and transcripts, worked out once per message. */
     val waves = mutableStateMapOf<String, FloatArray>()
@@ -113,9 +153,8 @@ object Voice {
         }
         stop()
         runCatching {
-            val p = MediaPlayer().apply { setDataSource(path); prepare() }
-            p.setOnCompletionListener { playing = false; pos = 0; runCatching { it.seekTo(0) } }
-            mp = p; key = k; dur = p.duration
+            val p = player(path, onEar)
+            mp = p; key = k; dur = p.duration; curPath = path
             if (startAt > 0f) p.seekTo((startAt * p.duration).toInt())
             p.start(); applySpeed(); playing = true
         }
@@ -135,7 +174,8 @@ object Voice {
 
     fun stop() {
         runCatching { mp?.release() }
-        mp = null; key = null; playing = false; pos = 0; dur = 0
+        mp = null; key = null; playing = false; pos = 0; dur = 0; curPath = null
+        if (onEar) toEar(null, false)
     }
 }
 
@@ -607,6 +647,38 @@ fun ContactSheet() {
                 }, Modifier.weight(1f), height = 50.dp)
             }
             Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+/**
+ * While a voice message plays, the proximity sensor watches for the phone coming up to your ear:
+ * the sound moves to the earpiece and the screen goes dark so your cheek can't tap anything.
+ */
+@Composable
+fun RaiseToListen() {
+    val repo = LocalRepo.current
+    val ctx = LocalContext.current
+    val on = repo.prefs.state.on("raiseListen") && Voice.playing
+    androidx.compose.runtime.DisposableEffect(on) {
+        if (!on) return@DisposableEffect onDispose { }
+        val sm = ctx.getSystemService(android.hardware.SensorManager::class.java)
+        val sensor = sm?.getDefaultSensor(android.hardware.Sensor.TYPE_PROXIMITY) ?: return@DisposableEffect onDispose { }
+        val pm = ctx.getSystemService(android.os.PowerManager::class.java)
+        val lock = runCatching { pm?.newWakeLock(android.os.PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK, "pyng:ear") }.getOrNull()
+        val listener = object : android.hardware.SensorEventListener {
+            override fun onSensorChanged(e: android.hardware.SensorEvent) {
+                val near = e.values.firstOrNull()?.let { it < minOf(5f, sensor.maximumRange) } == true
+                Voice.toEar(ctx, near)
+                runCatching { if (near) { if (lock?.isHeld == false) lock.acquire(10 * 60 * 1000L) } else if (lock?.isHeld == true) lock.release() }
+            }
+            override fun onAccuracyChanged(s: android.hardware.Sensor?, a: Int) {}
+        }
+        sm.registerListener(listener, sensor, android.hardware.SensorManager.SENSOR_DELAY_NORMAL)
+        onDispose {
+            sm.unregisterListener(listener)
+            runCatching { if (lock?.isHeld == true) lock.release() }
+            Voice.toEar(ctx, false)
         }
     }
 }

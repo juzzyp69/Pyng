@@ -35,14 +35,21 @@ data class Release(val version: String, val date: String, val added: List<String
  */
 val RELEASES = listOf(
     Release(
-        "0.9.3", "Nov 18, 2026",
+        "0.9.5", "Nov 18, 2026",
         added = listOf(
+            "Categories\nPriority, Primary, Favorites and your own, in a bar under Messages. Turn them on in Settings, Categories",
             "Trash\nDeleted messages and chats wait 30 days in Trash, so you can bring them back",
             "Undo send\nA few seconds to take back a message after you tap send",
-            "Blocked words\nTexts with words you choose go to Spam quietly",
-            "Unknown senders\nA slim banner to review texts from numbers you don't know, with Report and Delete for each one or all of them",
-            "Quiet hours\nNo sound or vibration overnight, and pinned chats can still get through",
-            "Codes clean up after themselves\nTurn on Delete codes after 24 hours in Privacy & safety",
+            "Snooze\nHold a chat and tap Snooze to put it away until later",
+            "Pin a message\nHold a message and tap Pin; it stays under the chat's name",
+            "Sticker maker\nCuts out the subject automatically, with Outline, Puffy, Comic, Holo and Glitter, and keeps them in My stickers",
+            "Glass styles\nFrost, Liquid Glass or Solid, in Appearance",
+            "Save beside photos\nA save button next to photos and videos, and files land in Downloads with a notification",
+            "Chat bubbles\nChats can float over other apps",
+            "Raise to listen\nLift your phone to your ear while a voice message plays",
+            "Unknown senders\nA slim banner to review texts from numbers you don't know",
+            "Blocked words, quiet hours, a sound for each chat, and codes that delete themselves",
+            "Backup and restore\nSave Pyng's settings, looks, categories, stars and Trash to a file",
             "A menu on your photo\nStarred, Archived, Scheduled, Spam, Trash and What's new, with Settings one tap away",
         ),
         fixed = listOf(

@@ -166,6 +166,8 @@ fun AppearanceScreen(nav: Nav) {
             }
             SectionLabel("Mode")
             Seg(listOf("Light", "Dark", "Match system"), p.mode, { m -> repo.prefs.edit { it.copy(mode = m) } })
+            SectionLabel("Glass")
+            Seg(listOf("Frost", "Liquid Glass", "Solid"), p.opt("glass"), { g -> repo.prefs.setOpt("glass", g) })
             // Style studio: open Chat style or Home style to see every choice with a live preview.
             SectionLabel("Style studio")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

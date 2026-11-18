@@ -557,6 +557,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                         onReply = { replyTo = m },
                                         onOpenMedia = { ref -> if (selecting) toggle(selected, m.key) else view(m, ref) },
                                         onRetry = { if (bundle == null) repo.retry(m) else bundle.map { it.first }.distinctBy { it.key }.filter { it.failed }.forEach { repo.retry(it) } },
+                                        onSave = { val refs = bundle?.map { it.second } ?: m.media.filter { it.isImage || it.isVideo }; scope.launch { saveFiles(ctx, repo.filesFor(refs)) } },
                                         onPlaced = { bubbleCoords[m.key] = it },
                                         onOpenItem = { bm, r -> if (selecting) toggle(selected, bm.key) else view(bm, r) },
                                         onLongItem = { bm -> if (!selecting) { openMenu(bm); info = null } },
@@ -691,6 +692,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                 // Composer and everything above it. Measured with the keyboard included, so when the
                 // keyboard opens the newest messages ride up with it instead of hiding behind it.
                 if (!panelOn) Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { bottomH = it.height }.imePadding()) {
+                    RaiseToListen()
                     UndoSendPill(t, repo.held.values.any { it == convId }) { repo.undoSend(convId)?.let { back -> if (back.isNotBlank()) draft = back } }
                     Composer(
                         t = t, conv = conv, draft = draft, onDraft = { draft = it; if (it.isNotEmpty()) repo.typingPing(convId) },

@@ -230,6 +230,14 @@ object Notifier {
             .setOnlyAlertOnce(dupe)
             .setSilent(dupe || hush)
         if (!p.on("vibrate") || alerts?.vibrate == "Off") b.setVibrate(longArrayOf(0L))
+        // Chat bubbles: Android floats the chat over other apps when you allow bubbles for Pyng.
+        if (android.os.Build.VERSION.SDK_INT >= 30 && p.on("bubbles") && !placeholder) runCatching {
+            val bubble = PendingIntent.getActivity(
+                ctx, code + 7, Intent(ctx, com.jpetrydesign.pyng.BubbleActivity::class.java).setAction("bubble:" + conv.id).putExtra("chat", conv.id),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+            )
+            b.setBubbleMetadata(NotificationCompat.BubbleMetadata.Builder(bubble, IconCompat.createWithBitmap(icon)).setDesiredHeight(640).build())
+        }
         if (otp != null && !placeholder) {
             val copyPi = PendingIntent.getBroadcast(
                 ctx, code + 3, Intent(ctx, NotifyReceiver::class.java).setAction("copy").putExtra("chat", conv.id).putExtra("code", otp),
