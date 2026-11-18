@@ -58,6 +58,15 @@ data class Starred(val msgId: String, val convId: String, val text: String, val 
     }
 }
 
+/** A category you made for Home, with the chats in it. Unless [alsoPrimary], its chats leave Primary. */
+data class Category(val id: String, val name: String, val chats: List<String> = emptyList(), val alsoPrimary: Boolean = false) {
+    fun json(): JSONObject = JSONObject().put("id", id).put("name", name).put("chats", JSONArray(chats)).put("alsoPrimary", alsoPrimary)
+
+    companion object {
+        fun from(o: JSONObject) = Category(o.optString("id"), o.optString("name"), o.optJSONArray("chats")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(), o.optBoolean("alsoPrimary"))
+    }
+}
+
 /** Something you deleted, kept 30 days in case you want it back. kind is "msg" or "conv". */
 data class TrashItem(val kind: String, val id: String, val convId: String, val title: String, val text: String, val at: Long, val ts: Long, val fromMe: Boolean = false) {
     fun json(): JSONObject = JSONObject().put("kind", kind).put("id", id).put("convId", convId).put("title", title).put("text", text).put("at", at).put("ts", ts).put("fromMe", fromMe)
@@ -81,7 +90,7 @@ val DEFAULT_TOGGLES = mapOf(
     "quick" to true, "counter" to true, "spam" to true, "otpChip" to true, "otpAuto" to true, "bioLock" to false, "hideSwitcher" to false,
     "reduceBlur" to false, "reduceMotion" to false, "boldText" to false, "highContrast" to false, "effects" to true,
     "alwaysOn" to false, "hideGmAlerts" to false, "smsLinks" to false,
-    "undoSend" to true, "quiet" to false, "quietFavs" to true, "autoDelCodes" to false,
+    "undoSend" to true, "cats" to false, "catPriority" to true, "catFavs" to true, "quiet" to false, "quietFavs" to true, "autoDelCodes" to false,
 )
 
 val DEFAULT_OPTS = mapOf(
@@ -150,6 +159,8 @@ data class AppPrefs(
     val savedThemes: List<SavedTheme> = emptyList(),
     val trash: List<TrashItem> = emptyList(),
     val blockedWords: List<String> = emptyList(),
+    val categories: List<Category> = emptyList(),
+    val favs: Set<String> = emptySet(),
 ) {
     fun on(key: String) = toggles[key] ?: DEFAULT_TOGGLES[key] ?: false
     fun opt(key: String) = opts[key] ?: DEFAULT_OPTS[key].orEmpty()
@@ -176,6 +187,7 @@ private fun AppPrefs.toJson(): JSONObject = JSONObject().apply {
     put("permsAsked", permsAsked)
     put("savedThemes", JSONArray(savedThemes.map { it.json() }))
     put("trash", JSONArray(trash.map { it.json() })); put("blockedWords", JSONArray(blockedWords))
+    put("categories", JSONArray(categories.map { it.json() })); put("favs", JSONArray(favs.toList()))
 }
 
 private fun JSONObject.strList(k: String) = optJSONArray(k).mapEach { optJSONArray(k)!!.optString(it) }
@@ -226,6 +238,8 @@ private fun fromJson(o: JSONObject): AppPrefs {
         savedThemes = o.optJSONArray("savedThemes").mapEach { SavedTheme.from(o.optJSONArray("savedThemes")!!.getJSONObject(it)) },
         trash = o.optJSONArray("trash").mapEach { TrashItem.from(o.optJSONArray("trash")!!.getJSONObject(it)) },
         blockedWords = o.strList("blockedWords"),
+        categories = o.optJSONArray("categories").mapEach { Category.from(o.optJSONArray("categories")!!.getJSONObject(it)) },
+        favs = o.strList("favs").toSet(),
     )
 }
 

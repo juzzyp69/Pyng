@@ -87,6 +87,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -102,6 +103,7 @@ import com.jpetrydesign.pyng.ui.Nav
 import com.jpetrydesign.pyng.ui.Route
 import com.jpetrydesign.pyng.ui.kit.Avatar
 import com.jpetrydesign.pyng.ui.kit.Hairline
+import com.jpetrydesign.pyng.ui.kit.semanticsLabel
 import com.jpetrydesign.pyng.ui.kit.CountBadge
 import com.jpetrydesign.pyng.ui.kit.enterOnce
 import com.jpetrydesign.pyng.ui.kit.Glow
@@ -177,6 +179,27 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
     // Texts from numbers you don't know: a slim card offers to review them. Nothing is hidden.
     val unknownIds = if (p.on("unknownFilter")) active.filter { c -> !c.known && !c.business && !c.fromMe && unreadOf(c) && c.id !in p.dismissedUnknown }.map { it.id } else emptyList()
     var unknownSheet by remember { mutableStateOf(false) }
+    // Categories along the top (optional): Priority, Primary, Favorites and your own.
+    val catsOn = p.on("cats")
+    var catPick by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("primary") }
+    val catList = buildList {
+        if (p.on("catPriority")) add("priority" to "Priority")
+        add("primary" to "Primary")
+        if (p.on("catFavs")) add("favorites" to "Favorites")
+        p.categories.forEach { add(it.id to it.name) }
+    }
+    val cat = if (catsOn && catList.any { it.first == catPick }) catPick else "primary"
+    val awayFromPrimary = p.categories.filter { !it.alsoPrimary }.flatMap { it.chats }.toSet()
+    fun inCat(c: Conv, id: String): Boolean = when (id) {
+        "primary" -> !catsOn || c.id !in awayFromPrimary
+        "priority" -> c.id in p.favs || (unreadOf(c) && !c.business && (c.known || detect(c.preview).code != null)) ||
+            (unreadOf(c) && c.known && (c.preview.trimEnd().endsWith("?") || detect(c.preview).date != null))
+        "favorites" -> c.id in p.favs
+        else -> p.categories.firstOrNull { it.id == id }?.chats?.contains(c.id) == true
+    }
+    fun catUnread(id: String) = active.count { unreadOf(it) && inCat(it, id) }
+    var newCatSheet by remember { mutableStateOf(false) }
+
     var profileMenu by remember { mutableStateOf(false) }
     val pinnedIds = p.pinned.filter { id -> active.any { it.id == id } }
 
@@ -201,10 +224,11 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
             if (inZone && (!dragFromRow || without.size < 8)) without.toMutableList().apply { add(target.coerceIn(0, size), id) } else without
         }
     }
-    val pins = previewIds.mapNotNull { id -> active.firstOrNull { it.id == id } }.map { c ->
+    val pins = (if (cat == "primary") previewIds else emptyList()).mapNotNull { id -> active.firstOrNull { it.id == id } }.map { c ->
         Pin(c, whoOf(c, repo, t), countOf(c), typingOf(c), (if (c.fromMe) "You: " else if (c.group && c.sender.isNotBlank()) c.sender.substringBefore(' ') + ": " else "") + repo.previewOf(c))
     }
-    val rows = (if (layout == "List") pins.map { it.c } else emptyList()) + active.filter { it.id !in pinnedIds }.sortedByDescending { it.ts }
+    val rows = if (cat != "primary") active.filter { inCat(it, cat) }.sortedByDescending { it.ts }
+        else (if (layout == "List") pins.map { it.c } else emptyList()) + active.filter { it.id !in pinnedIds && inCat(it, "primary") }.sortedByDescending { it.ts }
     val archCount = all.count { it.status == "archived" }
     val spamCount = all.count { it.status == "spam" || it.status == "blocked" } + spamLocal.size
     val newCount = active.count { unreadOf(it) && it.id !in p.muted }
@@ -492,7 +516,8 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
 
             // The title bar stays pinned at the top; the chats slide under its frost.
             com.jpetrydesign.pyng.ui.kit.TopBar(haze, Modifier.align(Alignment.TopCenter).onSizeChanged { barH = it.height }) {
-                Row(Modifier.weight(1f).padding(start = 22.dp, end = 16.dp, top = 4.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+              Column(Modifier.weight(1f)) {
+                Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 16.dp, top = 4.dp, bottom = if (catsOn && !editPins) 10.dp else 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         T("Messages", size = 28.sp, weight = FontWeight.Bold, letterSpacing = (-0.9).sp, lineHeight = 32.sp)
                         Spacer(Modifier.height(3.dp))
@@ -505,6 +530,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                                     repo.loading && all.isEmpty() -> "Loading your chats…"
                                     status == "phone_not_responding" -> "Your phone isn't responding"
                                     status == "reconnecting" || status == "connecting" -> "Connecting…"
+                                    cat != "primary" -> catList.firstOrNull { it.first == cat }?.second.orEmpty() + " · " + catUnread(cat).let { if (it > 0) "$it unread" else "all read" }
                                     newCount > 0 -> "$newCount New Conversation" + if (newCount > 1) "s" else ""
                                     else -> "You’re All Caught Up"
                                 },
@@ -513,13 +539,15 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                         }
                     }
                     val photo = p.profilePhoto.ifEmpty { null }
-                    Box {
+                    Box(Modifier.align(Alignment.Top)) {
                         Box(Modifier.size(44.dp).edge(CircleShape, elevation = 8.dp).clip(CircleShape).press(0.92f) { profileMenu = true }) {
                             Avatar(photo, com.jpetrydesign.pyng.ui.kit.initialsOf(p.profileName.ifBlank { "Me" }), 44.dp, t.tone, t.p)
                         }
                         ProfileMenu(profileMenu, nav, trashCount = p.trash.size) { profileMenu = false }
                     }
                 }
+                if (catsOn && !editPins) CategoryBar(catList, cat, ::catUnread, onPick = { catPick = it }, onAdd = { newCatSheet = true })
+              }
             }
 
             if (layout == "Dock" && pins.isNotEmpty()) {
@@ -637,6 +665,8 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
         androidx.compose.runtime.SideEffect { peek.onEditPins = { editPins = true } }
         PermissionSheet(askPerms) { askPerms = false; repo.prefs.edit { it.copy(permsAsked = 1) } }
         UnknownSheet(unknownSheet, unknownIds.mapNotNull { repo.convs[it] }, nav) { unknownSheet = false }
+        NewCategorySheet(newCatSheet) { name -> newCatSheet = false; if (name != null) { val id = "c" + System.currentTimeMillis(); repo.prefs.edit { it.copy(categories = it.categories + com.jpetrydesign.pyng.data.Category(id, name)) }; catPick = id; repo.toast("Hold a chat and tap Move to add it to $name") } }
+        MoveToCategorySheet(CatMove.conv) { CatMove.conv = null }
         if (nav.strip) ColorStrip(onDone = { nav.closeStrip() })
     }
 }
@@ -1435,6 +1465,25 @@ private fun PeekBody(cur: Conv, repo: com.jpetrydesign.pyng.data.Repo, t: com.jp
                     repo.toast(if (!archived) "Chat archived" else "Moved back to your inbox", if (!archived) ({ repo.setArchived(cur.id, false) }) else null)
                 }
             }
+            if (p.on("cats")) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                val fav = cur.id in p.favs
+                listOf(
+                    Triple(if (fav) "Unfavorite" else "Favorite", Icons.star) {
+                        repo.prefs.edit { it.copy(favs = if (fav) it.favs - cur.id else it.favs + cur.id) }
+                        repo.toast(if (fav) "Removed from Favorites" else "Added to Favorites")
+                    },
+                    Triple("Move to…", Icons.box) { onDismiss(); CatMove.conv = cur },
+                ).forEach { (label, icon, go) ->
+                    Row(
+                        Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(22.dp)).background(t.surface).clickable(onClick = go),
+                        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Ico(icon, t.ink, 16.dp, 2f)
+                        Spacer(Modifier.width(7.dp))
+                        T(label, size = 13.sp, weight = FontWeight.SemiBold, maxLines = 1)
+                    }
+                }
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 @Composable fun small(label: String, icon: String, danger: Boolean = false, go: () -> Unit) {
                     Row(
@@ -1670,5 +1719,136 @@ private fun ProfileMenu(open: Boolean, nav: Nav, trashCount: Int, onClose: () ->
                 modifier = Modifier.padding(horizontal = 4.dp),
             )
         }
+    }
+}
+
+/** Which chat the "Move to…" sheet is for. */
+object CatMove { var conv by mutableStateOf<Conv?>(null) }
+
+/**
+ * Words along a soft track; the picked one sits on a lit pill that springs across, leading edge first.
+ * Scrolls sideways when there are more than fit. No icons or dots, just the names.
+ */
+@Composable
+private fun CategoryBar(items: List<Pair<String, String>>, cur: String, unread: (String) -> Int, onPick: (String) -> Unit, onAdd: () -> Unit) {
+    val t = LocalTok.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val pos = remember { androidx.compose.runtime.mutableStateMapOf<String, Pair<Float, Float>>() }
+    val scroll = rememberScrollState()
+    val target = pos[cur]
+    val left = remember { Animatable(0f) }
+    val right = remember { Animatable(0f) }
+    var placed by remember { mutableStateOf(false) }
+    LaunchedEffect(cur, target) {
+        val (x, w) = target ?: return@LaunchedEffect
+        if (!placed) { left.snapTo(x); right.snapTo(x + w); placed = true; return@LaunchedEffect }
+        // The edge in the direction of travel moves first; the other catches up, so the pill stretches a little.
+        val goingRight = x > left.value
+        val fast = androidx.compose.animation.core.spring<Float>(dampingRatio = 0.78f, stiffness = 900f)
+        val slow = androidx.compose.animation.core.spring<Float>(dampingRatio = 0.82f, stiffness = 420f)
+        launch { left.animateTo(x, if (goingRight) slow else fast) }
+        launch { right.animateTo(x + w, if (goingRight) fast else slow) }
+        // Keep the picked one in view.
+        val vp = scroll.viewportSize
+        if (vp > 0) {
+            val pad = with(density) { 24.dp.toPx() }
+            if (x - pad < scroll.value) scroll.animateScrollTo((x - pad).toInt().coerceAtLeast(0))
+            else if (x + w + pad > scroll.value + vp) scroll.animateScrollTo((x + w + pad - vp).toInt())
+        }
+    }
+    val track = if (t.dark) Color.White.copy(alpha = 0.07f) else t.ink.copy(alpha = 0.05f)
+    Box(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 12.dp).clip(RoundedCornerShape(24.dp)).background(track)) {
+        Box(Modifier.horizontalScroll(scroll).padding(4.dp)) {
+            if (placed) Box(
+                Modifier.offset { androidx.compose.ui.unit.IntOffset(left.value.toInt(), 0) }
+                    .width(with(density) { (right.value - left.value).coerceAtLeast(0f).toDp() }).height(38.dp)
+                    .shadow(10.dp, RoundedCornerShape(19.dp), clip = false, ambientColor = t.p.copy(alpha = 0.3f), spotColor = t.p.copy(alpha = 0.35f))
+                    .clip(RoundedCornerShape(19.dp))
+                    .background(Brush.verticalGradient(listOf(androidx.compose.ui.graphics.lerp(t.fill, Color.White, 0.16f), t.fill))),
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                items.forEach { (id, name) ->
+                    val on = id == cur
+                    val ink by androidx.compose.animation.animateColorAsState(if (on) t.onFill else t.soft, tween(220), label = "catInk")
+                    Box(
+                        Modifier.height(38.dp).widthIn(min = 64.dp).clip(RoundedCornerShape(19.dp))
+                            .onGloballyPositioned { c -> pos[id] = c.positionInParent().x to c.size.width.toFloat() }
+                            .clickable { if (!on) { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onPick(id) } }
+                            .padding(horizontal = 15.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        val n = unread(id)
+                        T(if (n > 0 && !on && id != "primary") "$name $n" else name, size = 14.sp, weight = FontWeight.SemiBold, color = ink, maxLines = 1)
+                    }
+                }
+                Box(
+                    Modifier.padding(start = 2.dp).size(38.dp).clip(CircleShape).clickable(onClick = onAdd).semanticsLabel("New category"),
+                    contentAlignment = Alignment.Center,
+                ) { Ico(Icons.plus, t.soft, 17.dp, 2.2f) }
+            }
+        }
+    }
+}
+
+/** Names a new category. Returns null when you back out. */
+@Composable
+private fun NewCategorySheet(visible: Boolean, onDone: (String?) -> Unit) {
+    val t = LocalTok.current
+    var name by remember(visible) { mutableStateOf("") }
+    com.jpetrydesign.pyng.ui.kit.Sheet(visible, { onDone(null) }) {
+        T("New category", size = 20.sp, weight = FontWeight.SemiBold)
+        T("Give it a short name. Then hold any chat and tap Move to add it.", size = 13.5.sp, color = t.soft, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
+        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(t.card).padding(horizontal = 16.dp, vertical = 14.dp)) {
+            androidx.compose.foundation.text.BasicTextField(
+                name, { if (it.length <= 24) name = it }, singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(color = t.ink, fontSize = 16.sp),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(t.p),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Words, imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { if (name.isNotBlank()) onDone(name.trim()) }),
+                modifier = Modifier.fillMaxWidth(),
+                decorationBox = { inner -> Box { if (name.isEmpty()) T("Work, Family, Climbing…", size = 16.sp, color = t.faint); inner() } },
+            )
+        }
+        Spacer(Modifier.height(14.dp))
+        com.jpetrydesign.pyng.ui.kit.PillButton("Create", onClick = { if (name.isNotBlank()) onDone(name.trim()) }, modifier = Modifier.fillMaxWidth())
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+/** Puts a chat in one of your categories, or takes it out. */
+@Composable
+private fun MoveToCategorySheet(c: Conv?, onDismiss: () -> Unit) {
+    val repo = LocalRepo.current
+    val t = LocalTok.current
+    val p = repo.prefs.state
+    var shown by remember { mutableStateOf<Conv?>(null) }
+    if (c != null) shown = c
+    val cur = shown
+    com.jpetrydesign.pyng.ui.kit.Sheet(c != null, onDismiss) {
+        if (cur == null) return@Sheet
+        T("Move ${cur.shortTitle} to…", size = 20.sp, weight = FontWeight.SemiBold, maxLines = 1)
+        Spacer(Modifier.height(12.dp))
+        if (p.categories.isEmpty()) T("You haven't made any categories yet. Tap + at the end of the category bar to make one.", size = 14.sp, color = t.soft, lineHeight = 20.sp)
+        else com.jpetrydesign.pyng.ui.kit.Card {
+            val inAny = p.categories.any { cur.id in it.chats }
+            p.categories.forEachIndexed { i, k ->
+                if (i > 0) Hairline()
+                val here = cur.id in k.chats
+                com.jpetrydesign.pyng.ui.kit.ListRow(k.name, if (k.alsoPrimary) "Also shows in Primary" else null, onClick = {
+                    // A chat lives in one category of yours at a time.
+                    repo.prefs.edit { pr -> pr.copy(categories = pr.categories.map { x -> x.copy(chats = if (x.id == k.id && !here) x.chats + cur.id else x.chats - cur.id) }) }
+                    repo.toast(if (here) "Taken out of ${k.name}" else "Moved to ${k.name}"); onDismiss()
+                }, trailing = { if (here) Ico(Icons.check, t.p, 18.dp, 2.4f) })
+            }
+            if (inAny) {
+                Hairline()
+                com.jpetrydesign.pyng.ui.kit.ListRow("Just Primary", null, onClick = {
+                    repo.prefs.edit { pr -> pr.copy(categories = pr.categories.map { x -> x.copy(chats = x.chats - cur.id) }) }
+                    repo.toast("Back in Primary"); onDismiss()
+                }, trailing = null)
+            }
+        }
+        Spacer(Modifier.height(10.dp))
     }
 }

@@ -142,6 +142,7 @@ fun SettingsScreen(nav: Nav) {
         val secs = listOf(
             Sec("appearance", "Appearance", Icons.palette, "${pal.name} · ${p.mode} · ${p.bubble} bubbles"),
             Sec("chats", "Chats", Icons.message, "Replies, receipts, media, GIFs, gestures"),
+            Sec("categories", "Categories", Icons.box, if (p.on("cats")) "On · " + (listOfNotNull("Priority".takeIf { p.on("catPriority") }, "Primary", "Favorites".takeIf { p.on("catFavs") }) + p.categories.map { it.name }).joinToString(", ") else "Off · sort your chats like Mail"),
             Sec("notifications", "Notifications", Icons.bell, if (p.on("notif")) "On · quick reply " + (if (p.on("quick")) "on" else "off") else "Off"),
             Sec("chatfeat", "Chat features", Icons.wifi, if (conn == "ready" || conn == "idle") "Connected through Google Messages" else "Connecting…"),
             Sec("privacy", "Privacy & safety", Icons.shield, (if (p.on("spam")) "Spam protection on" else "Spam protection off") + if (p.on("bioLock")) " · app lock on" else ""),
@@ -178,6 +179,65 @@ private fun TimeRow(label: String, key: String) {
     ListRow(label, shown, onClick = {
         android.app.TimePickerDialog(ctx, { _, hh, mm -> repo.prefs.setOpt(key, "%02d:%02d".format(hh, mm)) }, h, m, android.text.format.DateFormat.is24HourFormat(ctx)).show()
     })
+}
+
+/** Turn categories on, pick the built-in ones, and manage your own. */
+@Composable
+private fun Categories() {
+    val repo = LocalRepo.current
+    val t = LocalTok.current
+    val p = repo.prefs.state
+    var input by remember { mutableStateOf("") }
+    fun add() {
+        val n = input.trim()
+        if (n.isNotEmpty() && p.categories.none { it.name.equals(n, true) }) repo.prefs.edit { it.copy(categories = it.categories + com.jpetrydesign.pyng.data.Category("c" + System.currentTimeMillis(), n)) }
+        input = ""
+    }
+    Group("Categories") {
+        TogRow("Categories", "cats", "A bar under Messages to switch between Priority, Primary, Favorites and your own"); Hairline()
+        TogRow("Priority", "catPriority", "Unread texts from people you know, codes, questions and plans, plus your Favorites"); Hairline()
+        TogRow("Favorites", "catFavs", "Chats you favorite. Hold a chat and tap Favorite.")
+    }
+    SectionLabel("Your categories")
+    if (p.categories.isNotEmpty()) Card {
+        p.categories.forEachIndexed { i, k ->
+            if (i > 0) Hairline()
+            Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        T(k.name, size = 15.5.sp, weight = FontWeight.SemiBold, maxLines = 1)
+                        T((if (k.chats.isEmpty()) "No chats yet" else "${k.chats.size} chat" + if (k.chats.size > 1) "s" else "") + if (k.alsoPrimary) " · also in Primary" else " · moved out of Primary", size = 12.5.sp, color = t.soft)
+                    }
+                    Box(Modifier.size(40.dp).clip(CircleShape).clickable {
+                        repo.confirm("Delete ${k.name}?", "Its chats go back to Primary. Nothing is deleted.") { repo.prefs.edit { pr -> pr.copy(categories = pr.categories.filter { it.id != k.id }) } }
+                    }, contentAlignment = Alignment.Center) { Ico(Icons.trash, t.danger, 18.dp) }
+                }
+                Row(Modifier.padding(top = 8.dp).clip(RoundedCornerShape(17.dp)).clickable {
+                    repo.prefs.edit { pr -> pr.copy(categories = pr.categories.map { if (it.id == k.id) it.copy(alsoPrimary = !it.alsoPrimary) else it }) }
+                }.padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Toggle(k.alsoPrimary)
+                    Spacer(Modifier.width(10.dp))
+                    T("Also show in Primary", size = 13.5.sp)
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(t.card).padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        androidx.compose.foundation.text.BasicTextField(
+            input, { if (it.length <= 24) input = it }, singleLine = true,
+            textStyle = androidx.compose.ui.text.TextStyle(color = t.ink, fontSize = 15.sp),
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(t.p),
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Words, imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { add() }),
+            modifier = Modifier.weight(1f),
+            decorationBox = { inner -> Box { if (input.isEmpty()) T("New category, like Work", size = 15.sp, color = t.faint); inner() } },
+        )
+        Box(Modifier.height(38.dp).clip(RoundedCornerShape(19.dp)).background(if (input.isBlank()) t.neutral else t.fill).clickable(enabled = input.isNotBlank()) { add() }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+            T("Add", size = 14.sp, weight = FontWeight.SemiBold, color = if (input.isBlank()) t.soft else t.onFill)
+        }
+    }
+    Note("To put a chat in a category, hold it in your list and tap Move to. A chat can be in one of your categories at a time.")
 }
 
 /** Words that send a text to Spam, quietly. */
@@ -248,7 +308,7 @@ fun SectionScreen(nav: Nav, key: String) {
     val p = repo.prefs.state
     val conn by repo.hub.connection.collectAsState()
     val app = ctx.applicationContext as PyngApp
-    val title = mapOf("chats" to "Chats", "notifications" to "Notifications", "chatfeat" to "Chat features", "privacy" to "Privacy & safety", "access" to "Accessibility", "storage" to "Storage", "about" to "Help & about", "versions" to "Version history", "blockedWords" to "Blocked words")[key] ?: "Settings"
+    val title = mapOf("chats" to "Chats", "notifications" to "Notifications", "chatfeat" to "Chat features", "privacy" to "Privacy & safety", "access" to "Accessibility", "storage" to "Storage", "about" to "Help & about", "versions" to "Version history", "blockedWords" to "Blocked words", "categories" to "Categories")[key] ?: "Settings"
     Page(title, { nav.back() }) {
         when (key) {
             "versions" -> VersionHistory()
@@ -424,6 +484,7 @@ fun SectionScreen(nav: Nav, key: String) {
                 Note("These work alongside your phone's accessibility settings, including system font size and TalkBack.")
             }
             "blockedWords" -> BlockedWords()
+            "categories" -> Categories()
             "storage" -> {
                 var size by remember { mutableStateOf(-1L) }
                 LaunchedEffect(Unit) { size = withContext(Dispatchers.IO) { repo.cacheBytes() } }
