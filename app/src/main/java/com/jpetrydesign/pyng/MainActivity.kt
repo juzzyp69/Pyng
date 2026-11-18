@@ -99,7 +99,10 @@ class MainActivity : FragmentActivity() {
         } else repo.loadDemo()
         repo.demoOpen = i.getStringExtra("open")
         repo.prefs.edit { pr ->
-            var x = pr.copy(toggles = pr.toggles + ("bioLock" to false))
+            // Screenshots skip the What's New card unless they ask for it.
+            var x = pr.copy(toggles = pr.toggles + ("bioLock" to false) + ("cats" to i.getBooleanExtra("cats", false)) + ("unknownFilter" to true),
+                seenVersion = if (i.getBooleanExtra("whatsnew", false)) "" else BuildConfig.VERSION_NAME)
+            i.getStringExtra("glass")?.let { x = x.copy(opts = x.opts + ("glass" to it)) }
             i.getStringExtra("mode")?.let { x = x.copy(mode = it) }
             i.getStringExtra("layout")?.let { x = x.copy(pinLayout = it) }
             i.getStringExtra("text")?.let { x = x.copy(textSize = it) }

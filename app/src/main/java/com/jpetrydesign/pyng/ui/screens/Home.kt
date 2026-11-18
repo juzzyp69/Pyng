@@ -159,7 +159,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
             "strip" -> nav.strip = true
             "perms" -> askPerms = true
         }
-        repo.demoOpen = null
+        if (repo.demoOpen !in LATER_OPENS) repo.demoOpen = null
     }
 
     val all = repo.convs.values.toList()
@@ -202,6 +202,16 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
     var newCatSheet by remember { mutableStateOf(false) }
 
     var profileMenu by remember { mutableStateOf(false) }
+    // Screenshots can open these too (demo only).
+    LaunchedEffect(Unit) {
+        when (repo.demoOpen) {
+            "profile" -> profileMenu = true
+            "unknown" -> unknownSheet = true
+            "snooze" -> SnoozeFor.conv = repo.convs["c6"] ?: repo.convs["g1"]
+            "newcat" -> newCatSheet = true
+        }
+        if (repo.demoOpen in LATER_OPENS) repo.demoOpen = null
+    }
     val pinnedIds = p.pinned.filter { id -> active.any { it.id == id } }
 
     // Dragging: a pinned chat (to reorder or drag out) or a list row (to drag up into pins).
@@ -1946,3 +1956,5 @@ private fun PadSheet(visible: Boolean, onDismiss: () -> Unit, maxHeightFraction:
         Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 6.dp), content = content)
     }
 }
+
+private val LATER_OPENS = setOf("profile", "unknown", "snooze", "newcat")

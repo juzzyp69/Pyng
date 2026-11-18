@@ -41,6 +41,13 @@ WAIT=10 shot 05-home-rowmenu --es open rowmenu --es pinstyle Badges
 shot 06-home-strip --es open strip
 shot 07-home-perms --es open perms
 shot 08-home-duo --es theme "'Grape Soda'"
+shot 09-home-cats --ez cats true
+WAIT=6 shot 09b-home-profile --es open profile
+WAIT=6 shot 09c-home-whatsnew --ez whatsnew true
+WAIT=6 shot 09d-home-unknown --es open unknown
+WAIT=6 shot 09e-home-snooze --es open snooze
+WAIT=6 shot 09f-home-newcat --ez cats true --es open newcat
+shot 09g-home-liquid --es glass "'Liquid Glass'"
 shot 10-thread --es route thread:c1 --es theme Ocean
 shot 11-thread-dark --es route thread:c1 --es mode Dark
 shot 12-thread-group --es route thread:c3 --es mode Light
@@ -77,14 +84,14 @@ WAIT=8 shot 45c-newgroup-name --es route new --es open group-name
 WAIT=8 shot 45d-share --es route share
 WAIT=8 shot 45e-share-dark --es route share --es mode Dark
 shot 50-settings --es route settings
-for S in chats notifications chatfeat privacy access storage about; do shot "51-section-$S" --es route "section:$S"; done
+for S in chats categories notifications chatfeat privacy access storage about blockedWords; do shot "51-section-$S" --es route "section:$S"; done
 shot 52-appearance --es route appearance
 shot 52b-studio-chat --es route appearance --es open studio:chat
 shot 52c-studio-home --es route appearance --es open studio:home
 for K in pinLayout pinStyle bubble textSize showPhotos density appIcon defWall sendStyle reactStyle; do shot "53-pick-$K" --es route appearance --es open "pick:$K"; done
 shot 54-profile --es route profile
 shot 55-react --es route react
-for K in archived starred scheduled spam; do shot "56-list-$K" --es route "lists:$K"; done
+for K in archived starred scheduled spam trash snoozed; do shot "56-list-$K" --es route "lists:$K"; done
 for N in 0 1 2 3; do shot "60-setup-$N" --es route "setup:$N"; done
 shot 61-log --es route log
 shot 62-home-editpins --es open editpins
