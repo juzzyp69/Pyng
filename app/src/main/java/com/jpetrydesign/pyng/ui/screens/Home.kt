@@ -175,7 +175,8 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
         c.status == "active" && c.id !in p.notSpam && !c.fromMe && ((p.on("spam") && spamCheck(c, c.preview) != null) || repo.hasBlockedWord(c.preview))
     }.map { it.id }.toSet()
     val trashed = repo.trashedChats()
-    val active = all.filter { it.status == "active" && it.id !in spamLocal && it.id !in trashed }
+    val snoozedNow = p.snoozed.filterValues { it > now }.keys
+    val active = all.filter { it.status == "active" && it.id !in spamLocal && it.id !in trashed && it.id !in snoozedNow }
     // Texts from numbers you don't know: a slim card offers to review them. Nothing is hidden.
     val unknownIds = if (p.on("unknownFilter")) active.filter { c -> !c.known && !c.business && !c.fromMe && unreadOf(c) && c.id !in p.dismissedUnknown }.map { it.id } else emptyList()
     var unknownSheet by remember { mutableStateOf(false) }
@@ -502,6 +503,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                         androidx.compose.material3.CircularProgressIndicator(color = t.soft, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
                     }
                 }
+                if (snoozedNow.isNotEmpty() && cat == "primary") item("snoozed") { Box(onSheet) { FolderRow(Icons.clock, "Snoozed · ${snoozedNow.size}") { nav.go(Route.Lists("snoozed")) } } }
                 if (archCount > 0) item("arch") { Box(onSheet) { FolderRow(Icons.archive, "Archived · $archCount") { nav.go(Route.Lists("archived")) } } }
                 if (spamCount > 0) item("spam") { Box(onSheet) { FolderRow(Icons.shield, "Spam & blocked · $spamCount") { nav.go(Route.Lists("spam")) } } }
                 item("hint") { Box(if (sheetMode) onSheet.heightIn(min = 400.dp) else Modifier.fillMaxWidth()) {
@@ -667,6 +669,12 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
         UnknownSheet(unknownSheet, unknownIds.mapNotNull { repo.convs[it] }, nav) { unknownSheet = false }
         NewCategorySheet(newCatSheet) { name -> newCatSheet = false; if (name != null) { val id = "c" + System.currentTimeMillis(); repo.prefs.edit { it.copy(categories = it.categories + com.jpetrydesign.pyng.data.Category(id, name)) }; catPick = id; repo.toast("Hold a chat and tap Move to add it to $name") } }
         MoveToCategorySheet(CatMove.conv) { CatMove.conv = null }
+        SnoozeSheet(SnoozeFor.conv) { SnoozeFor.conv = null }
+        // After an update: a short card with what's new, once.
+        val fresh = RELEASES.firstOrNull()?.takeIf { it.version == com.jpetrydesign.pyng.BuildConfig.VERSION_NAME }
+        WhatsNewSheet(if (fresh != null && p.setupDone && !askPerms && p.seenVersion != fresh.version) fresh else null, onAll = { nav.go(Route.Section("versions")) }) {
+            repo.prefs.edit { it.copy(seenVersion = com.jpetrydesign.pyng.BuildConfig.VERSION_NAME) }
+        }
         if (nav.strip) ColorStrip(onDone = { nav.closeStrip() })
     }
 }
@@ -1497,6 +1505,7 @@ private fun PeekBody(cur: Conv, repo: com.jpetrydesign.pyng.data.Repo, t: com.jp
                     }
                 }
                 if (onEditPins != null && pinned) small("Edit pins", Icons.pencil) { onDismiss(); onEditPins() }
+                small("Snooze", Icons.clock) { onDismiss(); SnoozeFor.conv = cur }
                 if (!cur.group) small("Block", Icons.block) { onDismiss(); repo.setBlocked(cur.id, true); repo.toast("Blocked ${cur.shortTitle}") { repo.setBlocked(cur.id, false) } }
                 small("Delete", Icons.trash, danger = true) {
                     onDismiss()
@@ -1633,7 +1642,7 @@ private fun UnknownSheet(visible: Boolean, list: List<Conv>, nav: Nav, onDismiss
     val repo = LocalRepo.current
     val t = LocalTok.current
     LaunchedEffect(visible, list.size) { if (visible && list.isEmpty()) onDismiss() }
-    com.jpetrydesign.pyng.ui.kit.Sheet(visible, onDismiss) {
+    PadSheet(visible, onDismiss) {
         T("Unknown senders", size = 20.sp, weight = FontWeight.SemiBold)
         T("From numbers that aren't in your contacts. Nothing here is hidden unless you choose to.", size = 13.5.sp, color = t.soft, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
         list.forEach { c ->
@@ -1796,7 +1805,7 @@ private fun CategoryBar(items: List<Pair<String, String>>, cur: String, unread: 
 private fun NewCategorySheet(visible: Boolean, onDone: (String?) -> Unit) {
     val t = LocalTok.current
     var name by remember(visible) { mutableStateOf("") }
-    com.jpetrydesign.pyng.ui.kit.Sheet(visible, { onDone(null) }) {
+    PadSheet(visible, { onDone(null) }) {
         T("New category", size = 20.sp, weight = FontWeight.SemiBold)
         T("Give it a short name. Then hold any chat and tap Move to add it.", size = 13.5.sp, color = t.soft, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
         Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(t.card).padding(horizontal = 16.dp, vertical = 14.dp)) {
@@ -1825,8 +1834,8 @@ private fun MoveToCategorySheet(c: Conv?, onDismiss: () -> Unit) {
     var shown by remember { mutableStateOf<Conv?>(null) }
     if (c != null) shown = c
     val cur = shown
-    com.jpetrydesign.pyng.ui.kit.Sheet(c != null, onDismiss) {
-        if (cur == null) return@Sheet
+    PadSheet(c != null, onDismiss) {
+        if (cur == null) return@PadSheet
         T("Move ${cur.shortTitle} to…", size = 20.sp, weight = FontWeight.SemiBold, maxLines = 1)
         Spacer(Modifier.height(12.dp))
         if (p.categories.isEmpty()) T("You haven't made any categories yet. Tap + at the end of the category bar to make one.", size = 14.sp, color = t.soft, lineHeight = 20.sp)
@@ -1850,5 +1859,90 @@ private fun MoveToCategorySheet(c: Conv?, onDismiss: () -> Unit) {
             }
         }
         Spacer(Modifier.height(10.dp))
+    }
+}
+
+/** Which chat the snooze sheet is for. */
+object SnoozeFor { var conv by mutableStateOf<Conv?>(null) }
+
+/** The times a chat can be snoozed until, from [now]: label, then when. */
+fun snoozeTimes(now: java.util.Calendar = java.util.Calendar.getInstance()): List<Pair<String, Long>> {
+    fun at(daysAhead: Int, hour: Int) = (now.clone() as java.util.Calendar).apply {
+        add(java.util.Calendar.DAY_OF_YEAR, daysAhead); set(java.util.Calendar.HOUR_OF_DAY, hour); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0)
+    }.timeInMillis
+    val h = now.get(java.util.Calendar.HOUR_OF_DAY)
+    val toMonday = ((java.util.Calendar.MONDAY - now.get(java.util.Calendar.DAY_OF_WEEK) + 7) % 7).let { if (it == 0) 7 else it }
+    return buildList {
+        add("In 3 hours" to now.timeInMillis + 3 * 3_600_000L)
+        if (h < 18) add("This evening, 6 PM" to at(0, 18))
+        add("Tomorrow, 8 AM" to at(1, 8))
+        add("Next week, Monday 8 AM" to at(toMonday, 8))
+    }
+}
+
+/** Puts a chat away until later; it comes back to the top of your list at that time. */
+@Composable
+private fun SnoozeSheet(c: Conv?, onDismiss: () -> Unit) {
+    val repo = LocalRepo.current
+    val t = LocalTok.current
+    var shown by remember { mutableStateOf<Conv?>(null) }
+    if (c != null) shown = c
+    val cur = shown
+    PadSheet(c != null, onDismiss) {
+        if (cur == null) return@PadSheet
+        T("Snooze ${cur.shortTitle}", size = 20.sp, weight = FontWeight.SemiBold, maxLines = 1)
+        T("It leaves your list until then, and comes back when someone texts.", size = 13.5.sp, color = t.soft, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
+        com.jpetrydesign.pyng.ui.kit.Card {
+            snoozeTimes().forEachIndexed { i, (label, until) ->
+                if (i > 0) Hairline()
+                com.jpetrydesign.pyng.ui.kit.ListRow(label, null, icon = Icons.clock, onClick = {
+                    repo.prefs.edit { it.copy(snoozed = it.snoozed + (cur.id to until)) }
+                    repo.toast("Snoozed") { repo.prefs.edit { it.copy(snoozed = it.snoozed - cur.id) } }
+                    onDismiss()
+                }, trailing = null)
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+    }
+}
+
+/** What's new in this update: the headlines, then a count of fixes. Shown once per update. */
+@Composable
+private fun WhatsNewSheet(r: Release?, onAll: () -> Unit, onDone: () -> Unit) {
+    val t = LocalTok.current
+    var shown by remember { mutableStateOf<Release?>(null) }
+    if (r != null) shown = r
+    val cur = shown
+    PadSheet(r != null, onDone, maxHeightFraction = 0.86f) {
+        if (cur == null) return@PadSheet
+        T("What's new", size = 24.sp, weight = FontWeight.Bold, letterSpacing = (-0.5).sp)
+        T("Pyng ${cur.version}", size = 13.5.sp, color = t.soft, modifier = Modifier.padding(top = 2.dp, bottom = 14.dp))
+        Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            cur.added.forEachIndexed { i, line ->
+                val head = line.substringBefore('\n'); val more = line.substringAfter('\n', "")
+                Row(Modifier.fillMaxWidth().enter(i)) {
+                    Box(Modifier.padding(top = 2.dp).size(30.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(Icons.spark, t.p, 16.dp) }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        T(head, size = 15.sp, weight = FontWeight.SemiBold)
+                        if (more.isNotEmpty()) T(more, size = 13.5.sp, color = t.soft, lineHeight = 19.sp)
+                    }
+                }
+            }
+            if (cur.fixed.isNotEmpty()) T("Plus ${cur.fixed.size} fixes, like: " + cur.fixed.take(3).joinToString("; ") { it.substringBefore('\n').replaceFirstChar { c -> c.lowercase() } } + ".", size = 13.sp, color = t.soft, lineHeight = 18.sp)
+        }
+        Spacer(Modifier.height(16.dp))
+        com.jpetrydesign.pyng.ui.kit.PillButton("Got it", onClick = onDone, modifier = Modifier.fillMaxWidth())
+        T("See everything that changed", size = 14.sp, weight = FontWeight.SemiBold, color = t.p,
+            modifier = Modifier.align(Alignment.CenterHorizontally).clip(RoundedCornerShape(16.dp)).clickable { onDone(); onAll() }.padding(horizontal = 12.dp, vertical = 12.dp))
+    }
+}
+
+
+/** A bottom sheet with the app's usual side margins. */
+@Composable
+private fun PadSheet(visible: Boolean, onDismiss: () -> Unit, maxHeightFraction: Float = 0.9f, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    com.jpetrydesign.pyng.ui.kit.Sheet(visible, onDismiss, maxHeightFraction) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 6.dp), content = content)
     }
 }

@@ -216,6 +216,16 @@ fun MessageMenu(
             if (cur.text.isNotEmpty()) add(Act(if (links.isNotEmpty() && cur.text.trim() != links.first()) "Copy text" else if (links.isNotEmpty()) "Copy all" else "Copy", Icons.copy) { onCopy(cur) })
             if (cur.text.length > 1) add(Act("Select text", Icons.select) { onSelectText(cur) })
             add(Act(if (p.isStarred(cur.key)) "Unstar" else "Star", Icons.star) { onStar(cur) })
+            if (cur.id.isNotEmpty()) {
+                val pinnedHere = p.pinnedMsgs.any { it.msgId == cur.id }
+                add(Act(if (pinnedHere) "Unpin" else "Pin", Icons.pinned) {
+                    repo.prefs.edit { pr ->
+                        val others = pr.pinnedMsgs.filter { it.convId != cur.convId }
+                        pr.copy(pinnedMsgs = if (pinnedHere) others else others + com.jpetrydesign.pyng.data.Starred(cur.id, cur.convId, cur.summary.ifEmpty { cur.text }.ifEmpty { "Attachment" }, cur.ts))
+                    }
+                    repo.toast(if (pinnedHere) "Unpinned" else "Pinned to the top of this chat")
+                })
+            }
             if (p.on("readAloud") && cur.text.isNotEmpty()) add(Act("Read aloud", Icons.volume) { Speaker.say(ctx, cur.text) })
             add(Act("Delete", Icons.trash, danger = true) { onDelete(cur) })
             add(Act("Select more", Icons.select) { onSelect(cur) })

@@ -187,6 +187,10 @@ fun ContactScreen(nav: Nav, convId: String) {
                                 Spacer(Modifier.height(10.dp))
                                 Chips(listOf("Default", "Off"), alerts.vibrate, { v -> repo.prefs.edit { it.copy(alerts = it.alerts + (convId to alerts.copy(vibrate = v))) } })
                             }
+                            Hairline()
+                            ListRow("Sound", "Choose a sound just for ${c.shortTitle}", icon = Icons.volume, onClick = {
+                                com.jpetrydesign.pyng.data.Notifier.openChatSound(ctx, convId, c.title)
+                            })
                         }
                     }
                     if (c.group) {

@@ -588,13 +588,14 @@ fun ListScreen(nav: Nav, kind: String) {
     val t = LocalTok.current
     val ctx = LocalContext.current
     val p = repo.prefs.state
-    val title = mapOf("archived" to "Archived", "spam" to "Spam & blocked", "starred" to "Starred", "scheduled" to "Scheduled", "trash" to "Trash")[kind] ?: ""
+    val title = mapOf("archived" to "Archived", "spam" to "Spam & blocked", "starred" to "Starred", "scheduled" to "Scheduled", "trash" to "Trash", "snoozed" to "Snoozed")[kind] ?: ""
     val sub = mapOf(
         "archived" to "Archived chats come back when someone messages you.",
         "spam" to "Suspected spam lands here quietly, with no alerts. Links stay off until you mark a chat as not spam.",
         "starred" to "Messages you starred in any chat",
         "scheduled" to "Messages waiting to send",
         "trash" to "Deleted messages and chats wait here 30 days, then they're deleted from Google Messages too.",
+        "snoozed" to "Chats you put away for later. Each one comes back at its time, or sooner if someone texts.",
     )[kind]
     Page(title, { nav.back() }) {
         if (sub != null) T(sub, size = 13.sp, color = t.soft, lineHeight = 18.sp, modifier = Modifier.padding(start = 4.dp, bottom = 12.dp))
@@ -621,6 +622,11 @@ fun ListScreen(nav: Nav, kind: String) {
                 val c = repo.convs[s.convId]
                 Item(s.convId, c?.title ?: "Chat", s.text, listTime(s.ts), { nav.openChat(s.convId, s.msgId) }, listOf("Unstar" to { repo.prefs.edit { pr -> pr.copy(starred = pr.starred.filter { it.msgId != s.msgId }) } }))
             }
+            "snoozed" -> p.snoozed.filterValues { it > System.currentTimeMillis() }.entries.sortedBy { it.value }.mapNotNull { (id, until) ->
+                val c = repo.convs[id] ?: return@mapNotNull null
+                val whenText = java.text.SimpleDateFormat("EEE h:mm a", java.util.Locale.getDefault()).format(java.util.Date(until))
+                Item(id, c.title, c.preview, whenText, { nav.openChat(id) }, listOf("Unsnooze" to { repo.prefs.edit { it.copy(snoozed = it.snoozed - id) }; repo.toast("Back in your list") }))
+            }
             "trash" -> p.trash.sortedByDescending { it.at }.map { item ->
                 val left = ((com.jpetrydesign.pyng.data.Repo.TRASH_MS - (System.currentTimeMillis() - item.at)) / 86_400_000L).coerceAtLeast(0)
                 Item(item.convId, if (item.kind == "conv") item.title + " · whole chat" else item.title, (if (item.fromMe && item.kind == "msg") "You: " else "") + item.text,
@@ -646,10 +652,10 @@ fun ListScreen(nav: Nav, kind: String) {
         if (items.isEmpty()) {
             Column(Modifier.fillMaxWidth().padding(vertical = 60.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.size(72.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) {
-                    Ico(mapOf("archived" to Icons.archive, "spam" to Icons.shield, "starred" to Icons.star, "scheduled" to Icons.clock, "trash" to Icons.trash)[kind] ?: Icons.inbox, t.p, 30.dp, 1.8f)
+                    Ico(mapOf("archived" to Icons.archive, "spam" to Icons.shield, "starred" to Icons.star, "scheduled" to Icons.clock, "trash" to Icons.trash, "snoozed" to Icons.clock)[kind] ?: Icons.inbox, t.p, 30.dp, 1.8f)
                 }
                 Spacer(Modifier.height(10.dp))
-                T(mapOf("archived" to "Nothing archived", "spam" to "No spam right now", "starred" to "No starred messages", "scheduled" to "Nothing scheduled", "trash" to "Trash is empty")[kind] ?: "", size = 16.sp, weight = FontWeight.SemiBold)
+                T(mapOf("archived" to "Nothing archived", "spam" to "No spam right now", "starred" to "No starred messages", "scheduled" to "Nothing scheduled", "trash" to "Trash is empty", "snoozed" to "Nothing snoozed")[kind] ?: "", size = 16.sp, weight = FontWeight.SemiBold)
                 T(
                     mapOf(
                         "archived" to "Hold a chat in your list and tap Archive to tuck it away here.",
@@ -657,6 +663,7 @@ fun ListScreen(nav: Nav, kind: String) {
                         "starred" to "Hold any message and tap Star to keep it here.",
                         "scheduled" to "Tap + in a chat, then Schedule, to send a text later.",
                         "trash" to "Delete a message or chat and it waits here 30 days, in case you want it back.",
+                        "snoozed" to "Hold a chat and tap Snooze to put it away until later.",
                     )[kind] ?: "",
                     size = 13.5.sp, color = t.soft, align = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 19.sp,
                     modifier = Modifier.padding(top = 4.dp, start = 30.dp, end = 30.dp),

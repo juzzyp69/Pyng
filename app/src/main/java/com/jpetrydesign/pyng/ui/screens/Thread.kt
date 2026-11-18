@@ -655,7 +655,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                 }
 
                 // Header
-                Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().onSizeChanged { headH = it.height }) {
+                Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().onSizeChanged { headH = it.height }) {
                     when {
                         selecting -> SelectHeader(t, selected.size,
                             onClose = { selected.clear() },
@@ -677,6 +677,15 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                             if (to != null) nav.swapChat(to, next) else repo.toast(if (next) "That's your last chat" else "That's your first chat")
                         })
                     }
+                    // A pinned message rides under the header; tap it to jump there.
+                    val pinnedMsg = p.pinnedMsgs.firstOrNull { it.convId == convId }
+                    if (pinnedMsg != null && !selecting && !searching) PinnedMessageBar(t, pinnedMsg.text,
+                        onOpen = {
+                            val row = rowOf[msgs.firstOrNull { it.id == pinnedMsg.msgId }?.key]
+                            if (row != null) { hl = pinnedMsg.msgId; scope.launch { list.animateScrollToItem(row + typingRows) } }
+                            else repo.toast("It's further back. Scroll up to load older messages.")
+                        },
+                        onUnpin = { repo.prefs.edit { pr -> pr.copy(pinnedMsgs = pr.pinnedMsgs.filter { it.convId != convId }) } })
                 }
 
                 // Composer and everything above it. Measured with the keyboard included, so when the
@@ -1051,5 +1060,23 @@ private fun UndoSendPill(t: Tok, visible: Boolean, onUndo: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+/** The pinned message under the chat's header: a slim frosted pill with the text, tap to jump, x to unpin. */
+@Composable
+private fun PinnedMessageBar(t: Tok, text: String, onOpen: () -> Unit, onUnpin: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp).clip(RoundedCornerShape(20.dp)).background(t.card)
+            .border(1.dp, t.cardEdge, RoundedCornerShape(20.dp)).clickable(onClick = onOpen).padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Ico(Icons.pinned, t.p, 16.dp, 2f)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f).padding(vertical = 4.dp)) {
+            T("Pinned", size = 11.5.sp, weight = FontWeight.SemiBold, color = t.p)
+            T(text, size = 13.5.sp, maxLines = 1)
+        }
+        Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onUnpin), contentAlignment = Alignment.Center) { Ico(Icons.close, t.soft, 15.dp, 2f) }
     }
 }

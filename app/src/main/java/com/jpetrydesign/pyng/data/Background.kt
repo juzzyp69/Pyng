@@ -43,6 +43,31 @@ object Notifier {
     const val CH_LINK = "link-hidden"
     const val KEY_REPLY = "reply"
 
+    /** A chat's own channel (its sound and importance), once you've set one up; otherwise the shared one. */
+    fun chatChannel(ctx: Context, convId: String): String {
+        if (android.os.Build.VERSION.SDK_INT < 30) return CH_MESSAGES
+        val id = "msg:$convId"
+        return if (ctx.getSystemService(NotificationManager::class.java).getNotificationChannel(id) != null) id else CH_MESSAGES
+    }
+
+    /**
+     * Opens Android's sound settings for one chat. On Android 11 and up each chat can have its own
+     * sound; the chat's channel is made the first time, starting from your usual message settings.
+     */
+    fun openChatSound(ctx: Context, convId: String, title: String) {
+        val nm = ctx.getSystemService(NotificationManager::class.java)
+        val i = Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, ctx.packageName)
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            val id = "msg:$convId"
+            if (nm.getNotificationChannel(id) == null) nm.createNotificationChannel(NotificationChannel(id, title, NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Texts from $title"
+                setConversationId(CH_MESSAGES, convId)
+            })
+            i.putExtra(android.provider.Settings.EXTRA_CHANNEL_ID, id).putExtra(android.provider.Settings.EXTRA_CONVERSATION_ID, convId)
+        } else i.putExtra(android.provider.Settings.EXTRA_CHANNEL_ID, CH_MESSAGES)
+        runCatching { ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
     fun channels(ctx: Context) {
         val nm = ctx.getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(CH_MESSAGES, "Messages", NotificationManager.IMPORTANCE_HIGH).apply {
@@ -191,7 +216,7 @@ object Notifier {
             (if (placeholder) Intent(ctx, MainActivity::class.java) else Intent(ctx, MainActivity::class.java).setAction("open").putExtra("chat", conv.id)).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val b = NotificationCompat.Builder(ctx, CH_MESSAGES)
+        val b = NotificationCompat.Builder(ctx, chatChannel(ctx, conv.id))
             .setSmallIcon(R.drawable.ic_stat_message)
             .setStyle(style)
             .setContentTitle(conv.title)

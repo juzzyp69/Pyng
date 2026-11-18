@@ -161,6 +161,12 @@ data class AppPrefs(
     val blockedWords: List<String> = emptyList(),
     val categories: List<Category> = emptyList(),
     val favs: Set<String> = emptySet(),
+    /** Snoozed chats → when they come back. */
+    val snoozed: Map<String, Long> = emptyMap(),
+    /** One pinned message per chat. */
+    val pinnedMsgs: List<Starred> = emptyList(),
+    /** The newest version whose What's New you've seen. */
+    val seenVersion: String = "",
 ) {
     fun on(key: String) = toggles[key] ?: DEFAULT_TOGGLES[key] ?: false
     fun opt(key: String) = opts[key] ?: DEFAULT_OPTS[key].orEmpty()
@@ -188,6 +194,8 @@ private fun AppPrefs.toJson(): JSONObject = JSONObject().apply {
     put("savedThemes", JSONArray(savedThemes.map { it.json() }))
     put("trash", JSONArray(trash.map { it.json() })); put("blockedWords", JSONArray(blockedWords))
     put("categories", JSONArray(categories.map { it.json() })); put("favs", JSONArray(favs.toList()))
+    put("snoozed", JSONObject().also { o -> snoozed.forEach { (k, v) -> o.put(k, v) } })
+    put("pinnedMsgs", JSONArray(pinnedMsgs.map { it.json() })); put("seenVersion", seenVersion)
 }
 
 private fun JSONObject.strList(k: String) = optJSONArray(k).mapEach { optJSONArray(k)!!.optString(it) }
@@ -240,6 +248,9 @@ private fun fromJson(o: JSONObject): AppPrefs {
         blockedWords = o.strList("blockedWords"),
         categories = o.optJSONArray("categories").mapEach { Category.from(o.optJSONArray("categories")!!.getJSONObject(it)) },
         favs = o.strList("favs").toSet(),
+        snoozed = o.optJSONObject("snoozed")?.let { s -> s.keys().asSequence().associateWith { s.optLong(it) } } ?: emptyMap(),
+        pinnedMsgs = o.optJSONArray("pinnedMsgs").mapEach { Starred.from(o.optJSONArray("pinnedMsgs")!!.getJSONObject(it)) },
+        seenVersion = o.optString("seenVersion"),
     )
 }
 

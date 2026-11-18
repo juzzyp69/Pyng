@@ -240,6 +240,8 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         if (c.group) rawNames[c.id] = c.name
         convs[c.id] = withLocalName(c)
         prefs.state.trash.firstOrNull { it.kind == "conv" && it.id == c.id }?.let { t -> if (c.ts > t.at && !c.fromMe) prefs.edit { p -> p.copy(trash = p.trash - t) } }
+        // A snoozed chat comes back early when someone texts.
+        if (c.id in prefs.state.snoozed && !c.fromMe && c.unread && c.ts > (old?.ts ?: 0L)) prefs.edit { p -> p.copy(snoozed = p.snoozed - c.id) }
         fillPreview(c)
         if (old == null || old.avatarId != c.avatarId) ensureAvatars(c.others.map { it.id })
         if (old != null && old.unread && !c.unread) onRead?.invoke(c.id)
