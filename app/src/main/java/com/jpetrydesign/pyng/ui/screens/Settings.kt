@@ -123,18 +123,27 @@ fun SettingsScreen(nav: Nav) {
             Ico(Icons.chev, t.faint, 16.dp, 2f)
         }
         Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(
-                Triple(Icons.archive, "Archived", repo.convs.values.count { it.status == "archived" }) to "archived",
-                Triple(Icons.star, "Starred", p.starred.size) to "starred",
-                Triple(Icons.clock, "Scheduled", p.scheduled.size) to "scheduled",
-                Triple(Icons.trash, "Trash", p.trash.size) to "trash",
-            ).forEachIndexed { i, (x, kind) ->
-                Column(Modifier.weight(1f).enter(1 + i, pop = true).clip(RoundedCornerShape(22.dp)).background(t.surface).press(0.95f) { nav.go(Route.Lists(kind)) }.padding(14.dp)) {
-                    Ico(x.first, t.p, 19.dp)
-                    Spacer(Modifier.height(10.dp))
-                    T("${x.third}", size = 20.sp, weight = FontWeight.SemiBold)
-                    T(x.second, size = 12.5.sp, color = t.soft)
+        val tiles = listOf(
+            Triple(Icons.archive, "Archived", repo.convs.values.count { it.status == "archived" }) to "archived",
+            Triple(Icons.star, "Starred", p.starred.size) to "starred",
+            Triple(Icons.clock, "Scheduled", p.scheduled.size) to "scheduled",
+            Triple(Icons.trash, "Trash", p.trash.size) to "trash",
+        )
+        // Four across when there's room; two by two in a narrow pane (the Fold's side-by-side view, small cover screens).
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val cols = if (maxWidth < 380.dp) 2 else 4
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                tiles.chunked(cols).forEachIndexed { r, row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        row.forEachIndexed { c, (x, kind) ->
+                            Column(Modifier.weight(1f).enter(1 + r * cols + c, pop = true).clip(RoundedCornerShape(22.dp)).background(t.surface).press(0.95f) { nav.go(Route.Lists(kind)) }.padding(14.dp)) {
+                                Ico(x.first, t.p, 19.dp)
+                                Spacer(Modifier.height(10.dp))
+                                T("${x.third}", size = 20.sp, weight = FontWeight.SemiBold, maxLines = 1)
+                                T(x.second, size = 12.5.sp, color = t.soft, maxLines = 1)
+                            }
+                        }
+                    }
                 }
             }
         }
