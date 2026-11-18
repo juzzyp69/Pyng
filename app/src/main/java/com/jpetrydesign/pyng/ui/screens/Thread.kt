@@ -1049,7 +1049,8 @@ private fun UndoSendPill(t: Tok, visible: Boolean, onUndo: () -> Unit) {
     ) {
         Box(Modifier.fillMaxWidth().padding(bottom = 6.dp), contentAlignment = Alignment.Center) {
             Row(
-                Modifier.clip(RoundedCornerShape(20.dp)).background(t.card).border(1.dp, t.cardEdge, RoundedCornerShape(20.dp))
+                Modifier.shadow(8.dp, RoundedCornerShape(20.dp), clip = false, ambientColor = t.shadow.copy(alpha = 0.10f), spotColor = t.shadow.copy(alpha = 0.14f))
+                    .clip(RoundedCornerShape(20.dp)).background(t.sheet).border(1.dp, t.cardEdge, RoundedCornerShape(20.dp))
                     .clickable(onClick = onUndo).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -1069,7 +1070,9 @@ private fun UndoSendPill(t: Tok, visible: Boolean, onUndo: () -> Unit) {
 @Composable
 private fun PinnedMessageBar(t: Tok, text: String, onOpen: () -> Unit, onUnpin: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp).clip(RoundedCornerShape(20.dp)).background(t.card)
+        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp)
+            .shadow(8.dp, RoundedCornerShape(20.dp), clip = false, ambientColor = t.shadow.copy(alpha = 0.10f), spotColor = t.shadow.copy(alpha = 0.14f))
+            .clip(RoundedCornerShape(20.dp)).background(t.sheet)
             .border(1.dp, t.cardEdge, RoundedCornerShape(20.dp)).clickable(onClick = onOpen).padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

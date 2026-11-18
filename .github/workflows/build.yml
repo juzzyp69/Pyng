@@ -123,7 +123,7 @@ jobs:
         id: screens
         if: steps.app.outcome == 'success'
         continue-on-error: true
-        timeout-minutes: 30
+        timeout-minutes: 50
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34

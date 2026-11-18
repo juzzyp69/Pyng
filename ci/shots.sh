@@ -51,6 +51,11 @@ shot 09g-home-liquid --es glass "'Liquid Glass'"
 shot 10-thread --es route thread:c1 --es theme Ocean
 shot 11-thread-dark --es route thread:c1 --es mode Dark
 shot 12-thread-group --es route thread:c3 --es mode Light
+adb logcat -d -t 600 '*:W' > ci-logs/log-12-group.txt 2>&1
+WAIT=10 shot 12b-thread-group-late --es route thread:c3 --es mode Light
+adb logcat -d -t 600 '*:W' > ci-logs/log-12b-group.txt 2>&1
+WAIT=10 shot 12c-thread-mom-late --es route thread:c2 --es mode Light
+adb exec-out run-as com.jpetrydesign.pyng true 2>/dev/null; adb shell dumpsys activity processes | grep -i "anr\|not responding" > ci-logs/anr.txt 2>&1
 shot 13-thread-textXL --es route thread:c1 --es text XL
 shot 14-thread-textS --es route thread:c1 --es text S
 shot 15-thread-soft --es route thread:c1 --es text M --es bubble Soft

@@ -191,14 +191,24 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
     }
     val cat = if (catsOn && catList.any { it.first == catPick }) catPick else "primary"
     val awayFromPrimary = p.categories.filter { !it.alsoPrimary }.flatMap { it.chats }.toSet()
+    // Worked out once per change to your chats, not on every frame (Priority reads each preview).
+    val unreadNow = active.count { unreadOf(it) }
+    val priorityIds = remember(catsOn, active.size, active.maxOfOrNull { it.ts }, unreadNow, p.favs) {
+        if (!catsOn) emptySet() else active.filter { c ->
+            c.id in p.favs || (unreadOf(c) && !c.business && (c.known || detect(c.preview).code != null)) ||
+                (unreadOf(c) && c.known && (c.preview.trimEnd().endsWith("?") || detect(c.preview).date != null))
+        }.mapTo(HashSet()) { it.id }
+    }
     fun inCat(c: Conv, id: String): Boolean = when (id) {
         "primary" -> !catsOn || c.id !in awayFromPrimary
-        "priority" -> c.id in p.favs || (unreadOf(c) && !c.business && (c.known || detect(c.preview).code != null)) ||
-            (unreadOf(c) && c.known && (c.preview.trimEnd().endsWith("?") || detect(c.preview).date != null))
+        "priority" -> c.id in priorityIds
         "favorites" -> c.id in p.favs
         else -> p.categories.firstOrNull { it.id == id }?.chats?.contains(c.id) == true
     }
-    fun catUnread(id: String) = active.count { unreadOf(it) && inCat(it, id) }
+    val unreadByCat = remember(catList, priorityIds, active.size, unreadNow, p.categories, p.favs) {
+        catList.associate { (id, _) -> id to active.count { unreadOf(it) && inCat(it, id) } }
+    }
+    fun catUnread(id: String) = unreadByCat[id] ?: 0
     var newCatSheet by remember { mutableStateOf(false) }
 
     var profileMenu by remember { mutableStateOf(false) }
@@ -1704,7 +1714,7 @@ private fun ProfileMenu(open: Boolean, nav: Nav, trashCount: Int, onClose: () ->
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val p = repo.prefs.state
     androidx.compose.material3.DropdownMenu(
-        open, onClose, containerColor = t.card, shape = RoundedCornerShape(26.dp), shadowElevation = 14.dp,
+        open, onClose, containerColor = t.sheet, shape = RoundedCornerShape(26.dp), shadowElevation = 14.dp,
         modifier = Modifier.widthIn(min = 260.dp),
     ) {
         Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
