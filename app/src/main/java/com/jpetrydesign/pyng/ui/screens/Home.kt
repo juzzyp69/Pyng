@@ -101,6 +101,7 @@ import com.jpetrydesign.pyng.data.Conv
 import com.jpetrydesign.pyng.ui.Nav
 import com.jpetrydesign.pyng.ui.Route
 import com.jpetrydesign.pyng.ui.kit.Avatar
+import com.jpetrydesign.pyng.ui.kit.Hairline
 import com.jpetrydesign.pyng.ui.kit.CountBadge
 import com.jpetrydesign.pyng.ui.kit.enterOnce
 import com.jpetrydesign.pyng.ui.kit.Glow
@@ -168,8 +169,15 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
         return list.takeLastWhile { !it.fromMe }.size.coerceIn(1, 99)
     }
     fun typingOf(c: Conv) = (repo.typing[c.id] ?: 0L) > now
-    val spamLocal = if (p.on("spam")) all.filter { c -> c.status == "active" && c.id !in p.notSpam && !c.fromMe && spamCheck(c, c.preview) != null }.map { it.id }.toSet() else emptySet()
-    val active = all.filter { it.status == "active" && it.id !in spamLocal }
+    val spamLocal = all.filter { c ->
+        c.status == "active" && c.id !in p.notSpam && !c.fromMe && ((p.on("spam") && spamCheck(c, c.preview) != null) || repo.hasBlockedWord(c.preview))
+    }.map { it.id }.toSet()
+    val trashed = repo.trashedChats()
+    val active = all.filter { it.status == "active" && it.id !in spamLocal && it.id !in trashed }
+    // Texts from numbers you don't know: a slim card offers to review them. Nothing is hidden.
+    val unknownIds = if (p.on("unknownFilter")) active.filter { c -> !c.known && !c.business && !c.fromMe && unreadOf(c) && c.id !in p.dismissedUnknown }.map { it.id } else emptyList()
+    var unknownSheet by remember { mutableStateOf(false) }
+    var profileMenu by remember { mutableStateOf(false) }
     val pinnedIds = p.pinned.filter { id -> active.any { it.id == id } }
 
     // Dragging: a pinned chat (to reorder or drag out) or a list row (to drag up into pins).
@@ -451,6 +459,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                         }
                     }
                 }
+                if (unknownIds.isNotEmpty() && !editPins) item("unknown") { Box(onSheet) { UnknownCard(unknownIds.size) { unknownSheet = true } } }
                 items(rows, key = { "r:" + it.id }) { c ->
                     val i = rows.indexOf(c)
                     Box(onSheet) { ConvRow(
@@ -504,8 +513,11 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                         }
                     }
                     val photo = p.profilePhoto.ifEmpty { null }
-                    Box(Modifier.size(44.dp).edge(CircleShape, elevation = 8.dp).clip(CircleShape).press(0.92f) { nav.go(Route.Settings) }) {
-                        Avatar(photo, com.jpetrydesign.pyng.ui.kit.initialsOf(p.profileName.ifBlank { "Me" }), 44.dp, t.tone, t.p)
+                    Box {
+                        Box(Modifier.size(44.dp).edge(CircleShape, elevation = 8.dp).clip(CircleShape).press(0.92f) { profileMenu = true }) {
+                            Avatar(photo, com.jpetrydesign.pyng.ui.kit.initialsOf(p.profileName.ifBlank { "Me" }), 44.dp, t.tone, t.p)
+                        }
+                        ProfileMenu(profileMenu, nav, trashCount = p.trash.size) { profileMenu = false }
                     }
                 }
             }
@@ -624,6 +636,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
         }
         androidx.compose.runtime.SideEffect { peek.onEditPins = { editPins = true } }
         PermissionSheet(askPerms) { askPerms = false; repo.prefs.edit { it.copy(permsAsked = 1) } }
+        UnknownSheet(unknownSheet, unknownIds.mapNotNull { repo.convs[it] }, nav) { unknownSheet = false }
         if (nav.strip) ColorStrip(onDone = { nav.closeStrip() })
     }
 }
@@ -632,7 +645,7 @@ fun swipeAct(repo: com.jpetrydesign.pyng.data.Repo, c: Conv, action: String) {
     val p = repo.prefs.state
     when (action) {
         "Archive" -> { repo.setArchived(c.id, true); repo.toast("Chat archived") { repo.setArchived(c.id, false) } }
-        "Delete" -> repo.confirm("Delete this conversation?", "All of ${c.shortTitle}'s messages will be deleted from Google Messages on your phone too.") { repo.deleteConversation(c.id); repo.toast("Conversation deleted") }
+        "Delete" -> repo.confirm("Delete this conversation?", "It goes to Trash for 30 days, then it's deleted from Google Messages too.") { repo.deleteConversation(c.id) }
         "Pin" -> if (repo.togglePin(c.id)) repo.toast(if (p.isPinned(c.id)) "Unpinned" else "Pinned to top")
         "Mute" -> { val on = !p.isMuted(c.id); repo.setMuted(c.id, on); repo.toast(if (on) "Muted" else "Notifications on") }
         "Read/Unread" -> { val was = c.unread || c.id in p.markedUnread; repo.toggleUnread(c.id); repo.toast(if (was) "Marked as read" else "Marked as unread") }
@@ -1438,7 +1451,7 @@ private fun PeekBody(cur: Conv, repo: com.jpetrydesign.pyng.data.Repo, t: com.jp
                 if (!cur.group) small("Block", Icons.block) { onDismiss(); repo.setBlocked(cur.id, true); repo.toast("Blocked ${cur.shortTitle}") { repo.setBlocked(cur.id, false) } }
                 small("Delete", Icons.trash, danger = true) {
                     onDismiss()
-                    repo.confirm("Delete this conversation?", "All of ${cur.shortTitle}'s messages will be deleted from Google Messages on your phone too.") { repo.deleteConversation(cur.id); repo.toast("Conversation deleted") }
+                    repo.confirm("Delete this conversation?", "It goes to Trash for 30 days, then it's deleted from Google Messages too.") { repo.deleteConversation(cur.id) }
                 }
             }
         }
@@ -1547,4 +1560,115 @@ private fun jellyFrames(t: Float, frames: Array<FloatArray>): FloatArray {
     val b = frames[i + 1]
     val f = androidx.compose.animation.core.FastOutSlowInEasing.transform(((t - a[0]) / (b[0] - a[0])).coerceIn(0f, 1f))
     return FloatArray(4) { k -> a[k + 1] + (b[k + 1] - a[k + 1]) * f }
+}
+
+/** The slim card above your chats when texts come in from numbers you don't know. */
+@Composable
+private fun UnknownCard(n: Int, onReview: () -> Unit) {
+    val t = LocalTok.current
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp).clip(RoundedCornerShape(20.dp)).background(t.card).clickable(onClick = onReview)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(30.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { T("?", size = 14.sp, weight = FontWeight.Bold, color = t.p) }
+        Spacer(Modifier.width(12.dp))
+        T(if (n == 1) "1 text from a number you don't know" else "$n texts from numbers you don't know", size = 14.sp, weight = FontWeight.Medium, modifier = Modifier.weight(1f))
+        T("Review", size = 14.sp, weight = FontWeight.SemiBold, color = t.p)
+    }
+}
+
+/** Each unknown sender with Report and Delete, plus the same for all of them at once. */
+@Composable
+private fun UnknownSheet(visible: Boolean, list: List<Conv>, nav: Nav, onDismiss: () -> Unit) {
+    val repo = LocalRepo.current
+    val t = LocalTok.current
+    LaunchedEffect(visible, list.size) { if (visible && list.isEmpty()) onDismiss() }
+    com.jpetrydesign.pyng.ui.kit.Sheet(visible, onDismiss) {
+        T("Unknown senders", size = 20.sp, weight = FontWeight.SemiBold)
+        T("From numbers that aren't in your contacts. Nothing here is hidden unless you choose to.", size = 13.5.sp, color = t.soft, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
+        list.forEach { c ->
+            Row(
+                Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(20.dp)).background(t.card).clickable { onDismiss(); nav.openChat(c.id) }.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                WhoAvatar(whoOf(c), 40.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    T(c.title, size = 15.sp, weight = FontWeight.SemiBold, maxLines = 1)
+                    T(c.preview, size = 13.sp, color = t.soft, maxLines = 1)
+                }
+                Box(Modifier.size(38.dp).clip(CircleShape).background(t.neutral).clickable { repo.setBlocked(c.id, true, true); repo.toast("${c.shortTitle} reported as spam and blocked") }, contentAlignment = Alignment.Center) {
+                    Ico(Icons.shield, t.ink, 18.dp)
+                }
+                Spacer(Modifier.width(6.dp))
+                Box(Modifier.size(38.dp).clip(CircleShape).background(t.danger.copy(alpha = 0.13f)).clickable { repo.deleteConversation(c.id) }, contentAlignment = Alignment.Center) {
+                    Ico(Icons.trash, t.danger, 18.dp)
+                }
+            }
+        }
+        val many = list.size > 1
+        Spacer(Modifier.height(6.dp))
+        com.jpetrydesign.pyng.ui.kit.PillButton(if (many) "Move all to Primary" else "Move to Primary", onClick = {
+            repo.prefs.edit { p -> p.copy(dismissedUnknown = p.dismissedUnknown + list.map { it.id }) }; onDismiss(); repo.toast("Moved to Primary")
+        }, modifier = Modifier.fillMaxWidth())
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(
+                (if (many) "Report all as spam" else "Report as spam") to { list.forEach { repo.setBlocked(it.id, true, true) }; onDismiss(); repo.toast(if (many) "Reported and blocked" else "Reported and blocked") },
+                (if (many) "Delete all" else "Delete") to { list.forEach { repo.deleteConversation(it.id) }; onDismiss() },
+            ).forEachIndexed { i, (label, go) ->
+                Box(Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(23.dp)).background(if (i == 1) t.danger.copy(alpha = 0.13f) else t.neutral).clickable(onClick = go), contentAlignment = Alignment.Center) {
+                    T(label, size = 13.5.sp, weight = FontWeight.SemiBold, color = if (i == 1) t.danger else t.ink)
+                }
+            }
+        }
+        T("Hide this banner", size = 14.sp, weight = FontWeight.SemiBold, color = t.soft, modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 14.dp, bottom = 6.dp)
+            .clickable { repo.prefs.toggle("unknownFilter"); onDismiss(); repo.toast("Banner hidden. Turn it back on in Privacy & safety.") })
+    }
+}
+
+/** Your photo opens this: you at the top with a settings gear, then the places you go most. */
+@Composable
+private fun ProfileMenu(open: Boolean, nav: Nav, trashCount: Int, onClose: () -> Unit) {
+    val repo = LocalRepo.current
+    val t = LocalTok.current
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val p = repo.prefs.state
+    androidx.compose.material3.DropdownMenu(
+        open, onClose, containerColor = t.card, shape = RoundedCornerShape(26.dp), shadowElevation = 14.dp,
+        modifier = Modifier.widthIn(min = 260.dp),
+    ) {
+        Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Avatar(p.profilePhoto.ifEmpty { null }, com.jpetrydesign.pyng.ui.kit.initialsOf(p.profileName.ifBlank { "Me" }), 40.dp, t.tone, t.p, 14.sp)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f).clickable { onClose(); nav.go(Route.Profile) }) {
+                T(p.profileName.ifBlank { "Your profile" }, size = 15.sp, weight = FontWeight.SemiBold, maxLines = 1)
+                T("Name and photo", size = 12.5.sp, color = t.soft)
+            }
+            Box(Modifier.size(40.dp).clip(CircleShape).clickable { onClose(); nav.go(Route.Settings) }, contentAlignment = Alignment.Center) {
+                Ico(Icons.settings, t.ink, 21.dp)
+            }
+        }
+        Hairline()
+        val rows = listOf(
+            Triple(Icons.star, "Starred") { nav.go(Route.Lists("starred")) },
+            Triple(Icons.archive, "Archived") { nav.go(Route.Lists("archived")) },
+            Triple(Icons.clock, "Scheduled") { nav.go(Route.Lists("scheduled")) },
+            Triple(Icons.shield, "Spam & blocked") { nav.go(Route.Lists("spam")) },
+            Triple(Icons.trash, if (trashCount > 0) "Trash · $trashCount" else "Trash") { nav.go(Route.Lists("trash")) },
+            Triple(Icons.spark, "What's new") { nav.go(Route.Section("versions")) },
+            Triple(Icons.message, "Send feedback") {
+                runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/juzzyp69/Pyng/issues/new")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            },
+        )
+        rows.forEach { (icon, label, go) ->
+            androidx.compose.material3.DropdownMenuItem(
+                text = { T(label, size = 15.sp) },
+                leadingIcon = { Ico(icon, t.p, 19.dp) },
+                onClick = { onClose(); go() },
+                modifier = Modifier.padding(horizontal = 4.dp),
+            )
+        }
+    }
 }

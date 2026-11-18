@@ -58,6 +58,15 @@ data class Starred(val msgId: String, val convId: String, val text: String, val 
     }
 }
 
+/** Something you deleted, kept 30 days in case you want it back. kind is "msg" or "conv". */
+data class TrashItem(val kind: String, val id: String, val convId: String, val title: String, val text: String, val at: Long, val ts: Long, val fromMe: Boolean = false) {
+    fun json(): JSONObject = JSONObject().put("kind", kind).put("id", id).put("convId", convId).put("title", title).put("text", text).put("at", at).put("ts", ts).put("fromMe", fromMe)
+
+    companion object {
+        fun from(o: JSONObject) = TrashItem(o.optString("kind"), o.optString("id"), o.optString("convId"), o.optString("title"), o.optString("text"), o.optLong("at"), o.optLong("ts"), o.optBoolean("fromMe"))
+    }
+}
+
 data class Scheduled(val id: String, val convId: String, val text: String, val at: Long, val label: String) {
     fun json(): JSONObject = JSONObject().put("id", id).put("convId", convId).put("text", text).put("at", at).put("label", label)
 
@@ -72,11 +81,13 @@ val DEFAULT_TOGGLES = mapOf(
     "quick" to true, "counter" to true, "spam" to true, "otpChip" to true, "otpAuto" to true, "bioLock" to false, "hideSwitcher" to false,
     "reduceBlur" to false, "reduceMotion" to false, "boldText" to false, "highContrast" to false, "effects" to true,
     "alwaysOn" to false, "hideGmAlerts" to false, "smsLinks" to false,
+    "undoSend" to true, "quiet" to false, "quietFavs" to true, "autoDelCodes" to false,
 )
 
 val DEFAULT_OPTS = mapOf(
     "autoDl" to "Always", "quality" to "High", "swipe" to "Archive", "swipeR" to "Read/Unread",
     "stamps" to "Grouped", "gifRating" to "pg", "gradient" to "Across the screen", "statusStyle" to "Icon and text", "sendStyle" to "Jelly", "photoGroups" to "Peek", "font" to "Google",
+    "quietFrom" to "22:00", "quietTo" to "07:00",
 )
 
 /** A theme you made and named, kept to use again for the app or any chat. */
@@ -137,6 +148,8 @@ data class AppPrefs(
     val notSpam: Set<String> = emptySet(),
     val permsAsked: Int = 0,
     val savedThemes: List<SavedTheme> = emptyList(),
+    val trash: List<TrashItem> = emptyList(),
+    val blockedWords: List<String> = emptyList(),
 ) {
     fun on(key: String) = toggles[key] ?: DEFAULT_TOGGLES[key] ?: false
     fun opt(key: String) = opts[key] ?: DEFAULT_OPTS[key].orEmpty()
@@ -162,6 +175,7 @@ private fun AppPrefs.toJson(): JSONObject = JSONObject().apply {
     put("dismissedUnknown", JSONArray(dismissedUnknown.toList())); put("notSpam", JSONArray(notSpam.toList()))
     put("permsAsked", permsAsked)
     put("savedThemes", JSONArray(savedThemes.map { it.json() }))
+    put("trash", JSONArray(trash.map { it.json() })); put("blockedWords", JSONArray(blockedWords))
 }
 
 private fun JSONObject.strList(k: String) = optJSONArray(k).mapEach { optJSONArray(k)!!.optString(it) }
@@ -210,6 +224,8 @@ private fun fromJson(o: JSONObject): AppPrefs {
         notSpam = o.strList("notSpam").toSet(),
         permsAsked = o.optInt("permsAsked"),
         savedThemes = o.optJSONArray("savedThemes").mapEach { SavedTheme.from(o.optJSONArray("savedThemes")!!.getJSONObject(it)) },
+        trash = o.optJSONArray("trash").mapEach { TrashItem.from(o.optJSONArray("trash")!!.getJSONObject(it)) },
+        blockedWords = o.strList("blockedWords"),
     )
 }
 

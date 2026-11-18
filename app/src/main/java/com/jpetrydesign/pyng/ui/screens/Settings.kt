@@ -128,6 +128,7 @@ fun SettingsScreen(nav: Nav) {
                 Triple(Icons.archive, "Archived", repo.convs.values.count { it.status == "archived" }) to "archived",
                 Triple(Icons.star, "Starred", p.starred.size) to "starred",
                 Triple(Icons.clock, "Scheduled", p.scheduled.size) to "scheduled",
+                Triple(Icons.trash, "Trash", p.trash.size) to "trash",
             ).forEachIndexed { i, (x, kind) ->
                 Column(Modifier.weight(1f).enter(1 + i, pop = true).clip(RoundedCornerShape(22.dp)).background(t.surface).press(0.95f) { nav.go(Route.Lists(kind)) }.padding(14.dp)) {
                     Ico(x.first, t.p, 19.dp)
@@ -166,6 +167,57 @@ private fun TogRow(label: String, key: String, sub: String? = null, onChange: (B
     ListRow(label, sub, onClick = { repo.prefs.toggle(key); onChange(!on) }, trailing = { Toggle(on) })
 }
 
+/** A time setting, like 10:00 PM, that opens the clock picker. */
+@Composable
+private fun TimeRow(label: String, key: String) {
+    val repo = LocalRepo.current
+    val ctx = LocalContext.current
+    val v = repo.prefs.state.opt(key)
+    val (h, m) = v.split(":").let { (it.getOrNull(0)?.toIntOrNull() ?: 0) to (it.getOrNull(1)?.toIntOrNull() ?: 0) }
+    val shown = java.time.LocalTime.of(h, m).format(java.time.format.DateTimeFormatter.ofPattern("h:mm a"))
+    ListRow(label, shown, onClick = {
+        android.app.TimePickerDialog(ctx, { _, hh, mm -> repo.prefs.setOpt(key, "%02d:%02d".format(hh, mm)) }, h, m, android.text.format.DateFormat.is24HourFormat(ctx)).show()
+    })
+}
+
+/** Words that send a text to Spam, quietly. */
+@Composable
+private fun BlockedWords() {
+    val repo = LocalRepo.current
+    val t = LocalTok.current
+    val words = repo.prefs.state.blockedWords
+    var input by remember { mutableStateOf("") }
+    fun add() {
+        val w = input.trim()
+        if (w.isNotEmpty() && words.none { it.equals(w, true) }) repo.prefs.edit { it.copy(blockedWords = it.blockedWords + w) }
+        input = ""
+    }
+    T("Texts with any of these words go to Spam & blocked, with no alert. Matching ignores capital letters.", size = 13.sp, color = t.soft, lineHeight = 18.sp, modifier = Modifier.padding(start = 4.dp, bottom = 12.dp))
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(t.card).padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        androidx.compose.foundation.text.BasicTextField(
+            input, { input = it }, singleLine = true,
+            textStyle = androidx.compose.ui.text.TextStyle(color = t.ink, fontSize = 15.sp),
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(t.p),
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { add() }),
+            modifier = Modifier.weight(1f),
+            decorationBox = { inner -> Box { if (input.isEmpty()) T("Add a word or phrase", size = 15.sp, color = t.faint); inner() } },
+        )
+        Box(Modifier.height(38.dp).clip(RoundedCornerShape(19.dp)).background(if (input.isBlank()) t.neutral else t.fill).clickable(enabled = input.isNotBlank()) { add() }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+            T("Add", size = 14.sp, weight = FontWeight.SemiBold, color = if (input.isBlank()) t.soft else t.onFill)
+        }
+    }
+    Spacer(Modifier.height(12.dp))
+    if (words.isNotEmpty()) Card {
+        words.forEachIndexed { i, w ->
+            if (i > 0) Hairline()
+            ListRow(w, null, trailing = {
+                Box(Modifier.size(34.dp).clip(CircleShape).clickable { repo.prefs.edit { p -> p.copy(blockedWords = p.blockedWords - w) } }, contentAlignment = Alignment.Center) { Ico(Icons.close, t.soft, 16.dp) }
+            })
+        }
+    }
+}
+
 @Composable
 private fun SegRow(label: String, key: String, options: List<String>, sub: String? = null) {
     val repo = LocalRepo.current
@@ -196,7 +248,7 @@ fun SectionScreen(nav: Nav, key: String) {
     val p = repo.prefs.state
     val conn by repo.hub.connection.collectAsState()
     val app = ctx.applicationContext as PyngApp
-    val title = mapOf("chats" to "Chats", "notifications" to "Notifications", "chatfeat" to "Chat features", "privacy" to "Privacy & safety", "access" to "Accessibility", "storage" to "Storage", "about" to "Help & about", "versions" to "Version history")[key] ?: "Settings"
+    val title = mapOf("chats" to "Chats", "notifications" to "Notifications", "chatfeat" to "Chat features", "privacy" to "Privacy & safety", "access" to "Accessibility", "storage" to "Storage", "about" to "Help & about", "versions" to "Version history", "blockedWords" to "Blocked words")[key] ?: "Settings"
     Page(title, { nav.back() }) {
         when (key) {
             "versions" -> VersionHistory()
@@ -207,7 +259,8 @@ fun SectionScreen(nav: Nav, key: String) {
                     TogRow("Voice message button", "micBtn", "Show the mic next to the message box"); Hairline()
                     TogRow("Transcribe voice messages", "autoTranscribe", "Turn voice messages into text automatically, right on your phone"); Hairline()
                     TogRow("Link previews", "previews", "Show a preview card for links"); Hairline()
-                    TogRow("Enter key sends", "enterSend", "Your keyboard's enter key sends instead of adding a line")
+                    TogRow("Enter key sends", "enterSend", "Your keyboard's enter key sends instead of adding a line"); Hairline()
+                    TogRow("Undo send", "undoSend", "A few seconds to take back a message after you send it")
                 }
                 // Whether others see that you've read their texts is Google Messages' setting, so this points there.
                 Group("Read receipts") {
@@ -246,6 +299,12 @@ fun SectionScreen(nav: Nav, key: String) {
                     TogRow("Notifications", "notif", "Alerts for new messages"); Hairline()
                     TogRow("Vibrate", "vibrate"); Hairline()
                     TogRow("Reply and mark as read from notifications", "quick")
+                }
+                Group("Quiet hours") {
+                    TogRow("Quiet hours", "quiet", "No sound or vibration while you sleep. Texts still arrive."); Hairline()
+                    TimeRow("From", "quietFrom"); Hairline()
+                    TimeRow("To", "quietTo"); Hairline()
+                    TogRow("Let pinned chats through", "quietFavs", "Texts from chats you pinned still alert you")
                 }
                 Group("New texts") {
                     // Re-check access each time this screen shows.
@@ -323,8 +382,11 @@ fun SectionScreen(nav: Nav, key: String) {
                 Group("Protection") {
                     TogRow("Spam protection", "spam", "Checks unknown senders and their links on this phone"); Hairline()
                     ListRow("Spam & blocked", "Chats Google Messages marked as spam, and numbers you blocked", onClick = { nav.go(Route.Lists("spam")) }); Hairline()
+                    TogRow("Filter unknown senders", "unknownFilter", "Texts from numbers that aren't in your contacts get a slim banner to review them. Nothing is hidden unless you choose."); Hairline()
+                    ListRow("Blocked words", if (p.blockedWords.isEmpty()) "Texts with these words go to Spam, with no alert" else "${p.blockedWords.size} word" + (if (p.blockedWords.size > 1) "s" else "") + " · texts with them go to Spam", onClick = { nav.go(Route.Section("blockedWords")) }); Hairline()
                     TogRow("Copy buttons for codes", "otpChip", "Shows a Copy button for verification codes in your list"); Hairline()
-                    TogRow("Copy codes automatically", "otpAuto", "New verification codes go straight to your clipboard, so your keyboard can suggest them")
+                    TogRow("Copy codes automatically", "otpAuto", "New verification codes go straight to your clipboard, so your keyboard can suggest them"); Hairline()
+                    TogRow("Delete codes after 24 hours", "autoDelCodes", "Verification texts clear themselves a day after they arrive")
                 }
                 Group("App lock") {
                     TogRow("Lock with fingerprint", "bioLock", "Require your fingerprint or face to open Messages"); Hairline()
@@ -361,12 +423,16 @@ fun SectionScreen(nav: Nav, key: String) {
                 }
                 Note("These work alongside your phone's accessibility settings, including system font size and TalkBack.")
             }
+            "blockedWords" -> BlockedWords()
             "storage" -> {
                 var size by remember { mutableStateOf(-1L) }
                 LaunchedEffect(Unit) { size = withContext(Dispatchers.IO) { repo.cacheBytes() } }
                 Group("Usage") {
                     ListRow("Cached photos and files", if (size < 0) "Calculating…" else sizeText(size).ifEmpty { "Nothing cached" }, icon = Icons.storage, trailing = null); Hairline()
                     ListRow("Clear cache", "Photos download again when you open them", onClick = { repo.clearCache(); size = 0 })
+                }
+                Group("Trash") {
+                    ListRow("Trash", if (p.trash.isEmpty()) "Empty · deleted things wait here 30 days" else "${p.trash.size} item" + (if (p.trash.size > 1) "s" else "") + " · kept 30 days", icon = Icons.trash, onClick = { nav.go(Route.Lists("trash")) })
                 }
                 Note("Your messages and media are kept and backed up by Google Messages with your Google account. This app only keeps its own settings and a cache.")
             }
@@ -461,17 +527,23 @@ fun ListScreen(nav: Nav, kind: String) {
     val t = LocalTok.current
     val ctx = LocalContext.current
     val p = repo.prefs.state
-    val title = mapOf("archived" to "Archived", "spam" to "Spam & blocked", "starred" to "Starred", "scheduled" to "Scheduled")[kind] ?: ""
+    val title = mapOf("archived" to "Archived", "spam" to "Spam & blocked", "starred" to "Starred", "scheduled" to "Scheduled", "trash" to "Trash")[kind] ?: ""
     val sub = mapOf(
         "archived" to "Archived chats come back when someone messages you.",
         "spam" to "Suspected spam lands here quietly, with no alerts. Links stay off until you mark a chat as not spam.",
         "starred" to "Messages you starred in any chat",
         "scheduled" to "Messages waiting to send",
+        "trash" to "Deleted messages and chats wait here 30 days, then they're deleted from Google Messages too.",
     )[kind]
     Page(title, { nav.back() }) {
         if (sub != null) T(sub, size = 13.sp, color = t.soft, lineHeight = 18.sp, modifier = Modifier.padding(start = 4.dp, bottom = 12.dp))
         data class Item(val convId: String, val title: String, val sub: String, val meta: String?, val open: () -> Unit, val acts: List<Pair<String, () -> Unit>>)
-        val spamLocal = repo.convs.values.filter { c -> p.on("spam") && c.status == "active" && c.id !in p.notSpam && !c.fromMe && spamCheck(c, c.preview) != null }
+        val spamLocal = repo.convs.values.filter { c -> c.status == "active" && c.id !in p.notSpam && !c.fromMe && ((p.on("spam") && spamCheck(c, c.preview) != null) || repo.hasBlockedWord(c.preview)) }
+        if (kind == "trash" && p.trash.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.End) {
+            Box(Modifier.height(36.dp).clip(RoundedCornerShape(18.dp)).background(t.danger.copy(alpha = 0.13f)).clickable {
+                repo.confirm("Empty Trash?", "Everything in Trash is deleted from Google Messages now. This can't be undone.") { repo.purgeTrash(p.trash) }
+            }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) { T("Empty Trash", size = 13.5.sp, weight = FontWeight.SemiBold, color = t.danger) }
+        }
         val items: List<Item> = when (kind) {
             "archived" -> repo.convs.values.filter { it.status == "archived" }.sortedByDescending { it.ts }.map { c ->
                 Item(c.id, c.title, c.preview, listTime(c.ts), { nav.openChat(c.id) }, listOf("Unarchive" to { repo.setArchived(c.id, false); repo.toast("Moved back to your inbox") }))
@@ -487,6 +559,14 @@ fun ListScreen(nav: Nav, kind: String) {
             "starred" -> p.starred.sortedByDescending { it.ts }.map { s ->
                 val c = repo.convs[s.convId]
                 Item(s.convId, c?.title ?: "Chat", s.text, listTime(s.ts), { nav.openChat(s.convId, s.msgId) }, listOf("Unstar" to { repo.prefs.edit { pr -> pr.copy(starred = pr.starred.filter { it.msgId != s.msgId }) } }))
+            }
+            "trash" -> p.trash.sortedByDescending { it.at }.map { item ->
+                val left = ((com.jpetrydesign.pyng.data.Repo.TRASH_MS - (System.currentTimeMillis() - item.at)) / 86_400_000L).coerceAtLeast(0)
+                Item(item.convId, if (item.kind == "conv") item.title + " · whole chat" else item.title, (if (item.fromMe && item.kind == "msg") "You: " else "") + item.text,
+                    if (left <= 1) "Today" else "$left days", { if (item.kind == "msg") nav.openChat(item.convId) else repo.toast("Restore it to open it") }, listOf(
+                    "Restore" to { repo.restore(listOf(item)); repo.toast(if (item.kind == "conv") "Chat restored" else "Message restored") },
+                    "Delete now" to { repo.confirm("Delete for good?", "It's deleted from Google Messages now. This can't be undone.") { repo.purgeTrash(listOf(item)) } },
+                ))
             }
             else -> p.scheduled.sortedBy { it.at }.map { s ->
                 val c = repo.convs[s.convId]
@@ -505,16 +585,17 @@ fun ListScreen(nav: Nav, kind: String) {
         if (items.isEmpty()) {
             Column(Modifier.fillMaxWidth().padding(vertical = 60.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.size(72.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) {
-                    Ico(mapOf("archived" to Icons.archive, "spam" to Icons.shield, "starred" to Icons.star, "scheduled" to Icons.clock)[kind] ?: Icons.inbox, t.p, 30.dp, 1.8f)
+                    Ico(mapOf("archived" to Icons.archive, "spam" to Icons.shield, "starred" to Icons.star, "scheduled" to Icons.clock, "trash" to Icons.trash)[kind] ?: Icons.inbox, t.p, 30.dp, 1.8f)
                 }
                 Spacer(Modifier.height(10.dp))
-                T(mapOf("archived" to "Nothing archived", "spam" to "No spam right now", "starred" to "No starred messages", "scheduled" to "Nothing scheduled")[kind] ?: "", size = 16.sp, weight = FontWeight.SemiBold)
+                T(mapOf("archived" to "Nothing archived", "spam" to "No spam right now", "starred" to "No starred messages", "scheduled" to "Nothing scheduled", "trash" to "Trash is empty")[kind] ?: "", size = 16.sp, weight = FontWeight.SemiBold)
                 T(
                     mapOf(
                         "archived" to "Hold a chat in your list and tap Archive to tuck it away here.",
                         "spam" to "Texts that look like spam land here, out of your way.",
                         "starred" to "Hold any message and tap Star to keep it here.",
                         "scheduled" to "Tap + in a chat, then Schedule, to send a text later.",
+                        "trash" to "Delete a message or chat and it waits here 30 days, in case you want it back.",
                     )[kind] ?: "",
                     size = 13.5.sp, color = t.soft, align = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 19.sp,
                     modifier = Modifier.padding(top = 4.dp, start = 30.dp, end = 30.dp),
@@ -535,7 +616,7 @@ fun ListScreen(nav: Nav, kind: String) {
                 if (it.acts.isNotEmpty()) Row(Modifier.padding(top = 10.dp, start = 54.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     it.acts.forEachIndexed { j, (label, go) ->
                         Box(Modifier.height(34.dp).clip(RoundedCornerShape(17.dp)).background(if (j == 0) t.tone else t.neutral).clickable(onClick = go).padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                            T(label, size = 13.sp, weight = FontWeight.SemiBold, color = if (j == 0) t.p else if (label.contains("block")) t.danger else t.ink)
+                            T(label, size = 13.sp, weight = FontWeight.SemiBold, color = if (j == 0) t.p else if (label.contains("block") || label == "Delete now") t.danger else t.ink)
                         }
                     }
                 }

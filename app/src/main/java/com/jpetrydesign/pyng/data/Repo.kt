@@ -37,6 +37,15 @@ data class Toast(val text: String, val undo: (() -> Unit)? = null)
  * to Google Messages. Lives for the whole process.
  */
 class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val scope: CoroutineScope) {
+    companion object {
+        /** How long you have to take back a message after tapping send. */
+        const val UNDO_MS = 4_000L
+        /** How long deleted things wait in Trash. */
+        const val TRASH_MS = 30L * 24 * 60 * 60 * 1000
+        /** How long a verification code is kept when codes delete themselves. */
+        const val CODE_MS = 24L * 60 * 60 * 1000
+    }
+
 
     val convs = mutableStateMapOf<String, Conv>()
     val msgs = mutableStateMapOf<String, List<Msg>>()
@@ -230,6 +239,7 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         val old = convs[c.id]
         if (c.group) rawNames[c.id] = c.name
         convs[c.id] = withLocalName(c)
+        prefs.state.trash.firstOrNull { it.kind == "conv" && it.id == c.id }?.let { t -> if (c.ts > t.at && !c.fromMe) prefs.edit { p -> p.copy(trash = p.trash - t) } }
         fillPreview(c)
         if (old == null || old.avatarId != c.avatarId) ensureAvatars(c.others.map { it.id })
         if (old != null && old.unread && !c.unread) onRead?.invoke(c.id)
@@ -292,8 +302,10 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         msgs[m.convId] = tidy(next)
     }
 
-    private fun tidy(list: List<Msg>) =
-        list.distinctBy { it.key }.sortedBy { if (it.ts > 0) it.ts else Long.MAX_VALUE }
+    private fun tidy(list: List<Msg>): List<Msg> {
+        val gone = trashedMsgs()
+        return list.filter { it.id.isEmpty() || it.id !in gone }.distinctBy { it.key }.sortedBy { if (it.ts > 0) it.ts else Long.MAX_VALUE }
+    }
 
     // ---------- loading ----------
 
@@ -337,6 +349,8 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
                     ensureAvatars(convs.values.flatMap { c -> c.others.map { it.id } }.distinct())
                     loadError = null
                     seedPins()
+                    purgeTrash()
+                    sweepCodes()
                     break
                 }
                 loadError = r.exceptionOrNull()?.message
@@ -391,7 +405,7 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
                 else it.fetchMessages(convId, 40, "", 0)
             }
             r.onSuccess { json ->
-                val got = Msg.list(json).map { aliased(it) }
+                val got = Msg.list(json).map { aliased(it) }.let { dropOldCodes(it) }
                 hasMore[convId] = got.size >= 40
                 val pendingLocal = cur.filter { it.id.isEmpty() && got.none { g -> g.tmpId == it.tmpId } }
                 msgs[convId] = tidy(if (older) got + cur else got + cur.filter { c -> got.none { it.id == c.id } && c.id.isNotEmpty() && c.ts > (got.lastOrNull()?.ts ?: 0) } + pendingLocal)
@@ -632,7 +646,24 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     /** One queue per chat, so what you send arrives in the order you sent it. */
     private val sendLocks = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.sync.Mutex>()
 
-    fun send(convId: String, text: String, replyTo: String = "", attachments: List<Pending> = emptyList()) {
+    /** Messages waiting out the few seconds you have to take them back: the app's id for each → its chat. */
+    val held = androidx.compose.runtime.mutableStateMapOf<String, String>()
+    private val heldJobs = HashMap<String, kotlinx.coroutines.Job>()
+
+    /** Takes back what you just sent to [convId], if it hasn't gone yet. Returns the text, to put back in the box. */
+    fun undoSend(convId: String): String? {
+        val ids = held.filterValues { it == convId }.keys.toList()
+        if (ids.isEmpty()) return null
+        ids.mapNotNull { heldJobs.remove(it) }.distinct().forEach { it.cancel() }
+        ids.forEach { held.remove(it) }
+        val list = msgs[convId].orEmpty()
+        val gone = list.filter { it.tmpId in ids }
+        msgs[convId] = list.filter { it.tmpId !in ids }
+        gone.forEach { sentFiles.remove(it.tmpId) }
+        return gone.filter { it.text.isNotBlank() }.joinToString("\n") { it.text }
+    }
+
+    fun send(convId: String, text: String, replyTo: String = "", attachments: List<Pending> = emptyList(), undoable: Boolean = false) {
         val body = text.trim()
         if (body.isEmpty() && attachments.isEmpty()) return
         // Photos and videos first, in the order you picked them, then the text underneath them.
@@ -642,6 +673,16 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         if (msgs.containsKey(convId)) msgs[convId] = tidy(msgs[convId].orEmpty() + locals)
         locals.forEach { l -> l.media.firstOrNull()?.takeIf { it.localPath.isNotEmpty() }?.let { sentFiles[l.tmpId] = it } }
         if (demo) locals.forEach { deliver(it) }
+        else if (undoable && prefs.state.on("undoSend")) {
+            // A few seconds to take it back before it goes.
+            locals.forEach { held[it.tmpId] = convId }
+            val job = scope.launch {
+                delay(UNDO_MS)
+                locals.forEach { held.remove(it.tmpId); heldJobs.remove(it.tmpId) }
+                locals.forEach { deliverNow(it) }
+            }
+            locals.forEach { heldJobs[it.tmpId] = job }
+        }
         else scope.launch { locals.forEach { deliverNow(it) } }
         prefs.edit { it.copy(drafts = it.drafts - convId, markedUnread = it.markedUnread - convId) }
     }
@@ -725,17 +766,78 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         }
     }
 
+    // ---------- Trash: what you delete stays 30 days, then it's deleted from Google Messages too ----------
+
+    private fun trashedMsgs(): Set<String> = prefs.state.trash.filter { it.kind == "msg" }.mapTo(HashSet()) { it.id }
+
+    /** Chats you deleted that are still in Trash. */
+    fun trashedChats(): Set<String> = prefs.state.trash.filter { it.kind == "conv" }.mapTo(HashSet()) { it.id }
+
     fun deleteMessages(list: List<Msg>) {
         val convId = list.firstOrNull()?.convId ?: return
         val keys = list.map { it.key }.toSet()
         msgs[convId] = msgs[convId].orEmpty().filter { it.key !in keys }
+        val now = System.currentTimeMillis()
+        val items = list.filter { it.id.isNotEmpty() }.map { m ->
+            TrashItem("msg", m.id, convId, convs[convId]?.title.orEmpty(), m.summary.ifEmpty { m.text }.ifEmpty { "Attachment" }, now, m.ts, m.fromMe)
+        }
+        prefs.edit { p -> p.copy(trash = p.trash + items, starred = p.starred.filter { it.msgId !in keys }) }
+        if (items.isNotEmpty()) toast(if (items.size > 1) "${items.size} messages moved to Trash" else "Moved to Trash") { restore(items) }
+    }
+
+    /** Puts things back from Trash. */
+    fun restore(items: List<TrashItem>) {
+        val keys = items.map { it.kind + it.id }.toSet()
+        prefs.edit { p -> p.copy(trash = p.trash.filter { (it.kind + it.id) !in keys }) }
+        items.filter { it.kind == "msg" }.map { it.convId }.distinct().forEach { if (msgs.containsKey(it)) loadMessages(it) }
+    }
+
+    /**
+     * Deletes for good: everything in Trash longer than 30 days, or [only] these right now.
+     * Each one leaves Trash once Google Messages confirms it, so nothing is lost if you're offline.
+     */
+    fun purgeTrash(only: List<TrashItem>? = null) {
+        if (demo) { prefs.edit { p -> p.copy(trash = if (only == null) p.trash.filter { System.currentTimeMillis() - it.at < TRASH_MS } else p.trash - only.toSet()) }; return }
+        val due = only ?: prefs.state.trash.filter { System.currentTimeMillis() - it.at >= TRASH_MS }
+        if (due.isEmpty()) return
         scope.launch {
             var failed = 0
-            list.filter { it.id.isNotEmpty() }.forEach { m -> hub.io { it.deleteMessage(m.id) }.onFailure { failed++ } }
-            if (failed > 0) { toast("$failed couldn't be deleted"); loadMessages(convId) }
+            due.forEach { item ->
+                val r = if (item.kind == "msg") hub.io { it.deleteMessage(item.id) } else hub.io { it.deleteConversation(item.id) }
+                if (r.isSuccess) {
+                    prefs.edit { p -> p.copy(trash = p.trash.filter { !(it.kind == item.kind && it.id == item.id) }) }
+                    if (item.kind == "conv") { convs.remove(item.id); msgs.remove(item.id) }
+                } else failed++
+            }
+            if (only != null && failed > 0) toast("$failed couldn't be deleted yet. They'll stay in Trash and Pyng will try again.")
         }
-        prefs.edit { p -> p.copy(starred = p.starred.filter { it.msgId !in keys }) }
     }
+
+    // ---------- codes clean themselves up ----------
+
+    private fun isOldCode(m: Msg) = !m.fromMe && m.id.isNotEmpty() && System.currentTimeMillis() - m.ts > CODE_MS &&
+        com.jpetrydesign.pyng.ui.screens.detect(m.text).code != null
+
+    /** With "Delete codes after 24 hours" on, verification texts older than a day are deleted as they load. */
+    private fun dropOldCodes(list: List<Msg>): List<Msg> {
+        if (!prefs.state.on("autoDelCodes")) return list
+        val old = list.filter { isOldCode(it) }
+        if (old.isEmpty()) return list
+        scope.launch { old.forEach { m -> hub.io { it.deleteMessage(m.id) } } }
+        return list - old.toSet()
+    }
+
+    /** Looks in chats whose newest text is an old code, so those get cleaned up without opening them. */
+    private fun sweepCodes() {
+        if (!prefs.state.on("autoDelCodes")) return
+        convs.values.filter { c -> !c.fromMe && System.currentTimeMillis() - c.ts > CODE_MS && com.jpetrydesign.pyng.ui.screens.detect(c.preview).code != null }
+            .take(20).forEach { loadMessages(it.id) }
+    }
+
+    // ---------- blocked words ----------
+
+    /** True when [text] has one of your blocked words in it. */
+    fun hasBlockedWord(text: String): Boolean = prefs.state.blockedWords.any { w -> w.isNotBlank() && text.contains(w.trim(), ignoreCase = true) }
 
     fun markRead(convId: String) {
         val c = convs[convId]
@@ -788,15 +890,10 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     }
 
     fun deleteConversation(convId: String) {
-        val removed = convs.remove(convId)
-        msgs.remove(convId)
-        prefs.edit { it.copy(pinned = it.pinned - convId) }
-        scope.launch {
-            hub.io { it.deleteConversation(convId) }.onFailure { e ->
-                removed?.let { convs[convId] = it }
-                toast("Couldn't delete: ${e.message}")
-            }
-        }
+        val c = convs[convId] ?: return
+        val item = TrashItem("conv", convId, convId, c.title, c.preview, System.currentTimeMillis(), c.ts, c.fromMe)
+        prefs.edit { p -> p.copy(pinned = p.pinned - convId, trash = p.trash.filter { !(it.kind == "conv" && it.id == convId) } + item) }
+        toast("Chat moved to Trash") { restore(listOf(item)) }
     }
 
     fun setBlocked(convId: String, on: Boolean, report: Boolean = false) {

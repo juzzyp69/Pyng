@@ -35,6 +35,29 @@ data class Release(val version: String, val date: String, val added: List<String
  */
 val RELEASES = listOf(
     Release(
+        "0.9.3", "Nov 18, 2026",
+        added = listOf(
+            "Trash\nDeleted messages and chats wait 30 days in Trash, so you can bring them back",
+            "Undo send\nA few seconds to take back a message after you tap send",
+            "Blocked words\nTexts with words you choose go to Spam quietly",
+            "Unknown senders\nA slim banner to review texts from numbers you don't know, with Report and Delete for each one or all of them",
+            "Quiet hours\nNo sound or vibration overnight, and pinned chats can still get through",
+            "Codes clean up after themselves\nTurn on Delete codes after 24 hours in Privacy & safety",
+            "A menu on your photo\nStarred, Archived, Scheduled, Spam, Trash and What's new, with Settings one tap away",
+        ),
+        fixed = listOf(
+            "Sent bubble text stays readable on every bubble color",
+            "Group chats show who's typing",
+            "Texts come through even when Google Messages' alerts are set to Silent",
+            "iPhone reactions and replies land on the right message",
+            "Addresses open in Maps",
+            "Stickers show whole and see-through",
+            "Photos come in upright in the sticker maker",
+            "Contact photos show in notifications, as circles",
+            "The camera button opens the camera",
+        ),
+    ),
+    Release(
         "0.9.2", "Nov 12, 2026",
         added = listOf(
             "See Who Reacted\nTap the reactions under a message to see everyone's emoji and photo, with filters for each emoji",

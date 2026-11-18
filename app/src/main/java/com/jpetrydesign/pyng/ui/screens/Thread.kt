@@ -11,6 +11,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.border
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -412,7 +414,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
         val melt = if (motion && attachments.isEmpty() && replyTo == null && text.isNotBlank() && jumboCount(text) == 0 && root != null && sendFx.run == null) runCatching {
             Triple(root.localBoundingBoxOf(sendFx.field!!), root.localBoundingBoxOf(sendFx.text!!), root.localBoundingBoxOf(sendFx.button!!))
         }.getOrNull() else null
-        repo.send(convId, text, replyTo?.id.orEmpty(), attachments.toList())
+        repo.send(convId, text, replyTo?.id.orEmpty(), attachments.toList(), undoable = true)
         if (melt != null) repo.msgs[convId]?.lastOrNull { it.status == "LOCAL" && it.text == text.trim() }?.tmpId?.let { tmp ->
             sendFx.start(MeltRun(tmp, text.trim(), melt.first, melt.second, melt.third, p.opt("sendStyle").ifBlank { "Jelly" }))
         }
@@ -661,8 +663,8 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                             onStar = { star(repo, msgs.filter { it.key in selected }); selected.clear() },
                             onDelete = {
                                 val del = msgs.filter { it.key in selected }
-                                repo.confirm(if (del.size > 1) "Delete ${del.size} messages?" else "Delete message?", "They'll be deleted from Google Messages on your phone too. The other person still has their copy.") {
-                                    repo.deleteMessages(del); repo.toast(if (del.size > 1) "${del.size} messages deleted" else "Message deleted"); selected.clear()
+                                repo.confirm(if (del.size > 1) "Delete ${del.size} messages?" else "Delete message?", "They go to Trash for 30 days, then they're deleted from Google Messages too. The other person still has their copy.") {
+                                    repo.deleteMessages(del); selected.clear()
                                 }
                             })
                         searching -> SearchHeader(t, query, { query = it; matchIdx = 0; showResults = true }, if (panelOn) -1 else matches.size, matchIdx, { matchIdx++ }, { matchIdx = (matchIdx - 1 + maxOf(1, matches.size)) % maxOf(1, matches.size) }) { searching = false; query = "" }
@@ -680,6 +682,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                 // Composer and everything above it. Measured with the keyboard included, so when the
                 // keyboard opens the newest messages ride up with it instead of hiding behind it.
                 if (!panelOn) Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { bottomH = it.height }.imePadding()) {
+                    UndoSendPill(t, repo.held.values.any { it == convId }) { repo.undoSend(convId)?.let { back -> if (back.isNotBlank()) draft = back } }
                     Composer(
                         t = t, conv = conv, draft = draft, onDraft = { draft = it; if (it.isNotEmpty()) repo.typingPing(convId) },
                         replyTo = replyTo, onCancelReply = { replyTo = null }, attachments = attachments, schedule = schedule,
@@ -708,7 +711,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                 onDelete = {
                     val grp = bundles.of[it.key]?.map { p -> p.first }?.distinctBy { p -> p.key }?.takeIf { g -> g.size > 1 }
                     if (grp != null) {
-                        repo.confirm("Delete ${grp.size} messages?", "They'll be deleted from Google Messages on your phone too. The other person still has their copy.") { repo.deleteMessages(grp); repo.toast("Deleted") }
+                        repo.confirm("Delete ${grp.size} messages?", "They go to Trash for 30 days, then they're deleted from Google Messages too. The other person still has their copy.") { repo.deleteMessages(grp) }
                     } else if (it.tmpId.startsWith("sched-")) {
                         val id = it.tmpId.removePrefix("sched-")
                         com.jpetrydesign.pyng.data.ScheduleWorker.cancel(ctx, id)
@@ -716,7 +719,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                         repo.toast("Scheduled message canceled")
                     } else {
                         val m = it
-                        repo.confirm("Delete message?", "It'll be deleted from Google Messages on your phone too. The other person still has their copy.") { repo.deleteMessages(listOf(m)); repo.toast("Message deleted") }
+                        repo.confirm("Delete message?", "It goes to Trash for 30 days, then it's deleted from Google Messages too. The other person still has their copy.") { repo.deleteMessages(listOf(m)) }
                     }
                 })
             reviewAt?.let { i -> ReviewScreen(attachments, i) { reviewAt = null } }
@@ -746,7 +749,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                 onReply = { viewing = null; replyTo = it },
                 onReact = { m, e -> repo.react(m, e); burst = m.key to e },
                 onDelete = { m ->
-                    repo.confirm("Delete message?", "It'll be deleted from Google Messages on your phone too. The other person still has their copy.") { viewing = null; repo.deleteMessages(listOf(m)); repo.toast("Message deleted") }
+                    repo.confirm("Delete message?", "It goes to Trash for 30 days, then it's deleted from Google Messages too. The other person still has their copy.") { viewing = null; repo.deleteMessages(listOf(m)) }
                 },
                 onForward = { viewing = null; forward = it })
         }
@@ -1023,3 +1026,30 @@ private fun Effects(kind: String?, t: Tok) {
 }
 
 private class FxPart(val emoji: String?, val x: Float, val delay: Float, val dur: Float, val color: Color, val round: Boolean, val spin: Float)
+
+/** "Sending… Undo" over the message box for the few seconds a message can still be taken back. */
+@Composable
+private fun UndoSendPill(t: Tok, visible: Boolean, onUndo: () -> Unit) {
+    androidx.compose.animation.AnimatedVisibility(
+        visible,
+        enter = androidx.compose.animation.fadeIn(tween(160)) + androidx.compose.animation.scaleIn(spring(dampingRatio = 0.6f, stiffness = 520f), initialScale = 0.85f),
+        exit = androidx.compose.animation.fadeOut(tween(160)) + androidx.compose.animation.scaleOut(tween(160), targetScale = 0.9f),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Box(Modifier.fillMaxWidth().padding(bottom = 6.dp), contentAlignment = Alignment.Center) {
+            Row(
+                Modifier.clip(RoundedCornerShape(20.dp)).background(t.card).border(1.dp, t.cardEdge, RoundedCornerShape(20.dp))
+                    .clickable(onClick = onUndo).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Ico(Icons.clock, t.soft, 15.dp, 2f)
+                Spacer(Modifier.width(6.dp))
+                T("Sending…", size = 13.sp, color = t.soft)
+                Spacer(Modifier.width(10.dp))
+                Box(Modifier.clip(RoundedCornerShape(14.dp)).background(t.tone).padding(horizontal = 12.dp, vertical = 5.dp)) {
+                    T("Undo", size = 13.sp, weight = FontWeight.SemiBold, color = t.p)
+                }
+            }
+        }
+    }
+}

@@ -149,6 +149,9 @@ object Notifier {
         val otp = if (!m.fromMe) com.jpetrydesign.pyng.ui.screens.detect(m.text).code else null
         if (otp != null && p.on("otpAuto")) copyCode(ctx, otp)
         if (!p.on("notif") || conv.id in p.muted || !canPost(ctx)) return
+        // Texts with a word you blocked go to Spam quietly; chats in Trash wait there too.
+        if (!m.fromMe && repo.hasBlockedWord(m.text)) return
+        val hush = quietNow(p) && !(p.on("quietFavs") && p.isPinned(conv.id))
         // Already shown from Google Messages' notification a moment ago? Update quietly.
         val prev = lastAlert[conv.id]
         val dupe = prev != null && System.currentTimeMillis() - prev.first < 20_000 && prev.second.trim() == m.text.trim()
@@ -200,7 +203,7 @@ object Notifier {
             .setShortcutId(conv.id)
             .setContentIntent(open)
             .setOnlyAlertOnce(dupe)
-            .setSilent(dupe)
+            .setSilent(dupe || hush)
         if (!p.on("vibrate") || alerts?.vibrate == "Off") b.setVibrate(longArrayOf(0L))
         if (otp != null && !placeholder) {
             val copyPi = PendingIntent.getBroadcast(
@@ -518,4 +521,13 @@ class ReminderWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
             )
         }
     }
+}
+
+/** True during your quiet hours (they can cross midnight, like 10:00 PM to 7:00 AM). */
+fun quietNow(p: AppPrefs, now: java.util.Calendar = java.util.Calendar.getInstance()): Boolean {
+    if (!p.on("quiet")) return false
+    fun mins(s: String) = s.split(":").let { (it.getOrNull(0)?.toIntOrNull() ?: 0) * 60 + (it.getOrNull(1)?.toIntOrNull() ?: 0) }
+    val from = mins(p.opt("quietFrom")); val to = mins(p.opt("quietTo"))
+    val n = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE)
+    return if (from <= to) n in from until to else n >= from || n < to
 }
