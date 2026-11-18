@@ -124,7 +124,7 @@ object Voice {
         onEar = ear
         runCatching {
             audio?.mode = if (ear) android.media.AudioManager.MODE_IN_COMMUNICATION else android.media.AudioManager.MODE_NORMAL
-            @Suppress("DEPRECATION") audio?.isSpeakerphoneOn = !ear
+            audio?.isSpeakerphoneOn = !ear
         }
         val cur = mp ?: return
         val path = curPath ?: return

@@ -143,6 +143,17 @@ fun SearchScreen(nav: Nav) {
                     }
                     else -> {
                         if (query.isEmpty()) {
+                            // Moments: plans and packages from the last week, found in your texts.
+                            val weekAgo = System.currentTimeMillis() - 7L * 24 * 3600 * 1000
+                            val moments = repo.msgs.flatMap { (cid, list) ->
+                                list.filter { it.ts > weekAgo && !it.isSys }.mapNotNull { m -> val d = detect(m.text); (d.date?.let { "Plan · $it" } ?: d.track?.let { "Package · tracking" })?.let { Triple(cid, m, it) } }
+                            }.sortedByDescending { it.second.ts }.distinctBy { it.second.key }.take(6)
+                            if (moments.isNotEmpty()) {
+                                item { SectionTitle("Moments") }
+                                items(moments, key = { "mo" + it.second.key }) { (cid, m, label) ->
+                                    ResultRow(cid, label + " — " + m.text.take(80), listTime(m.ts)) { nav.openChat(cid, m.id) }
+                                }
+                            }
                             item { SectionTitle("Recent") }
                             items(convs.filter { it.status == "active" }.sortedByDescending { it.ts }.take(8), key = { "rc" + it.id }) { c ->
                                 ResultRow(c.id, c.preview, listTime(c.ts)) { nav.openChat(c.id) }
