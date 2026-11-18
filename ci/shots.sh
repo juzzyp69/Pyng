@@ -33,6 +33,33 @@ shot() {
   echo "shot $name"
 }
 
+# New in 0.9.5 first, so they're captured even if the run gets cut short.
+WAIT=6 shot 09-home-cats --ez cats true
+WAIT=6 shot 09b-home-profile --es open profile
+WAIT=6 shot 09c-home-whatsnew --ez whatsnew true
+WAIT=6 shot 09e-home-snooze --es open snooze
+WAIT=6 shot 09f-home-newcat --ez cats true --es open newcat
+shot 50-settings --es route settings
+for S in categories chats notifications privacy storage access blockedWords; do shot "51-section-$S" --es route "section:$S"; done
+shot 52-appearance --es route appearance
+for K in trash snoozed; do shot "56-list-$K" --es route "lists:$K"; done
+WAIT=6 shot 26-thread-maker --es route thread:c1 --es open maker
+# Fold inner screen
+adb shell wm size 1812x2176
+adb shell wm density 420
+WAIT=6 shot 70-fold-home --es route home --ez cats true
+shot 72-fold-settings --es route settings
+adb shell wm size reset
+adb shell wm density reset
+# Flip phone cover screen (about the size of a Razr Ultra's outside screen)
+adb shell wm size 1080x1272
+adb shell wm density 400
+WAIT=6 shot 75-cover-home --es route home --ez cats true
+WAIT=6 shot 75b-cover-profile --es open profile
+shot 79-cover-settings --es route settings
+adb shell wm size reset
+adb shell wm density reset
+
 shot 01-home
 shot 02-home-dark --es mode Dark
 for L in Large Pages Carousel Compact Chips Cards Spotlight List Dock; do shot "03-layout-$L" --es mode Light --es layout "$L"; done
@@ -41,12 +68,7 @@ WAIT=10 shot 05-home-rowmenu --es open rowmenu --es pinstyle Badges
 shot 06-home-strip --es open strip
 shot 07-home-perms --es open perms
 shot 08-home-duo --es theme "'Grape Soda'"
-shot 09-home-cats --ez cats true
-WAIT=6 shot 09b-home-profile --es open profile
-WAIT=6 shot 09c-home-whatsnew --ez whatsnew true
 WAIT=6 shot 09d-home-unknown --es open unknown
-WAIT=6 shot 09e-home-snooze --es open snooze
-WAIT=6 shot 09f-home-newcat --ez cats true --es open newcat
 shot 09g-home-liquid --es glass "'Liquid Glass'"
 shot 10-thread --es route thread:c1 --es theme Ocean
 shot 11-thread-dark --es route thread:c1 --es mode Dark
