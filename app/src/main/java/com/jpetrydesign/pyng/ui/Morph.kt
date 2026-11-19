@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -129,7 +130,9 @@ fun AnimatedVisibilityScope.MorphScreen(m: Morph, grow: Boolean, shrink: Boolean
         val (s, d) = simRects(b)
         dir.value = Offset(d.cx - s.cx, d.cy - s.cy).let { o -> val l = o.getDistance().coerceAtLeast(1f); Offset(o.x / l, o.y / l) }
         val sim = budSim(s, d, rev = false, style = mo)
-        val revealMs = if (mo == Mo.Drop) 360 else 300
+        // A whole screen starts showing through a little sooner, so there's never a blank moment.
+        sim.revealAt = 0.5f
+        val revealMs = if (mo == Mo.Drop) 320 else 260
         sim.onReveal = { scope.launch { shown.animateTo(1f, tween(revealMs, easing = Settle)) } }
         if (flying) scope.launch {
             snapshotFlow { slot.rect }.filterNotNull().first()
@@ -159,11 +162,15 @@ fun AnimatedVisibilityScope.MorphScreen(m: Morph, grow: Boolean, shrink: Boolean
         gone = true
     }
 
+    // Nothing below reads a moving value while composing: each frame only re-draws or re-places, so the
+    // screen inside (a whole chat) is never rebuilt mid-motion.
+    val contentOn by remember { derivedStateOf { shown.value > 0f } }
+    val landSize by remember { derivedStateOf { slot.rect?.width } }
     Box(Modifier.fillMaxSize().onGloballyPositioned { c -> val r = c.boundsInRoot(); if (box != r) box = r }) {
         if (gone) return@Box
         val liquid = growing || stage.busy
         if (liquid) Canvas(Modifier.fillMaxSize()) { stage.tick; stage.paths().forEach { drawPath(it, t.bg) } }
-        if (!exiting || shown.value > 0f) {
+        if (!exiting || contentOn) {
             val d = density.density
             Box(
                 Modifier.fillMaxSize().graphicsLayer {
@@ -187,21 +194,27 @@ fun AnimatedVisibilityScope.MorphScreen(m: Morph, grow: Boolean, shrink: Boolean
             ) { CompositionLocalProvider(LocalAvatarSlot provides slot) { content() } }
         }
         // The photo from the row, flying into the header (or back down into the row).
-        val from = m.avatar; val to = slot.rect; val b = box
-        if (flying && avatar != null && from != null && to != null && b != null) {
-            val k = fly.value
-            val size = to.width
-            val sc = (from.width / to.width) + ((1f) - from.width / to.width) * k
-            // A gentle arc: the photo lifts a little as it travels.
-            val lift = kotlin.math.sin(Math.PI * k.coerceIn(0f, 1f)).toFloat() * 18f * density.density
-            val cx = from.center.x + (to.center.x - from.center.x) * k - b.left
-            val cy = from.center.y + (to.center.y - from.center.y) * k - b.top - lift
+        val from = m.avatar
+        val size = landSize
+        if (flying && avatar != null && from != null && size != null) {
             Box(
-                Modifier.offset { IntOffset((cx - size / 2).roundToInt(), (cy - size / 2).roundToInt()) }
+                Modifier
+                    .offset {
+                        val to = slot.rect ?: from; val b = box ?: Rect.Zero
+                        val k = fly.value
+                        // A gentle arc: the photo lifts a little as it travels.
+                        val lift = kotlin.math.sin(Math.PI * k.coerceIn(0f, 1f)).toFloat() * 18f * density.density
+                        val cx = from.center.x + (to.center.x - from.center.x) * k - b.left
+                        val cy = from.center.y + (to.center.y - from.center.y) * k - b.top - lift
+                        IntOffset((cx - size / 2).roundToInt(), (cy - size / 2).roundToInt())
+                    }
                     .size(with(density) { size.toDp() })
-                    .graphicsLayer { scaleX = sc; scaleY = sc },
+                    .graphicsLayer {
+                        val k = fly.value
+                        val sc = (from.width / size) + (1f - from.width / size) * k
+                        scaleX = sc; scaleY = sc
+                    },
             ) { avatar(with(density) { size.toDp() }) }
         }
     }
 }
-

@@ -1025,9 +1025,9 @@ internal fun MotionMini(style: com.jpetrydesign.pyng.ui.kit.Mo, t: com.jpetrydes
         // Results arriving under the bar.
         Column(Modifier.offset((dst.x + 4f).dp, (dst.y + dst.h + if (big) 14f else 7f).dp), verticalArrangement = Arrangement.spacedBy(if (big) 10.dp else 5.dp)) {
             listOf(0.62f, 0.44f, 0.54f).forEachIndexed { i, f ->
-                val a = ((rows.value * 3f) - i * 0.5f).coerceIn(0f, 1f)
                 Box(
                     Modifier.graphicsLayer {
+                        val a = ((rows.value * 3f) - i * 0.5f).coerceIn(0f, 1f)
                         alpha = a
                         if (style != com.jpetrydesign.pyng.ui.kit.Mo.Minimal) translationY = (1f - a) * (if (style == com.jpetrydesign.pyng.ui.kit.Mo.Pour) -6f else 5f) * density
                         if (style == com.jpetrydesign.pyng.ui.kit.Mo.Drop) { val z = 0.9f + 0.1f * a; scaleX = z; scaleY = z }

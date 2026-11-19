@@ -142,8 +142,10 @@ internal fun edge(r: LRect, ux: Float, uy: Float, inset: Float): P {
 abstract class LiquidSim {
     var e = 0f
     var onReveal: (() -> Unit)? = null
+    /** How formed the shape is (0 to 1) when its content starts to show. Big surfaces start a bit sooner. */
+    var revealAt = 0.72f
     private var revealed = false
-    protected fun reveal(p: Float, rev: Boolean) { if (!rev && !revealed && p > 0.72f) { revealed = true; onReveal?.invoke() } }
+    protected fun reveal(p: Float, rev: Boolean) { if (!rev && !revealed && p > revealAt) { revealed = true; onReveal?.invoke() } }
     abstract fun step(dt: Float)
     abstract fun draw(lp: LP)
     abstract fun finished(): Boolean

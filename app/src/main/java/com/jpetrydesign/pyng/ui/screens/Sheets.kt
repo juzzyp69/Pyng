@@ -169,7 +169,8 @@ fun MessageMenu(
         }
         else if (motion) k.animateTo(0f, androidx.compose.animation.core.tween(160)) else k.snapTo(0f)
     }
-    if (m == null && k.value <= 0.01f && !stage.busy && !budded) return
+    val closed by remember { androidx.compose.runtime.derivedStateOf { k.value <= 0.01f } }
+    if (m == null && closed && !stage.busy && !budded) return
     val cur = last ?: return
     val p = repo.prefs.state
     val myId = conv?.me?.id.orEmpty()

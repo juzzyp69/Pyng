@@ -116,6 +116,7 @@ import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import java.io.File
 import kotlin.math.roundToInt
+import androidx.compose.ui.layout.layout
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -422,10 +423,17 @@ fun Seg(options: List<String>, selected: String, onPick: (String) -> Unit, modif
             }
         }
         if (idx >= 0) {
-            val l = min(lead.value, tail.value); val r = max(lead.value, tail.value)
+            // Read while placing, not while composing, so sliding never rebuilds the row.
+            val hl = if (t.dark) Color.White.copy(alpha = 0.14f) else Color.White
             Box(
-                Modifier.offset(x = (cell + gap) * l).size((cell + (cell + gap) * (r - l)).coerceAtLeast(0.dp), height - 8.dp)
-                    .clip(RoundedCornerShape(10.dp)).background(if (t.dark) Color.White.copy(alpha = 0.14f) else Color.White),
+                Modifier.layout { m, _ ->
+                    val l = min(lead.value, tail.value); val r = max(lead.value, tail.value)
+                    val step = (cell + gap).toPx()
+                    val w = (cell.toPx() + step * (r - l)).roundToInt().coerceAtLeast(0)
+                    val h = (height - 8.dp).roundToPx()
+                    val p = m.measure(androidx.compose.ui.unit.Constraints.fixed(w, h))
+                    layout(w, h) { p.place((step * l).roundToInt(), 0) }
+                }.clip(RoundedCornerShape(10.dp)).background(hl),
             )
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
