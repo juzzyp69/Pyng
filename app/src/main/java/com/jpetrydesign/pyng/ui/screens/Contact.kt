@@ -133,8 +133,6 @@ fun ContactScreen(nav: Nav, convId: String) {
                                 action = "Open",
                                 danger = false,
                             ) {
-                                // Drop any old Pyng-only name so the real one shows once it changes.
-                                repo.setGroupName(convId, "")
                                 val gm = ctx.packageManager.getLaunchIntentForPackage("com.google.android.apps.messaging")
                                 if (gm != null) runCatching { ctx.startActivity(gm.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
                                 else repo.toast("Google Messages isn't installed")

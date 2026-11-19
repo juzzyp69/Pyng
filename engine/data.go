@@ -296,7 +296,9 @@ func (m *Messenger) SetTyping(conversationID string) (err error) {
 	}
 	ctx, cancel := ctx20()
 	defer cancel()
-	return cli.SetTyping(ctx, conversationID, conv.GetSimCard().GetSIMData().GetSIMPayload())
+	err = cli.SetTyping(ctx, conversationID, conv.GetSimCard().GetSIMData().GetSIMPayload())
+	m.log.Info().Str("conversation_id", conversationID).Bool("group", conv.GetIsGroupChat()).AnErr("error", err).Msg("Typing update sent")
+	return err
 }
 
 // DeleteMessage deletes a message in Google Messages too.
@@ -779,9 +781,27 @@ func (m *Messenger) handleEvent(evt any) {
 		m.mu.Unlock()
 		m.emit("conversation", convJSON(e))
 	case *gmproto.TypingData:
+		// In some group chats the chat's ID and the typer's number only come in the group block.
+		convID := e.GetConversationID()
+		if convID == "" {
+			convID = e.GetSomeKindOfGroupID().GetConversationID()
+		}
+		num := e.GetUser().GetNumber()
+		if num == "" {
+			num = e.GetSomeKindOfGroupID().GetMaybePhoneNumber()
+		}
+		m.log.Info().
+			Str("conversation_id", e.GetConversationID()).
+			Str("group_conversation_id", e.GetSomeKindOfGroupID().GetConversationID()).
+			Bool("has_number", num != "").
+			Str("type", e.GetType().String()).
+			Msg("Typing update received")
+		if convID == "" {
+			return
+		}
 		m.emit("typing", map[string]any{
-			"conversationId": e.GetConversationID(),
-			"participantId":  e.GetUser().GetNumber(),
+			"conversationId": convID,
+			"participantId":  num,
 			"typing":         e.GetType() == gmproto.TypingTypes_STARTED_TYPING,
 		})
 	case *gmproto.Settings:

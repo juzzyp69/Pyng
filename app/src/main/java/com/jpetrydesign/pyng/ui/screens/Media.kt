@@ -196,6 +196,7 @@ fun VoicePlayer(m: Msg, ref: MediaRef, path: String, busy: Boolean, shape: Round
             runCatching { android.media.MediaMetadataRetriever().run { setDataSource(path); val d = extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toInt() ?: 0; release(); d } }.getOrDefault(0)
         }
         if (Voice.waves[k] == null) Voice.waves[k] = waveOf(path)
+        Transcripts.mask = repo.prefs.state.on("maskWords")
         Voice.texts[k] ?: Transcripts.load(ctx, k)?.let { Voice.texts[k] = it }
         if (repo.prefs.state.on("autoTranscribe") && Voice.texts[k] == null && hasMic(ctx)) Transcripts.run(ctx, k, path) { repo.toast(it) }
     }
@@ -375,7 +376,10 @@ private fun decodePcm(path: String, chunk: (ShortArray, Int, Float, Int, Int) ->
 
 /** Turns voice messages into text with the phone's own speech recognition. Nothing leaves the phone. */
 object Transcripts {
-    private fun file(ctx: Context, key: String) = File(File(ctx.filesDir, "transcripts").apply { mkdirs() }, key.replace(Regex("[^A-Za-z0-9_-]"), "_") + ".v2.txt")
+    /** Bleep out swear words (off unless turned on in Settings, Chats). */
+    @Volatile var mask = false
+    // Kept apart by setting, so changing it gives a fresh transcript instead of an old bleeped one.
+    private fun file(ctx: Context, key: String) = File(File(ctx.filesDir, "transcripts").apply { mkdirs() }, key.replace(Regex("[^A-Za-z0-9_-]"), "_") + (if (mask) ".v3m.txt" else ".v3.txt"))
 
     fun load(ctx: Context, key: String): String? = runCatching { file(ctx, key).takeIf { it.exists() }?.readText() }.getOrNull()
 
@@ -504,6 +508,8 @@ object Transcripts {
                     .putExtra(RecognizerIntent.EXTRA_LANGUAGE, java.util.Locale.getDefault().toLanguageTag())
                     .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
                     .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                    // Words come through as said unless you've asked for them to be hidden.
+                    .putExtra(RecognizerIntent.EXTRA_MASK_OFFENSIVE_WORDS, mask)
                     .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, pfd)
                     .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, android.media.AudioFormat.ENCODING_PCM_16BIT)
                     .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, 16_000)

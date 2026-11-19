@@ -327,6 +327,7 @@ fun SectionScreen(nav: Nav, key: String) {
                     TogRow("Typing indicators", "typing", "Show when people are typing, and let them see when you are"); Hairline()
                     TogRow("Voice message button", "micBtn", "Show the mic next to the message box"); Hairline()
                     TogRow("Transcribe voice messages", "autoTranscribe", "Turn voice messages into text automatically, right on your phone"); Hairline()
+                    TogRow("Hide swear words", "maskWords", "Bleep out curse words in voice message transcripts"); Hairline()
                     TogRow("Link previews", "previews", "Show a preview card for links"); Hairline()
                     TogRow("Enter key sends", "enterSend", "Your keyboard's enter key sends instead of adding a line"); Hairline()
                     TogRow("Undo send", "undoSend", "A few seconds to take back a message after you send it")

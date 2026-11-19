@@ -97,15 +97,12 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
 
     // Group names and photos you set in Pyng (Google Messages doesn't let linked apps change them).
     private val rawNames = HashMap<String, String>()
-    private fun withLocalName(c: Conv): Conv {
-        if (!c.group) return c
-        val n = prefs.state.opt("gname:" + c.id)
-        return if (n.isNotBlank()) c.copy(name = n) else c
-    }
-    fun setGroupName(convId: String, name: String) {
-        prefs.setOpt("gname:$convId", name.trim())
-        convs[convId]?.let { c -> convs[convId] = if (name.isBlank()) c.copy(name = rawNames[convId] ?: c.name) else c.copy(name = name.trim()) }
-        saveCacheSoon(); scope.launch { com.jpetrydesign.pyng.widget.Widgets.refresh(app) }
+    // A group's name always comes from Google Messages, so it's the same for everyone in the group.
+    // Names set in Pyng before this are dropped.
+    private fun withLocalName(c: Conv): Conv = c
+    private fun dropLocalGroupNames() {
+        if (prefs.state.opts.keys.none { it.startsWith("gname:") }) return
+        prefs.edit { p -> p.copy(opts = p.opts.filterKeys { !it.startsWith("gname:") }) }
     }
     /** A photo waiting in the crop screen (group, contact or profile photo). */
     var crop by mutableStateOf<com.jpetrydesign.pyng.ui.screens.CropRequest?>(null)
@@ -168,6 +165,7 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
                 o.keys().forEach { k -> val v = o.optString(k); if (v.isNotEmpty() && (v.startsWith("content://") || File(v).exists())) avatars[k] = v }
             }
         }
+        dropLocalGroupNames()
         scope.launch { hub.events.collect { handle(it) } }
         scope.launch {
             while (true) {
