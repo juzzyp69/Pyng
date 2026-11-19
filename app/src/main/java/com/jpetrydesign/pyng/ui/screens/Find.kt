@@ -1,6 +1,8 @@
 package com.jpetrydesign.pyng.ui.screens
 
 import androidx.activity.compose.BackHandler
+import android.provider.ContactsContract.CommonDataKinds.Event as CEvent
+import android.provider.ContactsContract.Data as CData
 import androidx.compose.foundation.background
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
@@ -453,12 +455,10 @@ object Moments {
         val md = java.text.SimpleDateFormat("MM-dd", java.util.Locale.US).format(java.util.Date())
         if (md == day) return cache
         if (androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.READ_CONTACTS) != android.content.pm.PackageManager.PERMISSION_GRANTED) return emptyList()
-        val E = android.provider.ContactsContract.CommonDataKinds.Event
-        val D = android.provider.ContactsContract.Data
         val out = runCatching {
             ctx.contentResolver.query(
-                D.CONTENT_URI, arrayOf(E.START_DATE, D.DISPLAY_NAME, D.CONTACT_ID),
-                "${D.MIMETYPE}=? AND ${E.TYPE}=?", arrayOf(E.CONTENT_ITEM_TYPE, E.TYPE_BIRTHDAY.toString()), null,
+                CData.CONTENT_URI, arrayOf(CEvent.START_DATE, CData.DISPLAY_NAME, CData.CONTACT_ID),
+                "${CData.MIMETYPE}=? AND ${CEvent.TYPE}=?", arrayOf(CEvent.CONTENT_ITEM_TYPE, CEvent.TYPE_BIRTHDAY.toString()), null,
             )?.use { c ->
                 buildList {
                     while (c.moveToNext()) {

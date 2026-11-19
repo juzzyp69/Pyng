@@ -123,7 +123,8 @@ fun AppearanceScreen(nav: Nav) {
     val p = repo.prefs.state
     val demo = remember { repo.demoOpen.also { repo.demoOpen = null } }
     var pick by remember { mutableStateOf(demo?.removePrefix("pick:")?.takeIf { demo.startsWith("pick:") }) }
-    var studio by remember { mutableStateOf(demo?.removePrefix("studio:")?.takeIf { demo.startsWith("studio:") }) }
+    var studio by remember { mutableStateOf(demo?.removePrefix("studio:")?.substringBefore(':')?.takeIf { demo.startsWith("studio:") }) }
+    remember { demo?.takeIf { it.startsWith("studio:") }?.split(':')?.getOrNull(2)?.let { StudioTab.pending = it } }
     val pal = Palettes.byKey(p.themeKey, p.c1, p.c2)
     Box(Modifier.fillMaxSize()) {
         Page("Appearance", { nav.back() }) {
@@ -752,7 +753,7 @@ private fun StyleStudio(kind: String?, onClose: () -> Unit) {
         val chat = k == "chat"
         val tabs = if (chat) listOf("bubble" to "Bubbles", "sendStyle" to "Send", "reactStyle" to "Reactions", "gradient" to "Gradient", "statusStyle" to "Status", "photoGroups" to "Photos", "textSize" to "Text", "font" to "Font", "defWall" to "Wallpaper")
             else listOf("pinLayout" to "Layout", "pinShape" to "Shape", "pinStyle" to "New messages", "pinNames" to "Names", "pinBack" to "Backdrop", "density" to "Density", "showPhotos" to "Faces", "motion" to "Motion")
-        var tab by remember(k) { mutableStateOf(tabs.first().first) }
+        var tab by remember(k) { mutableStateOf(StudioTab.pending?.takeIf { want -> tabs.any { it.first == want } }.also { StudioTab.pending = null } ?: tabs.first().first) }
         Column(Modifier.fillMaxSize().background(t.bg).statusBarsPadding().navigationBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(start = 6.dp, end = 16.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 com.jpetrydesign.pyng.ui.kit.CircleButton(Icons.back, "Back", onClose)
@@ -1040,3 +1041,6 @@ internal fun MotionMini(style: com.jpetrydesign.pyng.ui.kit.Mo, t: com.jpetrydes
         }
     }
 }
+
+/** A tab for Style studio to open on (used when a link or the demo asks for one). */
+object StudioTab { var pending: String? = null }

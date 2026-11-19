@@ -33,7 +33,24 @@ shot() {
   echo "shot $name"
 }
 
-# New in 0.9.5 first, so they're captured even if the run gets cut short.
+# New in 0.9.5.1 first: What's new cards, the Motion tab, and liquid motion caught mid-flight.
+WAIT=7 shot 00-whatsnew --ez whatsnew true
+WAIT=6 shot 00b-motion-tab --es route appearance --es open studio:home:motion
+WAIT=3 shot 00c-menu-budding --es route thread:c1 --es open menu
+WAIT=7 shot 00d-menu-open --es route thread:c1 --es open menu
+# Tap the search button and grab frames while it pours open.
+SZ=$(adb shell wm size | grep -oE '[0-9]+x[0-9]+' | tail -1); W=${SZ%x*}; H=${SZ#*x}
+DN=$(adb shell wm density | grep -oE '[0-9]+' | tail -1)
+px() { echo $(( $1 * DN / 160 )); }
+WAIT=6 shot 00e-home-before
+adb shell input tap $(( W - $(px 50) )) $(( H - $(px 98) ))
+sleep 0.1; adb exec-out screencap -p > "$OUT/00f-search-pouring.png"
+sleep 1; adb exec-out screencap -p > "$OUT/00g-search-open.png"
+adb shell input keyevent 4
+sleep 0.15; adb exec-out screencap -p > "$OUT/00h-search-draining.png"
+sleep 1.2; adb exec-out screencap -p > "$OUT/00i-search-closed.png"
+echo "shot search morph"
+# New in 0.9.5 next.
 WAIT=6 shot 09-home-cats --ez cats true
 WAIT=6 shot 09b-home-profile --es open profile
 WAIT=6 shot 09c-home-whatsnew --ez whatsnew true

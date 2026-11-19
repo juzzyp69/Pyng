@@ -128,7 +128,7 @@ class Nav(start: Route) {
     val morphs = mutableMapOf<Route, Morph>()
     private fun noteMorph(r: Route, from: Morph?) {
         morphs.keys.retainAll(stack.toSet())
-        if (from != null) morphs[r] = from else morphs.remove(r)
+        if (from != null) { from.under = stack.getOrNull(stack.size - 2); morphs[r] = from } else morphs.remove(r)
     }
 
     fun go(r: Route, from: Morph? = null) { forward = true; stack.add(r); noteMorph(r, from) }
@@ -274,7 +274,7 @@ private fun androidx.compose.animation.AnimatedContentTransitionScope<Route?>.na
     val hold = { androidx.compose.animation.EnterTransition.None togetherWith fadeOut(tween(1, delayMillis = MORPH_HOLD)) }
     return when {
         allowMorph && mo.liquid && nav.forward && into != null && nav.morphs[into] != null -> hold()
-        allowMorph && mo.liquid && !nav.forward && out != null && nav.morphs[out] != null -> hold().apply { targetContentZIndex = -1f }
+        allowMorph && mo.liquid && !nav.forward && out != null && nav.morphs[out]?.under == nav.top -> hold().apply { targetContentZIndex = -1f }
         else -> transition(nav.forward, mo)
     }
 }
@@ -285,11 +285,14 @@ private fun androidx.compose.animation.AnimatedVisibilityScope.NavScreen(r: Rout
     val mo = com.jpetrydesign.pyng.ui.kit.LocalMo.current
     val m = remember(r) { if (allowMorph && mo.liquid) nav.morphs[r] else null }
     if (m == null) { Screen(r, nav, wide); return }
+    // Grow only when it was just opened from what you tapped; drain back only when going back to where it came from.
+    val grow = remember(r) { nav.forward && nav.top == r }
+    val shrink = !nav.forward && nav.top == m.under
     val repo = LocalRepo.current
     val avatar: (@Composable (androidx.compose.ui.unit.Dp) -> Unit)? = (r as? Route.Thread)?.let { th ->
         { size -> repo.convs[th.id]?.let { com.jpetrydesign.pyng.ui.screens.WhoAvatar(com.jpetrydesign.pyng.ui.screens.whoOf(it), size, (size.value / 3.1f).sp) } }
     }
-    MorphScreen(m, avatar) { Screen(r, nav, wide) }
+    MorphScreen(m, grow, shrink, avatar) { Screen(r, nav, wide) }
 }
 
 /** Renders the top of the back stack with a slide in the right direction. */

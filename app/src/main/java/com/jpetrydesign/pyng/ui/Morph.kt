@@ -57,7 +57,10 @@ import kotlin.math.roundToInt
  * Where a screen grows out of: the button or row you tapped, in window pixels, with its corner radius.
  * [avatar] is the photo in that row, which flies up into the chat's header.
  */
-class Morph(val from: Rect, val radius: Float, val avatar: Rect? = null)
+class Morph(val from: Rect, val radius: Float, val avatar: Rect? = null) {
+    /** The screen it was opened from. Going back to that screen drains it back into what you tapped. */
+    var under: Any? = null
+}
 
 /** How long the screen underneath stays put while a screen grows over it or shrinks back off it. */
 const val MORPH_HOLD = 900
@@ -92,15 +95,15 @@ private val Settle = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
  */
 @OptIn(androidx.compose.animation.ExperimentalAnimationApi::class)
 @Composable
-fun AnimatedVisibilityScope.MorphScreen(m: Morph, avatar: (@Composable (Dp) -> Unit)?, content: @Composable () -> Unit) {
+fun AnimatedVisibilityScope.MorphScreen(m: Morph, grow: Boolean, shrink: Boolean, avatar: (@Composable (Dp) -> Unit)?, content: @Composable () -> Unit) {
     val mo = LocalMo.current
     val t = LocalTok.current
     val density = LocalDensity.current
     val stage = remember { LiquidStage() }
     LiquidDriver(stage)
     // Only a screen that's arriving grows; one that was already up (or came back some other way) just shows.
-    val grows = remember { transition.currentState == EnterExitState.PreEnter }
-    val exiting = transition.targetState == EnterExitState.PostExit
+    val grows = remember { grow && transition.currentState == EnterExitState.PreEnter }
+    val exiting = shrink && transition.targetState == EnterExitState.PostExit
     var box by remember { mutableStateOf<Rect?>(null) }
     var growing by remember { mutableStateOf(grows) }
     var gone by remember { mutableStateOf(false) }
