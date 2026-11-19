@@ -116,6 +116,10 @@ import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import java.io.File
 import kotlin.math.roundToInt
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+import kotlinx.coroutines.launch
 
 val LocalRepo = compositionLocalOf<Repo> { error("no repo") }
 val LocalHaze = compositionLocalOf<HazeState?> { null }
@@ -320,8 +324,17 @@ fun CountBadge(n: Int, bg: Color = LocalTok.current.badgeBg, ink: Color = LocalT
     val shape = RoundedCornerShape(h / 2)
     val glass = androidx.compose.ui.graphics.lerp(bg, Color.White, if (t.dark) 0.06f else 0.12f)
     val frosted = haze != null && !t.solid
+    // A new message makes the count bud out again: it swells from small with a little give.
+    val mo = LocalMo.current
+    val pop = remember { Animatable(1f) }
+    val seen = remember { intArrayOf(n) }
+    LaunchedEffect(n) {
+        if (n > seen[0] && mo.liquid) { pop.snapTo(0.35f); pop.animateTo(1f, spring(dampingRatio = if (mo == Mo.Pour) 0.5f else 0.42f, stiffness = 520f)) }
+        seen[0] = n
+    }
     Box(
-        modifier.heightIn(min = h).widthIn(min = h).clip(shape)
+        modifier.graphicsLayer { scaleX = pop.value; scaleY = pop.value; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.2f, 0.8f) }
+            .heightIn(min = h).widthIn(min = h).clip(shape)
             .then(
                 if (frosted) Modifier.hazeEffect(state = haze, style = HazeStyle(backgroundColor = t.bg, tint = HazeTint(glass.copy(alpha = if (t.dark) 0.56f else 0.62f)), blurRadius = 9.dp, noiseFactor = 0f))
                 else Modifier.background(glass.copy(alpha = if (t.solid) 1f else 0.92f)),
@@ -359,16 +372,26 @@ fun TypingDots(color: Color, dot: Dp = 4.dp, gap: Dp = 3.dp) {
 @Composable
 fun Toggle(on: Boolean, modifier: Modifier = Modifier) {
     val t = LocalTok.current
-    val x by animateFloatAsState(if (on) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 500f), label = "sw")
+    val mo = LocalMo.current
+    val x = remember { Animatable(if (on) 1f else 0f) }
+    LaunchedEffect(on) {
+        x.animateTo(if (on) 1f else 0f, if (mo == Mo.Minimal) tween(90) else spring(dampingRatio = if (mo.liquid) 0.62f else 0.9f, stiffness = 500f))
+    }
+    // The track color fades (it never bounces); the knob stretches as it travels, then settles round.
+    val trackA by animateFloatAsState(if (on) 1f else 0f, tween(250), label = "swTrack")
     Box(
         modifier.size(52.dp, 32.dp).clip(RoundedCornerShape(16.dp))
-            .background(if (on) t.p else Color.Transparent)
-            .then(if (on) Modifier else Modifier.border(2.dp, t.faint, RoundedCornerShape(16.dp))),
+            .background(t.p.copy(alpha = t.p.alpha * trackA))
+            .border(2.dp, t.faint.copy(alpha = t.faint.alpha * (1f - trackA)), RoundedCornerShape(16.dp)),
     ) {
-        val knob = 16.dp + 8.dp * x
+        val k = x.value
+        val stretch = if (mo.liquid) (abs(x.velocity) / 9f).coerceIn(0f, 1f) else 0f
+        val knob = 16.dp + 8.dp * k.coerceIn(0f, 1f)
+        val knobW = knob + 10.dp * stretch
+        val onKnob = if (t.dark) Color(0xFF101218) else Color.White
         Box(
-            Modifier.align(Alignment.CenterStart).offset(x = 4.dp + (52.dp - 8.dp - knob) * x)
-                .size(knob).clip(CircleShape).background(if (on) (if (t.dark) Color(0xFF101218) else Color.White) else t.faint),
+            Modifier.align(Alignment.CenterStart).offset(x = 4.dp + (52.dp - 8.dp - knobW) * k)
+                .size(knobW, knob).clip(RoundedCornerShape(knob / 2)).background(androidx.compose.ui.graphics.lerp(t.faint, onKnob, trackA)),
         )
     }
 }
@@ -377,19 +400,42 @@ fun Toggle(on: Boolean, modifier: Modifier = Modifier) {
 @Composable
 fun Seg(options: List<String>, selected: String, onPick: (String) -> Unit, modifier: Modifier = Modifier, height: Dp = 38.dp) {
     val t = LocalTok.current
-    Row(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(t.neutral).padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        options.forEach { o ->
-            val on = o == selected
-            val bgA by animateFloatAsState(if (on) 1f else 0f, tween(220), label = "seg")
+    val mo = LocalMo.current
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(t.neutral).padding(4.dp)) {
+        val n = options.size.coerceAtLeast(1)
+        val gap = 4.dp
+        val cell = (maxWidth - gap * (n - 1)) / n
+        val idx = options.indexOf(selected)
+        // The highlight slides to the one you tap: its leading edge gets there first and the back catches up.
+        val lead = remember { Animatable(idx.coerceAtLeast(0).toFloat()) }
+        val tail = remember { Animatable(idx.coerceAtLeast(0).toFloat()) }
+        LaunchedEffect(idx) {
+            if (idx < 0) return@LaunchedEffect
+            val to = idx.toFloat()
+            when {
+                mo == Mo.Minimal -> { lead.snapTo(to); tail.snapTo(to) }
+                mo.liquid -> {
+                    launch { lead.animateTo(to, spring(dampingRatio = 0.73f, stiffness = 640f)) }
+                    tail.animateTo(to, spring(dampingRatio = if (mo == Mo.Pour) 0.75f else 0.85f, stiffness = 250f))
+                }
+                else -> { launch { lead.animateTo(to, spring(dampingRatio = 1f, stiffness = 500f)) }; tail.animateTo(to, spring(dampingRatio = 1f, stiffness = 500f)) }
+            }
+        }
+        if (idx >= 0) {
+            val l = min(lead.value, tail.value); val r = max(lead.value, tail.value)
             Box(
-                Modifier.weight(1f).height(height - 8.dp).clip(RoundedCornerShape(10.dp))
-                    .background((if (t.dark) Color.White.copy(alpha = 0.14f) else Color.White).copy(alpha = (if (t.dark) 0.14f else 1f) * bgA))
-                    .clickable { onPick(o) },
-                contentAlignment = Alignment.Center,
-            ) { T(o, size = 13.5.sp, weight = FontWeight.SemiBold, color = if (on) t.ink else t.soft, maxLines = 1) }
+                Modifier.offset(x = (cell + gap) * l).size((cell + (cell + gap) * (r - l)).coerceAtLeast(0.dp), height - 8.dp)
+                    .clip(RoundedCornerShape(10.dp)).background(if (t.dark) Color.White.copy(alpha = 0.14f) else Color.White),
+            )
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+            options.forEach { o ->
+                val on = o == selected
+                Box(
+                    Modifier.weight(1f).height(height - 8.dp).clip(RoundedCornerShape(10.dp)).clickable { onPick(o) },
+                    contentAlignment = Alignment.Center,
+                ) { T(o, size = 13.5.sp, weight = FontWeight.SemiBold, color = if (on) t.ink else t.soft, maxLines = 1) }
+            }
         }
     }
 }
@@ -611,6 +657,7 @@ fun ListRow(
 fun Sheet(visible: Boolean, onDismiss: () -> Unit, maxHeightFraction: Float = 0.9f, content: @Composable ColumnScope.() -> Unit) {
     val t = LocalTok.current
     val motion = LocalMotion.current
+    val mo = LocalMo.current
     if (visible) BackHandler(onBack = onDismiss)
     Box(Modifier.fillMaxSize().zIndex(20f)) {
         AnimatedVisibility(visible, enter = fadeIn(tween(200)), exit = fadeOut(tween(180))) {
@@ -618,8 +665,15 @@ fun Sheet(visible: Boolean, onDismiss: () -> Unit, maxHeightFraction: Float = 0.
         }
         AnimatedVisibility(
             visible, modifier = Modifier.align(Alignment.BottomCenter),
-            enter = slideInVertically(if (motion) spring(dampingRatio = 0.78f, stiffness = 380f) else tween(0)) { it } + fadeIn(tween(120)),
-            exit = slideOutVertically(tween(if (motion) 220 else 0)) { it } + fadeOut(tween(200)),
+            // Each motion style settles the sheet its own way; Minimal just fades.
+            enter = when (mo) {
+                Mo.Minimal -> fadeIn(tween(120))
+                Mo.Simple -> slideInVertically(tween(260, easing = androidx.compose.animation.core.FastOutSlowInEasing)) { it } + fadeIn(tween(120))
+                Mo.Pour -> slideInVertically(spring(dampingRatio = 0.86f, stiffness = 300f)) { it } + fadeIn(tween(120))
+                Mo.Drop -> slideInVertically(spring(dampingRatio = 0.66f, stiffness = 420f)) { it } + fadeIn(tween(120))
+                else -> slideInVertically(spring(dampingRatio = 0.74f, stiffness = 400f)) { it } + fadeIn(tween(120))
+            },
+            exit = if (!motion) fadeOut(tween(90)) else slideOutVertically(tween(220)) { it } + fadeOut(tween(200)),
         ) {
             var drag by remember { mutableFloatStateOf(0f) }
             val shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)

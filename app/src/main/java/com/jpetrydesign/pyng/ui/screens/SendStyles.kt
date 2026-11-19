@@ -263,185 +263,129 @@ internal class TaffyFlight(run: MeltRun, d: Float, corner: Float) : Flight(run, 
     }
 }
 
-// ---------- Rise and Honey: the bubble lifts out of the box on a gooey neck ----------
+// ---------- Rise and Honey: the bubble lifts out of where you typed on a neck that thins and lets go ----------
 
 internal class RiseFlight(run: MeltRun, d: Float, corner: Float, val honey: Boolean) : Flight(run, d, corner) {
     override val maxTime = if (honey) 2.4f else 1.9f
-    private val textW = run.textBox.width.coerceAtMost(F.width - 32f * d)
-    private val sx0 = run.textBox.left + textW / 2f
-    private val bw0 = max(44f * d, min(textW + 20f * d, F.width * 0.7f))
-    private val bh0 = F.height * 0.62f
-    private val L = if (honey) FxSpring(sx0 - bw0 / 2, 0.5f, 0.8f) else FxSpring(sx0 - bw0 / 2, 0.36f, 0.74f)
-    private val R = if (honey) FxSpring(sx0 + bw0 / 2, 0.54f, 0.78f) else FxSpring(sx0 + bw0 / 2, 0.4f, 0.72f)
-    private val T = if (honey) FxSpring(F.top + (F.height - bh0) / 2, 0.6f, 0.8f) else FxSpring(F.top + (F.height - bh0) / 2, 0.44f, 0.74f)
-    private val H = if (honey) FxSpring(bh0, 0.42f, 0.75f) else FxSpring(bh0, 0.32f, 0.7f)
-    private val P = FxSpring(F.height, 0.3f, 0.95f)
-    private val PX = FxSpring(sx0, 0.16f, 0.9f)
+    private var ready = false
+    private lateinit var L: FxSpring; private lateinit var R: FxSpring; private lateinit var T: FxSpring; private lateinit var H: FxSpring
+    private val PX = FxSpring(0f, 0.16f, 0.9f)
     private val D1 = if (honey) FxSpring(0f, 0.42f, 0.28f) else FxSpring(0f, 0.22f, 0.35f)
-    private val D2 = FxSpring(0f, 0.24f, 0.85f)
     private val SX = FxSpring(1f, 0.32f, 0.4f)
     private val SY = FxSpring(1f, 0.32f, 0.4f)
-    private val gk = if (honey) 0.34f else 0.24f
-    private var pinched = false
-    private var neckTx = 0f
-    private var pinchGap = -1f
+    private var bh0 = 0f
+    private var travel = 1f
+    private var letGo = false
+    private var letT = 0f
+    private var nw = 0f
+    private var gap = 0f
+
+    private fun start(B: Rect) {
+        // It starts as a small bead right where your words were, then grows into the bubble as it rises.
+        val bw0 = min(B.width, F.width * 0.45f)
+        bh0 = min(B.height, F.height * 0.62f)
+        val sx0 = min(F.right - bw0 / 2f - 12f * d, run.textBox.left + bw0 / 2f)
+        L = if (honey) FxSpring(sx0 - bw0 / 2f, 0.5f, 0.8f) else FxSpring(sx0 - bw0 / 2f, 0.36f, 0.74f)
+        R = if (honey) FxSpring(sx0 + bw0 / 2f, 0.54f, 0.78f) else FxSpring(sx0 + bw0 / 2f, 0.4f, 0.72f)
+        T = if (honey) FxSpring(F.top + (F.height - bh0) / 2f, 0.6f, 0.8f) else FxSpring(F.top + (F.height - bh0) / 2f, 0.44f, 0.74f)
+        H = if (honey) FxSpring(bh0, 0.42f, 0.75f) else FxSpring(bh0, 0.32f, 0.7f)
+        PX.v = sx0; PX.to = sx0
+        travel = max(1f, F.top - B.bottom)
+        ready = true
+    }
 
     override fun step(dt: Float, t: Float, B: Rect) {
         time = t; lastB = B
-        if (pinchGap < 0f) {
-            val travel = F.top - B.bottom
-            pinchGap = min(max(8f * d, travel * 0.92f), max(24f * d, min((if (honey) 170f else 120f) * d, travel * (if (honey) 0.82f else 0.55f))))
-        }
+        if (!ready) start(B)
         if (!showReal) {
             L.to = B.left; R.to = B.right; T.to = B.top; H.to = B.height
             L.step(dt); R.step(dt); T.step(dt); H.step(dt)
-            val gap = F.top - (T.v + H.v)
-            PX.to = ((L.v + R.v) / 2f).coerceIn(F.left + 30f * d, F.right - 30f * d); PX.step(dt)
-            if (!pinched && gap > pinchGap && t > 0.12f) {
-                pinched = true
-                val yb0 = T.v + H.v - min(min(H.v / 2f, 20f * d) * 0.8f, H.v * 0.35f)
-                val half = (F.top + F.height / 2f - yb0) / 2f
-                D1.v = min((if (honey) 44f else 34f) * d, half); D1.vel = 0f
-                D2.v = min((if (honey) 30f else 22f) * d, half); D2.vel = 0f
-                P.to = 0f
-            }
-            if (pinched) { D1.step(dt); D2.step(dt); P.step(dt) }
+            PX.to = (L.v + R.v) / 2f; PX.step(dt)
+            gap = F.top - (T.v + H.v)
+            val k = min(1f, max(0f, gap) / (travel * (if (honey) 0.85f else 0.7f)))
+            if (!letGo) {
+                nw = max(0f, (R.v - L.v) * (if (honey) 0.55f else 0.42f) * (1f - k * k) + (if (honey) 6f else 3f) * d * (1f - k))
+                if (gap > 2f * d && nw < 1.5f * d) { letGo = true; letT = t; D1.v = min((if (honey) 44f else 34f) * d, gap / 2f); D1.vel = 0f }
+            } else D1.step(dt)
             val near = 2.5f * d
-            if (pinched && t > 0.14f && abs(T.v - T.to) < near && abs(L.v - L.to) < near && abs(R.v - R.to) < near * 1.2f && abs(H.v - H.to) < near) {
+            if (t > 0.15f && abs(T.v - T.to) < near && abs(L.v - L.to) < near && abs(R.v - R.to) < near && abs(H.v - H.to) < near) {
                 showReal = true; SX.vel = if (honey) 0.5f else 0.9f; SY.vel = if (honey) -0.75f else -1.2f
             }
         } else {
-            SX.step(dt); SY.step(dt); P.step(dt)
+            SX.step(dt); SY.step(dt); D1.step(dt)
             realSX = SX.v; realSY = SY.v
-            done = SX.still(0.002f) && SY.still(0.002f) && P.v < 0.5f
+            done = SX.still(0.002f) && SY.still(0.002f) && t - letT > 0.34f
         }
-    }
-
-    private fun drip(path: Path, px: Float, base: Float, len: Float, dir: Float, half: Float) {
-        if (len < 0.6f) return
-        val tip = base + len * dir
-        path.moveTo(px - half, base)
-        path.cubicTo(px - half * 0.35f, base + len * 0.45f * dir, px - 0.8f, tip - len * 0.12f * dir, px, tip)
-        path.cubicTo(px + 0.8f, tip - len * 0.12f * dir, px + half * 0.35f, base + len * 0.45f * dir, px + half, base)
-        path.close()
     }
 
     override fun draw(s: DrawScope, k: Look): Unit = with(s) {
         val B = lastB ?: return@with
-        val col = lerpColor(k.fieldSolid, k.t.outFlat, easeOut(time / 0.12f))
-        // The pool: the box fills, then gets drawn in toward the neck as the bubble pulls it up.
-        val kk = easeOut(time / gk)
-        val sc = max(0f, P.v / F.height)
-        val pw = mix(F.width, 48f * d, kk) * (if (pinched) sc else 1f)
-        val ph = mix(F.height, 24f * d, kk) * (if (pinched) sc else 1f)
-        val pcx = mix(F.center.x, PX.v, kk)
-        val poolTop = F.center.y - ph / 2f
-        if (pw > 1f && ph > 1f) {
-            val pool = bubblePath(pcx - pw / 2f, poolTop, pw, ph, ph / 2f)
-            if (pinched && D2.v > 0.6f) {
-                val up = Path(); drip(up, pcx, poolTop + ph * 0.5f, D2.v + ph * 0.5f, -1f, 7f * d)
-                pool.op(pool, up, PathOperation.Union)
+        if (!ready) return@with
+        val col = k.t.outFlat
+        dryText(k, 1f - easeOut(time / 0.08f))
+        // The neck: a soft strand from the bead down into the box, thinning until it lets go.
+        if (!letGo) {
+            if (gap > 0f && nw > 0.4f) {
+                val top = T.v + H.v - 6f * d; val hh = max(0f, gap + 12f * d)
+                drawRoundRect(col, Offset(PX.v - nw / 2f, top), Size(nw, hh), CornerRadius(nw / 2f))
             }
-            drawPath(pool, col, alpha = if (pinched) min(1f, sc * 2.5f) else 1f)
+        } else {
+            // What's left of it falls back into the box as a drip and fades away.
+            val r = max(0f, D1.v * 0.18f); val a = (1f - (time - letT) * 3f).coerceIn(0f, 1f)
+            if (r > 0.3f && a > 0f) drawCircle(col, r, Offset(PX.v, F.top - D1.v * 0.4f + r), alpha = a)
         }
         if (showReal) return@with
-        val x = L.v; val w = max(1f, R.v - L.v); val top = T.v; val h = max(1f, H.v); val bot = top + h
-        val r = min(h / 2f, 20f * d)
-        val rp = smooth((F.top - top) / max(1f, F.top - B.top))
-        val rad = mix(r, corner * d, rp)
-        val v = min(0.09f, abs(T.vel) / (8000f * d))
-        val shape = bubblePath(x, top, w, h, rad)
-        // The neck thins smoothly to a thread right as it lets go; its halves become the drips, so nothing pops.
-        val nwMax = if (honey) min(w * 0.34f, 34f * d) else min(w * 0.3f, 26f * d)
-        val poolW = mix(F.width, 48f * d, kk)
-        val swMax = min(w / 2f - r, nwMax * 1.8f)
-        val bsMax = max(8f * d, min(poolW / 2f - 6f * d, nwMax * 1.6f))
-        val yb = bot - min(r * 0.8f, h * 0.35f)
-        val yf = F.center.y
-        if (!pinched) {
-            val gap = F.top - bot; val dy = yf - yb
-            if (gap > -h && dy > 3f) {
-                val q = smooth(gap / pinchGap)
-                val nw = mix(nwMax, 0.7f * d, q); val sw = mix(swMax, 7f * d, q); val bs = mix(bsMax, 7f * d, q)
-                val bx = mix(F.center.x, PX.v, kk)
-                val tx = bx.coerceIn(x + sw + r * 0.3f, max(x + sw + r * 0.3f, x + w - sw - r * 0.3f))
-                neckTx = tx - x
-                val neck = Path().apply {
-                    moveTo(tx - sw, yb)
-                    cubicTo(tx - nw, yb + dy * 0.4f, bx - nw, yf - dy * 0.4f, bx - bs, yf)
-                    lineTo(bx + bs, yf)
-                    cubicTo(bx + nw, yf - dy * 0.4f, tx + nw, yb + dy * 0.4f, tx + sw, yb)
-                    close()
-                }
-                shape.op(shape, neck, PathOperation.Union)
-            }
-        } else if (D1.v > 0.6f) {
-            val dr = Path(); drip(dr, x + neckTx, yb, D1.v, 1f, 7f * d)
-            shape.op(shape, dr, PathOperation.Union)
-        }
-        withTransform({ scale(1f - v * 0.5f, 1f + v, Offset(x + w / 2f, top + h / 2f)) }) {
-            drawPath(shape, col)
-            val body = bubblePath(x, top, w, h, rad)
-            wetText(k, body, Offset(x + k.padL, top + k.padT + (h - B.height) / 2f), easeOut((w / B.width - 0.72f) / 0.28f) * easeOut((time - 0.1f) / 0.1f))
-        }
-        dryText(k, 1f - easeOut(time / 0.08f))
+        val x = L.v; val w = max(1f, R.v - L.v); val top = T.v; val h = max(1f, H.v)
+        val prog = smooth((F.top + (F.height - bh0) / 2f - top) / max(1f, F.top - B.top))
+        val body = bubblePath(x, top, w, h, mix(h / 2f, corner * d, prog))
+        drawPath(body, col)
+        // Your words ride along from where you typed them, sliding into place as it forms.
+        val tx = mix(max(4f * d, run.textBox.left - x), k.padL, prog)
+        val ty = mix((h - 20f * d) / 2f, k.padT, prog)
+        wetText(k, body, Offset(x + tx, top + ty), easeOut((time - 0.04f) / 0.14f))
     }
 }
 
-// ---------- Droplet: one shape the whole way, a drop that spreads into the bubble ----------
+// ---------- Droplet: shrinks to a drop, then spreads out into the bubble near the top ----------
 
 internal class DropletFlight(run: MeltRun, d: Float, corner: Float) : Flight(run, d, corner) {
-    private val D = 34f * d
-    private val CX = FxSpring(run.textBox.left + run.textBox.width.coerceAtMost(F.width - 32f * d) / 2f, 0.34f, 0.84f)
-    private val CY = FxSpring(F.center.y, 0.36f, 0.8f)
-    private val W = FxSpring(max(44f * d, run.textBox.width + 20f * d), 0.16f, 0.92f)
-    private val H = FxSpring(F.height * 0.72f, 0.16f, 0.92f)
+    private val D = 36f * d
+    private var ready = false
+    private lateinit var CX: FxSpring; private lateinit var CY: FxSpring; private lateinit var W: FxSpring; private lateinit var H: FxSpring
     private val SX = FxSpring(1f, 0.3f, 0.42f)
     private val SY = FxSpring(1f, 0.3f, 0.42f)
-    private var spread = 0f
-    private var dist0 = -1f
-    private var softened = false
+    private var spread = false
+
     override fun step(dt: Float, t: Float, B: Rect) {
         time = t; lastB = B
-        val tx = B.center.x; val ty = B.center.y
-        if (dist0 < 0f) dist0 = hypot(tx - CX.v, ty - CY.v)
+        if (!ready) {
+            val tw0 = min(F.width - 32f * d, run.textBox.width)
+            val seed = min(tw0, 80f * d)
+            CX = FxSpring(run.textBox.left + seed / 2f, 0.34f, 0.84f); CY = FxSpring(F.center.y, 0.36f, 0.8f)
+            W = FxSpring(max(44f * d, seed + 20f * d), 0.16f, 0.92f); H = FxSpring(F.height * 0.72f, 0.16f, 0.92f)
+            W.to = D; H.to = D
+            ready = true
+        }
         if (!showReal) {
-            if (t > 0.09f) { CX.to = tx; CY.to = ty }
-            CX.step(dt); CY.step(dt)
-            val dd = hypot(tx - CX.v, ty - CY.v)
-            spread = if (t < 0.09f) 0f else smooth(1f - (dd - 6f * d) / max(30f * d, min(90f * d, dist0 * 0.55f)))
-            W.to = mix(D, B.width, spread); H.to = mix(D, B.height, spread)
-            if (spread > 0.02f && !softened) { W.tune(0.3f, 0.7f); H.tune(0.3f, 0.7f); softened = true }
-            W.step(dt); H.step(dt)
-            val e = 1.5f * d
-            if (spread > 0.995f && abs(W.v - B.width) < e && abs(H.v - B.height) < e && abs(CX.v - tx) < e && abs(CY.v - ty) < e) {
+            CX.to = B.center.x; CY.to = B.center.y
+            if (!spread && abs(CY.v - B.center.y) < (F.center.y - B.center.y) * 0.3f) { spread = true; W.to = B.width; H.to = B.height }
+            CX.step(dt); CY.step(dt); W.step(dt); H.step(dt)
+            val e = 2.5f * d
+            if (spread && t > 0.15f && abs(W.v - B.width) < e && abs(H.v - B.height) < e && abs(CX.v - B.center.x) < e && abs(CY.v - B.center.y) < e) {
                 showReal = true; SX.vel = 1.2f; SY.vel = -1.2f
             }
         } else { SX.step(dt); SY.step(dt); realSX = SX.v; realSY = SY.v; done = SX.still(0.002f) && SY.still(0.002f) }
     }
+
     override fun draw(s: DrawScope, k: Look): Unit = with(s) {
-        if (showReal) return@with
+        if (showReal || !ready) return@with
         val B = lastB ?: return@with
         val w = max(1f, W.v); val h = max(1f, H.v); val x = CX.v - w / 2f; val y = CY.v - h / 2f
+        val kk = if (spread) smooth((w - D) / max(1f, B.width - D)) else 0f
         // A circle is a rounded box with fully round corners, so it widens straight into the bubble.
-        val r = mix(min(w, h) / 2f, corner * d, smooth(spread))
-        val body = bubblePath(x, y, w, h, r)
-        val shape = Path().apply { addPath(body) }
-        val tail = min(20f * d, max(0f, -CY.vel) / 34f) * (1f - spread) * (1f - spread)
-        if (tail > 0.8f) {
-            val rr = min(w, h) / 2f; val bx = CX.v; val by = y + h - rr * 0.45f; val tipX = bx - CX.vel * 0.003f; val tipY = y + h + tail
-            val tp = Path().apply {
-                moveTo(bx - rr * 0.72f, by)
-                cubicTo(bx - rr * 0.6f, by + rr * 0.5f, tipX - rr * 0.12f, tipY - tail * 0.3f, tipX, tipY)
-                cubicTo(tipX + rr * 0.12f, tipY - tail * 0.3f, bx + rr * 0.6f, by + rr * 0.5f, bx + rr * 0.72f, by)
-                close()
-            }
-            shape.op(body, tp, PathOperation.Union)
-        }
-        drawPath(shape, lerpColor(k.fieldSolid, k.t.outFlat, easeOut(time / 0.1f)))
-        dryText(k, 1f - easeOut(time / 0.08f))
-        val a = smooth((spread - 0.55f) / 0.45f) * smooth((w / B.width - 0.75f) / 0.25f)
-        wetText(k, body, Offset(x + k.padL + (w - B.width) / 2f, y + k.padT + (h - B.height) / 2f), a)
+        val body = bubblePath(x, y, w, h, mix(min(w, h) / 2f, corner * d, kk))
+        drawPath(body, lerpColor(k.fieldSolid, k.t.outFlat, easeOut(time / 0.1f)))
+        wetText(k, body, Offset(x + k.padL - (B.width - w) / 2f, y + k.padT - (B.height - h) / 2f), kk)
     }
 }
 
@@ -457,14 +401,15 @@ internal class InkFlight(run: MeltRun, d: Float, corner: Float) : Flight(run, d,
     private var landT = 0f
     override fun step(dt: Float, t: Float, B: Rect) {
         time = t; lastB = B
-        val cx = B.right - 16f * d; val cy = B.bottom - 14f * d
+        val cx = B.center.x; val cy = B.center.y
         val x = X ?: FxSpring(run.button.center.x, 0.2f, 0.85f).also { X = it }
         val y = Y ?: FxSpring(run.button.center.y, 0.2f, 0.85f).also { Y = it; it.vel = -300f * d }
         x.to = cx; y.to = cy
         val diag = hypot(B.width, B.height)
+        // From the middle, half the diagonal reaches every corner.
         when (phase) {
-            0 -> { x.step(dt); y.step(dt); if (hypot(x.v - cx, y.v - cy) < 4f * d) { phase = 1; Rd.to = diag * 1.05f } }
-            1 -> { Rd.step(dt); if (Rd.v > diag * 0.98f) { phase = 2; landT = t; showReal = true; SX.vel = 0.35f; SY.vel = 0.35f } }
+            0 -> { x.step(dt); y.step(dt); if (hypot(x.v - cx, y.v - cy) < 4f * d) { phase = 1; Rd.to = diag * 0.6f } }
+            1 -> { Rd.step(dt); if (Rd.v > diag * 0.55f) { phase = 2; landT = t; showReal = true; SX.vel = 0.35f; SY.vel = 0.35f } }
             else -> { SX.step(dt); SY.step(dt); realSX = SX.v; realSY = SY.v; done = SX.still(0.002f) && SY.still(0.002f) && t - landT > 0.5f }
         }
     }
@@ -483,7 +428,7 @@ internal class InkFlight(run: MeltRun, d: Float, corner: Float) : Flight(run, d,
             1 -> {
                 val body = bubblePath(B.left, B.top, B.width, B.height, corner * d)
                 clipPath(body) {
-                    val cx = B.right - 16f * d; val cy = B.bottom - 14f * d; val r = Rd.v
+                    val cx = B.center.x; val cy = B.center.y; val r = Rd.v
                     val wave = Path()
                     for (i in 0..48) {
                         val a = i / 48f * 2f * PI.toFloat(); val ww = 1f + 0.05f * sin(a * 6f + time * 18f)
@@ -493,7 +438,7 @@ internal class InkFlight(run: MeltRun, d: Float, corner: Float) : Flight(run, d,
                     wave.close()
                     drawPath(wave, out)
                 }
-                wetText(k, body, Offset(B.left + k.padL, B.top + k.padT), easeOut((Rd.v / hypot(B.width, B.height) - 0.6f) / 0.4f))
+                wetText(k, body, Offset(B.left + k.padL, B.top + k.padT), easeOut((Rd.v / (hypot(B.width, B.height) * 0.55f) - 0.5f) / 0.5f))
             }
             else -> {
                 val p = (time - landT) / 0.5f

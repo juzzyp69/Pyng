@@ -32,6 +32,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -113,6 +114,8 @@ import com.jpetrydesign.pyng.ui.kit.LocalMotion
 import com.jpetrydesign.pyng.ui.kit.LocalRepo
 import com.jpetrydesign.pyng.ui.kit.Seg
 import com.jpetrydesign.pyng.ui.kit.T
+import com.jpetrydesign.pyng.ui.kit.budIn
+import com.jpetrydesign.pyng.ui.kit.wobble
 import com.jpetrydesign.pyng.ui.kit.edge
 import com.jpetrydesign.pyng.ui.kit.enter
 import com.jpetrydesign.pyng.ui.kit.frost
@@ -268,13 +271,13 @@ fun Composer(
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                     // Close button sits right beside the first suggestion.
                     Box(
-                        Modifier.enter(0, pop = true).size(36.dp).edge(CircleShape, elevation = 3.dp).frost(CircleShape, t.glassStrong, 14.dp)
+                        Modifier.budIn(0).size(36.dp).edge(CircleShape, elevation = 3.dp).frost(CircleShape, t.glassStrong, 14.dp)
                             .press(0.9f) { smartClosed = true },
                         contentAlignment = Alignment.Center,
                     ) { Ico(Icons.close, t.soft, 15.dp, 2.2f) }
                     replies.forEachIndexed { i, r ->
                         Box(
-                            Modifier.enter(i + 1, pop = true).height(36.dp).edge(RoundedCornerShape(18.dp), elevation = 3.dp).frost(RoundedCornerShape(18.dp), t.glassStrong, 14.dp)
+                            Modifier.budIn(i + 1).height(36.dp).edge(RoundedCornerShape(18.dp), elevation = 3.dp).frost(RoundedCornerShape(18.dp), t.glassStrong, 14.dp)
                                 .press(0.94f) { onSend(r) }.padding(horizontal = 15.dp),
                             contentAlignment = Alignment.Center,
                         ) { T(r, size = 13.5.sp, weight = FontWeight.Medium) }
@@ -289,7 +292,7 @@ fun Composer(
                     people.forEachIndexed { i, person ->
                         val w = whoOf(person)
                         Row(
-                            Modifier.enter(i, pop = true).height(38.dp).edge(RoundedCornerShape(19.dp), elevation = 3.dp).frost(RoundedCornerShape(19.dp), t.glassStrong, 14.dp)
+                            Modifier.budIn(i).height(38.dp).edge(RoundedCornerShape(19.dp), elevation = 3.dp).frost(RoundedCornerShape(19.dp), t.glassStrong, 14.dp)
                                 .clickable { onDraft(draft.replace(Regex("@(\\w*)$"), "@" + person.short + " ")) }.padding(start = 4.dp, end = 14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -396,14 +399,18 @@ fun Composer(
                         }, contentAlignment = Alignment.Center) { Ico(Icons.gallery, if (panel == "gallery") t.p else t.ink, 20.dp, 1.9f) }
                     }
                                         Box(Modifier.onGloballyPositioned { fx?.button = it }.graphicsLayer { if (fx != null) { scaleX = fx.btnScale; scaleY = fx.btnScale; alpha = fx.btnAlpha } }) {
-                    when {
-                        hasDraft -> Box(Modifier.padding(bottom = 2.dp).size(44.dp).clip(CircleShape).background(t.plusBg).press(0.88f) { onSend(draft) }, contentAlignment = Alignment.Center) {
-                            Ico(Icons.send, t.plusInk, 21.dp, 2f)
-                        }
-                        p.on("micBtn") -> Box(Modifier.padding(bottom = 2.dp).size(44.dp).clip(CircleShape).background(t.plusBg).press(0.88f) { startRec() }, contentAlignment = Alignment.Center) {
-                            Ico(Icons.mic, t.plusInk, 21.dp, 2f)
-                        }
-                        else -> Box(Modifier.padding(bottom = 2.dp).size(44.dp).clip(CircleShape).background(t.neutral), contentAlignment = Alignment.Center) { Ico(Icons.send, t.faint, 21.dp, 2f) }
+                    // Send, mic, or a resting send. Switching between them squishes the button like a drop changing shape.
+                    val mode = when { hasDraft -> 0; p.on("micBtn") -> 1; else -> 2 }
+                    val btnBg by androidx.compose.animation.animateColorAsState(if (mode == 2) t.neutral else t.plusBg, tween(200), label = "sendBg")
+                    Box(
+                        Modifier.padding(bottom = 2.dp).wobble(mode).size(44.dp).clip(CircleShape).background(btnBg)
+                            .press(0.88f, if (mode == 2) null else ({ if (mode == 0) onSend(draft) else startRec() })),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        androidx.compose.animation.AnimatedContent(mode, label = "sendIcon", transitionSpec = {
+                            (fadeIn(tween(220, delayMillis = 60)) + androidx.compose.animation.scaleIn(spring(dampingRatio = 0.55f, stiffness = 600f), initialScale = 0.4f)) togetherWith
+                                (fadeOut(tween(140)) + androidx.compose.animation.scaleOut(tween(140), targetScale = 0.4f))
+                        }) { md -> Ico(if (md == 1) Icons.mic else Icons.send, if (md == 2) t.faint else t.plusInk, 21.dp, 2f) }
                     }
                     }
                 }

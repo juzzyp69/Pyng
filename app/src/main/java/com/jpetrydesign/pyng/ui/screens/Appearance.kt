@@ -51,6 +51,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -172,7 +173,7 @@ fun AppearanceScreen(nav: Nav) {
             SectionLabel("Style studio")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 StudioCard("Chat style", listOf(p.bubble, p.opt("photoGroups"), p.opt("statusStyle").let { if (it == "Off") "No status" else it }).joinToString(" · "), Modifier.weight(1f).enter(1)) { studio = "chat" }
-                StudioCard("Home style", listOf(p.pinLayout, p.pinStyle, p.density).joinToString(" · "), Modifier.weight(1f).enter(2)) { studio = "home" }
+                StudioCard("Home style", listOf(p.pinLayout, p.pinStyle, p.opt("motion") + " motion").joinToString(" · "), Modifier.weight(1f).enter(2)) { studio = "home" }
             }
             Spacer(Modifier.height(14.dp))
             Card {
@@ -226,6 +227,7 @@ private fun StylePicker(key: String?, onDone: () -> Unit) {
             "font" -> "Font" to "Used everywhere in Pyng"
             "showPhotos" -> "Contact photos" to "Tap a style to preview it live"
             "density" -> "List density" to "Tap a style to preview it live"
+            "motion" -> "Motion" to "How things move around the app"
             "appIcon" -> "App icon" to "Changes the icon on your home screen"
             else -> "Default chat wallpaper" to "Chats use this unless they have their own"
         }
@@ -338,6 +340,11 @@ fun StyleTiles(k: String, pickWall: () -> Unit) {
                     tiles = SendStyles.classic.zip(SendStyles.liquid).flatMap { (a, b) -> listOf(a, b) }.map { n ->
                         Tile(n, SendStyles.about[n], p.opt("sendStyle").ifBlank { "Jelly" } == n, { repo.prefs.setOpt("sendStyle", n) }) { SendMini(n, t) }
                     } }
+                "motion" -> { cols = 2; pvH = 84.dp; tiles = listOf("Rise", "Pour", "Drop", "Simple", "Minimal").map { n ->
+                    Tile(if (n == "Rise") "Rise (standard)" else n, com.jpetrydesign.pyng.ui.kit.Mo.about[n], p.opt("motion") == n, { repo.prefs.setOpt("motion", n) }) {
+                        MotionMini(com.jpetrydesign.pyng.ui.kit.Mo.of(n), t)
+                    }
+                } }
                 "reactStyle" -> { cols = 3; pvH = 84.dp; tiles = listOf("Faces" to "Big emoji, small photo", "Cards" to "Grouped by emoji", "Tabs" to "A list with tabs").map { (n, sub) ->
                     Tile(n, sub, p.opt("reactStyle").ifBlank { "Faces" } == n, { repo.prefs.setOpt("reactStyle", n) }) { ReactMini(n, t) }
                 } }
@@ -360,6 +367,9 @@ fun StyleTiles(k: String, pickWall: () -> Unit) {
                         Box(Modifier.size(36.dp).clip(CircleShape).background(if (t.dark) Color(0xFF2A2D36) else Color.White), contentAlignment = Alignment.Center) { Ico(Icons.gallery, t.p, 17.dp) }
                     }
                 }) + Palettes.walls.map { w -> Tile(w, null, p.defWall == w, { repo.prefs.edit { it.copy(defWall = w) } }) { Wallpaper(w, t) } } }
+            }
+            if (k == "motion" && com.jpetrydesign.pyng.ui.kit.LocalMo.current == com.jpetrydesign.pyng.ui.kit.Mo.Minimal && p.opt("motion") != "Minimal") {
+                T("Reduce motion is on (in Accessibility or your phone's settings), so Minimal is used for now.", size = 12.5.sp, color = t.soft, lineHeight = 17.sp, modifier = Modifier.padding(bottom = 10.dp, start = 4.dp, end = 4.dp))
             }
             heads?.let { hs ->
                 Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -741,7 +751,7 @@ private fun StyleStudio(kind: String?, onClose: () -> Unit) {
         val k = last ?: return@AnimatedVisibility
         val chat = k == "chat"
         val tabs = if (chat) listOf("bubble" to "Bubbles", "sendStyle" to "Send", "reactStyle" to "Reactions", "gradient" to "Gradient", "statusStyle" to "Status", "photoGroups" to "Photos", "textSize" to "Text", "font" to "Font", "defWall" to "Wallpaper")
-            else listOf("pinLayout" to "Layout", "pinShape" to "Shape", "pinStyle" to "New messages", "pinNames" to "Names", "pinBack" to "Backdrop", "density" to "Density", "showPhotos" to "Faces")
+            else listOf("pinLayout" to "Layout", "pinShape" to "Shape", "pinStyle" to "New messages", "pinNames" to "Names", "pinBack" to "Backdrop", "density" to "Density", "showPhotos" to "Faces", "motion" to "Motion")
         var tab by remember(k) { mutableStateOf(tabs.first().first) }
         Column(Modifier.fillMaxSize().background(t.bg).statusBarsPadding().navigationBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(start = 6.dp, end = 16.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -760,6 +770,7 @@ private fun StyleStudio(kind: String?, onClose: () -> Unit) {
                 // On the Send tab the preview plays your send animation on a loop.
                 if (chat && tab == "sendStyle") SendPreview(LocalRepo.current.prefs.state.opt("sendStyle").ifBlank { "Jelly" })
                 else if (chat && tab == "reactStyle") ReactPreview()
+                else if (!chat && tab == "motion") MotionMini(com.jpetrydesign.pyng.ui.kit.Mo.of(LocalRepo.current.prefs.state.opt("motion")), t, big = true)
                 else if (chat) ChatStylePreview(compact = false) else HomeStylePreview(compact = false)
             }
             // Tabs.
@@ -961,6 +972,71 @@ fun SendMini(style: String, t: com.jpetrydesign.pyng.ui.theme.Tok) {
             "Splash" -> { bubble(); listOf(-0.1f to -0.5f, 0.2f to -0.9f, 0.75f to -0.8f, 1.05f to -0.3f).forEach { (fx, fy) -> drawCircle(out, 2.6f * dp, androidx.compose.ui.geometry.Offset(bx + bw * fx, by + bh * 0.5f + bh * fy)) } }
             "Ink" -> { bubble(); drawRoundRect(out.copy(alpha = 0.5f), androidx.compose.ui.geometry.Offset(bx - 5f * dp, by - 5f * dp), androidx.compose.ui.geometry.Size(bw + 10f * dp, bh + 10f * dp), androidx.compose.ui.geometry.CornerRadius(r + 5f * dp), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f * dp))
                 drawCircle(out, 4f * dp, androidx.compose.ui.geometry.Offset(w * 0.86f, h * 0.62f)) }
+        }
+    }
+}
+
+/**
+ * A tiny loop of a motion style: the search button grows into a search bar, results arrive,
+ * then it all goes back into the button.
+ */
+@Composable
+private fun MotionMini(style: com.jpetrydesign.pyng.ui.kit.Mo, t: com.jpetrydesign.pyng.ui.theme.Tok, big: Boolean = false) {
+    val stage = remember { com.jpetrydesign.pyng.ui.kit.LiquidStage() }
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        val w = maxWidth.value; val h = maxHeight.value
+        val btn = if (big) 52f else 26f
+        val pad = if (big) 16f else 9f
+        val barH = if (big) 46f else 22f
+        val src = com.jpetrydesign.pyng.ui.kit.LRect(w - pad - btn, h - pad - btn, btn, btn, btn / 2)
+        val dst = com.jpetrydesign.pyng.ui.kit.LRect(pad, pad, w - pad * 2, barH, barH / 2)
+        val bar = remember { androidx.compose.animation.core.Animatable(0f) }
+        val rows = remember { androidx.compose.animation.core.Animatable(0f) }
+        var solid by remember { mutableStateOf(false) }
+        val settle = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
+        LaunchedEffect(style, w, h) {
+            bar.snapTo(0f); rows.snapTo(0f); solid = false
+            while (true) {
+                kotlinx.coroutines.delay(500)
+                if (style.liquid) {
+                    val sim = com.jpetrydesign.pyng.ui.kit.budSim(src, dst, false, style)
+                    stage.play(sim, t.tone)
+                    solid = true; bar.snapTo(1f)
+                } else bar.animateTo(1f, androidx.compose.animation.core.tween(if (style == com.jpetrydesign.pyng.ui.kit.Mo.Minimal) 120 else 240, easing = settle))
+                rows.animateTo(1f, androidx.compose.animation.core.tween(if (style == com.jpetrydesign.pyng.ui.kit.Mo.Minimal) 120 else 320, easing = settle))
+                kotlinx.coroutines.delay(1000)
+                rows.animateTo(0f, androidx.compose.animation.core.tween(140))
+                if (style.liquid) { solid = false; bar.snapTo(0f); stage.play(com.jpetrydesign.pyng.ui.kit.budSim(src, dst, true, style), t.tone) }
+                else bar.animateTo(0f, androidx.compose.animation.core.tween(if (style == com.jpetrydesign.pyng.ui.kit.Mo.Minimal) 90 else 180))
+                kotlinx.coroutines.delay(300)
+            }
+        }
+        com.jpetrydesign.pyng.ui.kit.LiquidCanvas(stage, Modifier.fillMaxSize())
+        // The bar once formed (or, without liquid, fading and sliding into place).
+        Box(
+            Modifier.offset(dst.x.dp, dst.y.dp).size(dst.w.dp, dst.h.dp)
+                .graphicsLayer {
+                    alpha = if (style.liquid) (if (solid) 1f else 0f) else bar.value
+                    if (style == com.jpetrydesign.pyng.ui.kit.Mo.Simple) translationY = (1f - bar.value) * 6.dp.toPx()
+                }
+                .clip(RoundedCornerShape(50)).background(t.tone),
+        )
+        // Results arriving under the bar.
+        Column(Modifier.offset((dst.x + 4f).dp, (dst.y + dst.h + if (big) 14f else 7f).dp), verticalArrangement = Arrangement.spacedBy(if (big) 10.dp else 5.dp)) {
+            listOf(0.62f, 0.44f, 0.54f).forEachIndexed { i, f ->
+                val a = ((rows.value * 3f) - i * 0.5f).coerceIn(0f, 1f)
+                Box(
+                    Modifier.graphicsLayer {
+                        alpha = a
+                        if (style != com.jpetrydesign.pyng.ui.kit.Mo.Minimal) translationY = (1f - a) * (if (style == com.jpetrydesign.pyng.ui.kit.Mo.Pour) -6f else 5f) * density
+                        if (style == com.jpetrydesign.pyng.ui.kit.Mo.Drop) { val z = 0.9f + 0.1f * a; scaleX = z; scaleY = z }
+                    }.size(((w - pad * 2) * f).dp, if (big) 10.dp else 6.dp).clip(RoundedCornerShape(4.dp)).background(t.hair),
+                )
+            }
+        }
+        // The search button itself.
+        Box(Modifier.offset(src.x.dp, src.y.dp).size(src.w.dp).clip(CircleShape).background(t.fill), contentAlignment = Alignment.Center) {
+            Ico(Icons.search, t.onFill, (btn * 0.5f).dp, 2.2f)
         }
     }
 }

@@ -76,6 +76,7 @@ import com.jpetrydesign.pyng.ui.kit.LocalRepo
 import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.layout.findRootCoordinates
 import com.jpetrydesign.pyng.ui.kit.T
+import com.jpetrydesign.pyng.ui.kit.shimmerOnce
 import com.jpetrydesign.pyng.ui.kit.swipeDir
 import com.jpetrydesign.pyng.ui.theme.LocalTok
 import com.jpetrydesign.pyng.ui.theme.Tok
@@ -303,7 +304,10 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
                         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             x.chips.forEach { (label, icon, go) ->
                                 Row(
-                                    Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).background(t.glassStrong).clickable(onClick = go).padding(horizontal = 12.dp),
+                                    Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).background(t.glassStrong)
+                                        // A found date gets a quick glint the first time you see it.
+                                        .then(if (icon == Icons.cal) Modifier.shimmerOnce(m.key + ":date", t.p) else Modifier)
+                                        .clickable(onClick = go).padding(horizontal = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Ico(icon, t.p, 14.dp, 2f); Spacer(Modifier.width(6.dp))

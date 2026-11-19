@@ -253,16 +253,15 @@ fun PyngRoot(repo: Repo, nav: Nav) {
 }
 
 private fun transition(forward: Boolean, mo: com.jpetrydesign.pyng.ui.kit.Mo): ContentTransform {
-    val M = com.jpetrydesign.pyng.ui.kit.Mo
     // Minimal: a quick fade. Simple: a short, gentle slide. The liquid styles each settle their own way.
-    if (mo == M.Minimal) return fadeIn(tween(120)) togetherWith fadeOut(tween(90))
+    if (mo == com.jpetrydesign.pyng.ui.kit.Mo.Minimal) return fadeIn(tween(120)) togetherWith fadeOut(tween(90))
     val sp = when (mo) {
-        M.Simple -> spring<androidx.compose.ui.unit.IntOffset>(dampingRatio = 1f, stiffness = 520f)
-        M.Pour -> spring(dampingRatio = 0.9f, stiffness = 300f)
-        M.Drop -> spring(dampingRatio = 0.76f, stiffness = 420f)
+        com.jpetrydesign.pyng.ui.kit.Mo.Simple -> spring<androidx.compose.ui.unit.IntOffset>(dampingRatio = 1f, stiffness = 520f)
+        com.jpetrydesign.pyng.ui.kit.Mo.Pour -> spring(dampingRatio = 0.9f, stiffness = 300f)
+        com.jpetrydesign.pyng.ui.kit.Mo.Drop -> spring(dampingRatio = 0.76f, stiffness = 420f)
         else -> spring(dampingRatio = 0.86f, stiffness = 380f)
     }
-    val far = if (mo == M.Simple) 12 else 5
+    val far = if (mo == com.jpetrydesign.pyng.ui.kit.Mo.Simple) 12 else 5
     return if (forward) (slideInHorizontally(sp) { it / far } + fadeIn(tween(220))) togetherWith
         (slideOutHorizontally(tween(220)) { -it / 10 } + fadeOut(tween(180)))
     else (slideInHorizontally(sp) { -it / 10 } + fadeIn(tween(220))) togetherWith
