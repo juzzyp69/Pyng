@@ -95,7 +95,6 @@ fun ContactScreen(nav: Nav, convId: String) {
     val look = p.looks[convId]
     val msgs = repo.msgs[convId].orEmpty()
     val scope = rememberCoroutineScope()
-    var renaming by remember { mutableStateOf(false) }
     val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) { if (c.group) repo.setGroupPhoto(convId, uri) else repo.setContactPhoto(c.avatarId, uri) }
     }
@@ -126,7 +125,21 @@ fun ContactScreen(nav: Nav, convId: String) {
                     }
                     Spacer(Modifier.height(14.dp))
                     Row(
-                        Modifier.enter(1).clip(RoundedCornerShape(14.dp)).then(if (c.group) Modifier.clickable { renaming = true } else Modifier).padding(horizontal = 8.dp, vertical = 2.dp),
+                        Modifier.enter(1).clip(RoundedCornerShape(14.dp)).then(if (c.group) Modifier.clickable {
+                            // Group names are shared, and only Google Messages on the phone can change them.
+                            repo.ask = com.jpetrydesign.pyng.data.Repo.Ask(
+                                title = "Rename in Google Messages",
+                                body = "A group's name is the same for everyone in it, so it's changed in Google Messages. Open the group there, tap its name at the top and rename it. The new name shows for everyone, then updates here in Pyng on its own.",
+                                action = "Open",
+                                danger = false,
+                            ) {
+                                // Drop any old Pyng-only name so the real one shows once it changes.
+                                repo.setGroupName(convId, "")
+                                val gm = ctx.packageManager.getLaunchIntentForPackage("com.google.android.apps.messaging")
+                                if (gm != null) runCatching { ctx.startActivity(gm.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                                else repo.toast("Google Messages isn't installed")
+                            }
+                        } else Modifier).padding(horizontal = 8.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         T(c.title, size = 26.sp, weight = FontWeight.Bold, letterSpacing = (-0.6).sp, align = TextAlign.Center, modifier = Modifier.weight(1f, fill = false))
@@ -341,7 +354,6 @@ fun ContactScreen(nav: Nav, convId: String) {
                 }
             }
             com.jpetrydesign.pyng.ui.kit.StatusScrim(Modifier.align(Alignment.TopCenter))
-            RenameSheet(renaming, c.title, { renaming = false }) { repo.setGroupName(convId, it) }
             SmsOnlySheet(smsInfo, c.smsOnly, c.others.firstOrNull()?.number.orEmpty()) { smsInfo = false }
             ForwardSheet(forward) { target, m ->
                 forward = null
@@ -358,31 +370,6 @@ fun ContactScreen(nav: Nav, convId: String) {
                 onDelete = { m -> repo.confirm("Delete message?", "It'll be deleted from Google Messages on your phone too. The other person still has their copy.") { viewing = null; repo.deleteMessages(listOf(m)); repo.toast("Message deleted") } },
                 onForward = { viewing = null; forward = it },
                 showInChat = { m -> viewing = null; nav.go(Route.Thread(convId, highlight = m.id)) })
-        }
-    }
-}
-
-/** Rename a group (in Pyng only). */
-@Composable
-fun RenameSheet(visible: Boolean, current: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
-    val t = LocalTok.current
-    var v by remember(visible) { mutableStateOf(current) }
-    com.jpetrydesign.pyng.ui.kit.Sheet(visible, onDismiss) {
-        Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-            T("Group name", size = 18.sp, weight = FontWeight.Bold)
-            T("Shows in Pyng only. Google Messages doesn't let linked apps rename groups.", size = 13.sp, color = t.soft, lineHeight = 18.sp, modifier = Modifier.padding(top = 4.dp))
-            Spacer(Modifier.height(14.dp))
-            Box(Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(25.dp)).background(t.field).padding(horizontal = 18.dp), contentAlignment = Alignment.CenterStart) {
-                if (v.isEmpty()) T("Name this group", size = 15.sp, color = t.soft)
-                androidx.compose.foundation.text.BasicTextField(v, { v = it.take(60) }, singleLine = true, cursorBrush = androidx.compose.ui.graphics.SolidColor(t.p),
-                    textStyle = androidx.compose.ui.text.TextStyle(fontFamily = com.jpetrydesign.pyng.ui.theme.Geist, fontSize = 15.sp, color = t.ink), modifier = Modifier.fillMaxWidth())
-            }
-            Spacer(Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PillButton("Reset", onClick = { onSave(""); onDismiss() }, modifier = Modifier.weight(1f), primary = false)
-                PillButton("Save", onClick = { onSave(v); onDismiss() }, modifier = Modifier.weight(1f))
-            }
-            Spacer(Modifier.height(10.dp))
         }
     }
 }
