@@ -35,6 +35,17 @@ data class Release(val version: String, val date: String, val added: List<String
  */
 val RELEASES = listOf(
     Release(
+        "0.9.5.2", "Nov 19, 2026",
+        added = listOf(
+            "Swear words, your call\nVoice message transcripts keep words as said. Turn on Hide swear words in Settings, Chats to bleep them",
+            "Group names come from Google Messages\nTap a group's name to rename it there, so it changes for everyone and shows here too",
+        ),
+        fixed = listOf(
+            "Typing shows in group chats",
+            "Who reacted shows your profile photo instead of a You badge",
+        ),
+    ),
+    Release(
         "0.9.5.1", "Nov 19, 2026",
         highlights = listOf(
             Highlight("Liquid motion", "Search, new messages and chats pour out of whatever you tap, then drain back into it when you go back.", "motion"),
