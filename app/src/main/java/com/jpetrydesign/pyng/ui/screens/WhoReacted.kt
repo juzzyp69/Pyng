@@ -68,7 +68,8 @@ fun reactorsOf(m: Msg, conv: Conv?, repo: Repo, t: Tok): List<Reactor> {
             val mine = myId.isNotEmpty() && id == myId
             val p = conv?.people?.firstOrNull { it.id == id }
             val who = when {
-                mine -> Who(null, "You", t.p, t.onFill)
+                // Your own photo from Pyng's profile (your initials if there isn't one), same as on Home.
+                mine -> repo.prefs.state.let { pr -> Who(pr.profilePhoto.ifEmpty { null }, com.jpetrydesign.pyng.ui.kit.initialsOf(pr.profileName.ifBlank { "Me" }), t.tone, t.p) }
                 p != null -> personWho(p, repo, t)
                 else -> Who(null, "?", t.neutral, t.neutralInk)
             }
