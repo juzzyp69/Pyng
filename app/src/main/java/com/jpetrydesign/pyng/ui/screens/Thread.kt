@@ -97,6 +97,7 @@ import com.jpetrydesign.pyng.ui.kit.LocalMotion
 import com.jpetrydesign.pyng.ui.kit.LocalRepo
 import com.jpetrydesign.pyng.ui.kit.Provide
 import com.jpetrydesign.pyng.ui.kit.T
+import com.jpetrydesign.pyng.ui.kit.budIn
 import com.jpetrydesign.pyng.ui.kit.TypingDots
 import com.jpetrydesign.pyng.ui.kit.Wallpaper
 import com.jpetrydesign.pyng.ui.kit.swipeDir
@@ -956,23 +957,30 @@ private fun SpamBanner(why: List<String>, t: Tok, onReport: () -> Unit, onNot: (
     }
 }
 
+/** A slim pill for a number that isn't in your contacts: add them, report them, or wave it away. */
 @Composable
 private fun UnknownBanner(t: Tok, c: Conv?, onDismiss: () -> Unit, onAdd: () -> Unit, onSpam: () -> Unit) {
-    Column(Modifier.padding(4.dp).padding(bottom = 6.dp).clip(RoundedCornerShape(22.dp)).background(t.glassStrong).padding(14.dp)) {
-        Row(verticalAlignment = Alignment.Top) {
-            Ico(Icons.shield, t.p, 20.dp, 1.9f)
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                T("Not in your contacts", size = 14.sp, weight = FontWeight.SemiBold)
-                T("Be careful with links, and never share a verification code with someone you don't know.", size = 12.5.sp, color = t.soft, lineHeight = 17.sp)
-            }
-            CircleButton(Icons.close, "Dismiss", onDismiss, size = 28.dp, iconSize = 16.dp, tint = t.soft)
+    val shape = RoundedCornerShape(26.dp)
+    Row(
+        Modifier.padding(horizontal = 4.dp).padding(bottom = 6.dp).fillMaxWidth().budIn(0).clip(shape).background(t.glassStrong)
+            .border(1.dp, t.edgeLine, shape).padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(30.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(Icons.shield, t.p, 16.dp, 2f) }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            T("New number", size = 13.5.sp, weight = FontWeight.SemiBold, maxLines = 1)
+            T("Not in your contacts · go easy on links", size = 11.5.sp, color = t.soft, maxLines = 1)
         }
-        Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(19.dp)).background(t.tone).clickable(onClick = onAdd), contentAlignment = Alignment.Center) { T("Add contact", size = 13.5.sp, weight = FontWeight.SemiBold, color = t.p) }
-            Box(Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(19.dp)).background(t.neutral).clickable(onClick = onSpam), contentAlignment = Alignment.Center) { T("Report spam", size = 13.5.sp, weight = FontWeight.SemiBold, color = t.danger) }
+        Spacer(Modifier.width(6.dp))
+        Box(Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).background(t.tone).clickable(onClick = onAdd).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+            T("Add", size = 12.5.sp, weight = FontWeight.SemiBold, color = t.p)
         }
+        Spacer(Modifier.width(6.dp))
+        Box(Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).background(t.neutral).clickable(onClick = onSpam).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+            T("Spam", size = 12.5.sp, weight = FontWeight.SemiBold, color = t.danger)
+        }
+        CircleButton(Icons.close, "Dismiss", onDismiss, size = 32.dp, iconSize = 14.dp, tint = t.soft)
     }
     @Suppress("UNUSED_EXPRESSION") c
 }

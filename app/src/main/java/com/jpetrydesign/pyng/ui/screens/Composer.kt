@@ -401,9 +401,9 @@ fun Composer(
                                         Box(Modifier.onGloballyPositioned { fx?.button = it }.graphicsLayer { if (fx != null) { scaleX = fx.btnScale; scaleY = fx.btnScale; alpha = fx.btnAlpha } }) {
                     // Send, mic, or a resting send. Switching between them squishes the button like a drop changing shape.
                     val mode = when { hasDraft -> 0; p.on("micBtn") -> 1; else -> 2 }
-                    val btnBg by androidx.compose.animation.animateColorAsState(if (mode == 2) t.neutral else t.plusBg, tween(200), label = "sendBg")
+                    val live by animateFloatAsState(if (mode == 2) 0f else 1f, tween(200), label = "sendBg")
                     Box(
-                        Modifier.padding(bottom = 2.dp).wobble(mode).size(44.dp).clip(CircleShape).background(btnBg)
+                        Modifier.padding(bottom = 2.dp).wobble(mode).size(44.dp).clip(CircleShape).background(t.neutral).background(t.plusBg, alpha = live)
                             .press(0.88f, if (mode == 2) null else ({ if (mode == 0) onSend(draft) else startRec() })),
                         contentAlignment = Alignment.Center,
                     ) {

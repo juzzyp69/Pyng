@@ -101,3 +101,36 @@ fun Modifier.shimmerOnce(key: String, tint: Color = Color.White): Modifier = com
         }
     }
 }
+
+/**
+ * Content arriving in the motion style's own way: Rise floats up out of a soft blur, Pour flows in from
+ * above, Drop settles in from slightly small. Staggered by [index]; only plays when [play] is true.
+ */
+fun Modifier.arrive(index: Int, play: Boolean): Modifier = composed {
+    val mo = LocalMo.current
+    val motion = LocalMotion.current
+    val go = remember { play && motion }
+    val a = remember { Animatable(if (go) 0f else 1f) }
+    LaunchedEffect(Unit) {
+        if (!go) return@LaunchedEffect
+        delay(minOf(index, 10) * (if (mo == Mo.Pour) 45L else 30L))
+        a.animateTo(1f, tween(if (mo == Mo.Drop) 360 else if (mo == Mo.Minimal) 120 else 300, easing = Settle))
+    }
+    this.graphicsLayer {
+        val k = a.value
+        alpha = k
+        if (k < 1f && mo != Mo.Minimal) {
+            val q = 1f - k
+            when (mo) {
+                Mo.Pour -> translationY = -10f * density * q
+                Mo.Drop -> { val z = 0.9f + 0.1f * k; scaleX = z; scaleY = z }
+                Mo.Simple -> translationY = 6f * density * q
+                else -> translationY = 7f * density * q
+            }
+            if (mo.liquid && android.os.Build.VERSION.SDK_INT >= 31) {
+                val b = (if (mo == Mo.Drop) 7f else 5f) * density * q
+                if (b > 0.5f) renderEffect = androidx.compose.ui.graphics.BlurEffect(b, b, androidx.compose.ui.graphics.TileMode.Decal)
+            }
+        }
+    }
+}

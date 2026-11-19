@@ -27,13 +27,40 @@ import com.jpetrydesign.pyng.ui.kit.Icons
 import com.jpetrydesign.pyng.ui.kit.T
 
 /** One update: its version, when it went out, what's new and what got fixed. */
-data class Release(val version: String, val date: String, val added: List<String>, val fixed: List<String> = emptyList())
+data class Release(val version: String, val date: String, val added: List<String>, val fixed: List<String> = emptyList(), val highlights: List<Highlight> = emptyList())
 
 /**
  * Every Pyng update, newest first. Each line is a short headline; anything after a line break is
  * a sentence of detail shown underneath.
  */
 val RELEASES = listOf(
+    Release(
+        "0.9.5.1", "Nov 19, 2026",
+        highlights = listOf(
+            Highlight("Liquid motion", "Search, new messages and chats pour out of whatever you tap, then drain back into it when you go back.", "motion"),
+            Highlight("Send styles, touched up", "Rise and Honey lift out right where you typed, Droplet shrinks to a drop and spreads, and Ink floods out from the middle.", "send"),
+            Highlight("Moments", "Birthdays from your contacts show up in Search, with a soft glowing dot on the search button.", "moments"),
+            Highlight("Little touches", "Switches stretch, tabs slide, unread counts bud, smart replies rise out of the message box, and found dates glint.", "touches"),
+        ),
+        added = listOf(
+            "Liquid motion\nSearch, new messages and chats pour out of whatever you tap, then drain back into it when you go back",
+            "Send styles, touched up\nRise and Honey lift out right where you typed, Droplet shrinks to a drop and spreads, and Ink floods out from the middle",
+            "Moments\nBirthdays from your contacts show up in Search, with a soft glowing dot on the search button",
+            "Little touches\nSwitches stretch, tabs slide, unread counts bud, smart replies rise out of the message box, and found dates glint",
+            "Motion styles\nRise, Pour or Drop, or keep it Simple or Minimal, in Appearance, Home style, Motion",
+            "Hold a message\nThe reaction bar rises out of the bubble and the menu drips out below",
+            "Your photo flies up\nOpening a chat carries its photo from the list into the header",
+            "Hide moments until tomorrow\nRight from the Moments heading in Search",
+            "Sticker maker turns\nTurn the photo a quarter at a time, or tilt the sticker left or right",
+            "New number note\nA slim pill instead of a big card for numbers that aren't in your contacts",
+            "A new What's new\nThe biggest changes on cards, then everything else",
+        ),
+        fixed = listOf(
+            "The send button eases between send and the mic instead of jumping",
+            "Tabs slide to the one you tap instead of blinking",
+            "Switches fade their color instead of snapping",
+        ),
+    ),
     Release(
         "0.9.5", "Nov 18, 2026",
         added = listOf(

@@ -208,9 +208,11 @@ private fun grown(b: Bitmap, radius: Float, color: Int): Bitmap {
  * effect: Outline (white edge), Puffy (thick edge, soft shadow, a little shine), Comic (black and white
  * edge), Holo (rainbow sheen) or Glitter (sparkles). Saved to [out].
  */
-suspend fun makeSticker(ctx: Context, uri: Uri, shape: String, effect: String, out: java.io.File): Bitmap? = withContext(Dispatchers.IO) {
+suspend fun makeSticker(ctx: Context, uri: Uri, shape: String, effect: String, out: java.io.File, turns: Int = 0, tilt: Float = 0f): Bitmap? = withContext(Dispatchers.IO) {
     runCatching {
-        val src = loadUpright(ctx, uri) ?: return@runCatching null
+        val upright = loadUpright(ctx, uri) ?: return@runCatching null
+        // Quarter turns spin the photo itself, before the cutout, so the edge follows the new angle.
+        val src = if (turns % 4 == 0) upright else Bitmap.createBitmap(upright, 0, 0, upright.width, upright.height, android.graphics.Matrix().apply { postRotate(90f * (turns % 4)) }, true)
         val size = 512
         val pad = when (effect) { "None" -> 6f; "Comic" -> 30f; "Puffy" -> 34f; else -> 24f }
         val inner = (size - pad * 2).toInt()
@@ -289,8 +291,16 @@ suspend fun makeSticker(ctx: Context, uri: Uri, shape: String, effect: String, o
                 }
             }
         }
-        FileOutputStream(out).use { result.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        result
+        // A tilt turns the finished sticker a little, shrunk just enough that no corner gets cut off.
+        val final = if (tilt == 0f) result else {
+            val rad = Math.toRadians(tilt.toDouble())
+            val fit = (1.0 / (kotlin.math.abs(kotlin.math.cos(rad)) + kotlin.math.abs(kotlin.math.sin(rad)))).toFloat().coerceAtLeast(0.84f)
+            Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).also { b ->
+                Canvas(b).apply { rotate(tilt, size / 2f, size / 2f); scale(fit, fit, size / 2f, size / 2f); drawBitmap(result, 0f, 0f, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)) }
+            }
+        }
+        FileOutputStream(out).use { final.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        final
     }.getOrNull()
 }
 
@@ -309,15 +319,17 @@ fun StickerMaker(t: Tok, uri: Uri?, onPick: () -> Unit, onBack: () -> Unit, onDo
     val repo = LocalRepo.current
     var shape by remember { mutableStateOf("Cutout") }
     var effect by remember { mutableStateOf("Outline") }
+    var turns by remember { mutableStateOf(0) }
+    var tilt by remember { mutableStateOf("Straight") }
     var preview by remember { mutableStateOf<Bitmap?>(null) }
     var file by remember { mutableStateOf<java.io.File?>(null) }
     var working by remember { mutableStateOf(false) }
     var mine by remember { mutableStateOf(myStickers(ctx)) }
-    LaunchedEffect(uri, shape, effect) {
+    LaunchedEffect(uri, shape, effect, turns, tilt) {
         if (uri == null) return@LaunchedEffect
         working = true
         val f = repo.newFile("png")
-        preview = makeSticker(ctx, uri, shape, effect, f)
+        preview = makeSticker(ctx, uri, shape, effect, f, turns, when (tilt) { "Tilt left" -> -10f; "Tilt right" -> 10f; else -> 0f })
         file = f
         working = false
     }
@@ -337,6 +349,11 @@ fun StickerMaker(t: Tok, uri: Uri?, onPick: () -> Unit, onBack: () -> Unit, onDo
                 if (b != null) Image(b.asImageBitmap(), "Sticker preview", Modifier.size(136.dp))
                 else if (!working) Column(horizontalAlignment = Alignment.CenterHorizontally) { Ico(Icons.gallery, t.p, 26.dp); Spacer(Modifier.height(6.dp)); T("Pick a photo", size = 12.5.sp, color = t.soft) }
                 if (working) CircularProgressIndicator(color = t.p, strokeWidth = 2.dp, modifier = Modifier.size(26.dp))
+                // Turn the photo a quarter at a time.
+                if (uri != null) Box(
+                    Modifier.align(Alignment.BottomEnd).padding(6.dp).size(32.dp).clip(CircleShape).background(t.sheet).clickable { turns = (turns + 1) % 4 },
+                    contentAlignment = Alignment.Center,
+                ) { Ico(Icons.refresh, t.ink, 16.dp, 2f) }
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -344,6 +361,8 @@ fun StickerMaker(t: Tok, uri: Uri?, onPick: () -> Unit, onBack: () -> Unit, onDo
                 Chips(listOf("Cutout", "Circle", "Rounded"), shape, { shape = it })
                 T("Effect", size = 12.5.sp, weight = FontWeight.SemiBold, color = t.soft)
                 Chips(listOf("None", "Outline", "Puffy", "Comic", "Holo", "Glitter"), effect, { effect = it })
+                T("Turn", size = 12.5.sp, weight = FontWeight.SemiBold, color = t.soft)
+                Chips(listOf("Straight", "Tilt left", "Tilt right"), tilt, { tilt = it })
             }
         }
         if (shape == "Cutout" && uri != null && !working && preview != null) T("Cut out automatically. If it missed, try Circle or Rounded.", size = 11.5.sp, color = t.faint, modifier = Modifier.padding(top = 8.dp))

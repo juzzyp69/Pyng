@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import com.jpetrydesign.pyng.ui.kit.arrive
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -97,6 +99,9 @@ fun SearchScreen(nav: Nav) {
     val t = LocalTok.current
     var q by remember { mutableStateOf("") }
     var tab by remember { mutableStateOf("All") }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    // Results cascade in the first time each one shows, not again as you scroll.
+    val firstShow = remember { HashSet<String>() }
     BackHandler { nav.back() }
     val query = q.trim().lowercase()
     val convs = repo.convs.values.filter { it.status != "deleted" }
@@ -143,24 +148,40 @@ fun SearchScreen(nav: Nav) {
                     }
                     else -> {
                         if (query.isEmpty()) {
-                            // Moments: plans and packages from the last week, found in your texts.
+                            // Moments: birthdays today, plus plans and packages from the last week, found in your texts.
                             val weekAgo = System.currentTimeMillis() - 7L * 24 * 3600 * 1000
                             val moments = repo.msgs.flatMap { (cid, list) ->
                                 list.filter { it.ts > weekAgo && !it.isSys }.mapNotNull { m -> val d = detect(m.text); (d.date?.let { "Plan · $it" } ?: d.track?.let { "Package · tracking" })?.let { Triple(cid, m, it) } }
                             }.sortedByDescending { it.second.ts }.distinctBy { it.second.key }.take(6)
-                            if (moments.isNotEmpty()) {
-                                item { SectionTitle("Moments") }
-                                items(moments, key = { "mo" + it.second.key }) { (cid, m, label) ->
-                                    ResultRow(cid, label + " — " + m.text.take(80), listTime(m.ts)) { nav.openChat(cid, m.id) }
+                            val bdays = Moments.birthdays(ctx)
+                            val hidden = repo.prefs.state.opt("momentsHide") == Moments.today()
+                            if ((moments.isNotEmpty() || bdays.isNotEmpty()) && hidden) item("moHidden") {
+                                T("Moments are hidden until tomorrow · Show", size = 12.5.sp, color = t.soft,
+                                    modifier = Modifier.padding(start = 4.dp, top = 14.dp).clip(RoundedCornerShape(10.dp)).clickable { repo.prefs.setOpt("momentsHide", "") }.padding(vertical = 4.dp))
+                            }
+                            if ((moments.isNotEmpty() || bdays.isNotEmpty()) && !hidden) {
+                                item("moTitle") {
+                                    Row(Modifier.fillMaxWidth().arrive(0, firstShow.add("moTitle")), verticalAlignment = Alignment.CenterVertically) {
+                                        Box(Modifier.weight(1f)) { SectionTitle("Moments") }
+                                        T("Hide until tomorrow", size = 12.5.sp, weight = FontWeight.SemiBold, color = t.p,
+                                            modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(10.dp)).clickable { repo.prefs.setOpt("momentsHide", Moments.today()) }.padding(horizontal = 6.dp, vertical = 4.dp))
+                                    }
+                                }
+                                itemsIndexed(bdays, key = { _, b -> "bd" + b.first + b.second }) { i, (name, _) ->
+                                    val conv = convs.firstOrNull { it.title.equals(name, ignoreCase = true) && !it.group }
+                                    BirthdayRow(name, Modifier.arrive(i + 1, firstShow.add("bd$name"))) { if (conv != null) nav.openChat(conv.id) else nav.go(Route.NewChat()) }
+                                }
+                                itemsIndexed(moments, key = { _, it -> "mo" + it.second.key }) { i, (cid, m, label) ->
+                                    Box(Modifier.arrive(bdays.size + i + 1, firstShow.add("mo" + m.key))) { ResultRow(cid, label + " — " + m.text.take(80), listTime(m.ts)) { nav.openChat(cid, m.id) } }
                                 }
                             }
                             item { SectionTitle("Recent") }
-                            items(convs.filter { it.status == "active" }.sortedByDescending { it.ts }.take(8), key = { "rc" + it.id }) { c ->
-                                ResultRow(c.id, c.preview, listTime(c.ts)) { nav.openChat(c.id) }
+                            itemsIndexed(convs.filter { it.status == "active" }.sortedByDescending { it.ts }.take(8), key = { _, it -> "rc" + it.id }) { i, c ->
+                                Box(Modifier.arrive(i + 2, firstShow.add("rc" + c.id))) { ResultRow(c.id, c.preview, listTime(c.ts)) { nav.openChat(c.id) } }
                             }
                         } else {
                             if (people.isNotEmpty()) item { SectionTitle("Conversations") }
-                            items(people, key = { "p" + it.id }) { c -> ResultRow(c.id, c.number.ifEmpty { c.preview }, null) { nav.openChat(c.id) } }
+                            itemsIndexed(people, key = { _, it -> "p" + it.id }) { i, c -> Box(Modifier.arrive(i, firstShow.add("p" + c.id + query))) { ResultRow(c.id, c.number.ifEmpty { c.preview }, null) { nav.openChat(c.id) } } }
                             if (hits.isNotEmpty() || previews.isNotEmpty()) item { SectionTitle("Messages") }
                             items(hits.take(60), key = { "m" + it.second.key }) { (cid, m) -> ResultRow(cid, m.text, listTime(m.ts), query) { nav.openChat(cid, m.id) } }
                             items(previews, key = { "pv" + it.id }) { c -> ResultRow(c.id, c.preview, listTime(c.ts), query) { nav.openChat(c.id) } }
@@ -417,5 +438,59 @@ private fun GroupDetails(
             if (working) "Creating…" else "Create group of ${members.size + 1}", onCreate,
             Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(16.dp).fillMaxWidth(), height = 54.dp,
         )
+    }
+}
+
+/** Today's moments: birthdays from your contacts, and whether anything's worth a glowing dot. */
+object Moments {
+    private var day = ""
+    private var cache: List<Pair<String, String>> = emptyList()
+
+    fun today(): String = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+
+    /** Contacts whose birthday is today, as name and contact id. Needs contacts access; empty without it. */
+    fun birthdays(ctx: android.content.Context): List<Pair<String, String>> {
+        val md = java.text.SimpleDateFormat("MM-dd", java.util.Locale.US).format(java.util.Date())
+        if (md == day) return cache
+        if (androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.READ_CONTACTS) != android.content.pm.PackageManager.PERMISSION_GRANTED) return emptyList()
+        val E = android.provider.ContactsContract.CommonDataKinds.Event
+        val D = android.provider.ContactsContract.Data
+        val out = runCatching {
+            ctx.contentResolver.query(
+                D.CONTENT_URI, arrayOf(E.START_DATE, D.DISPLAY_NAME, D.CONTACT_ID),
+                "${D.MIMETYPE}=? AND ${E.TYPE}=?", arrayOf(E.CONTENT_ITEM_TYPE, E.TYPE_BIRTHDAY.toString()), null,
+            )?.use { c ->
+                buildList {
+                    while (c.moveToNext()) {
+                        // Stored as 1990-11-18, or --11-18 when there's no year.
+                        val d = c.getString(0)?.trim() ?: continue
+                        if (d.length >= 5 && d.takeLast(5) == md) add((c.getString(1) ?: continue) to (c.getString(2) ?: ""))
+                    }
+                }.distinctBy { it.second }
+            } ?: emptyList()
+        }.getOrDefault(emptyList())
+        day = md; cache = out
+        return out
+    }
+
+    /** Something today is worth a look: a birthday, or a plan or package in the last day. */
+    fun worthADot(ctx: android.content.Context, repo: com.jpetrydesign.pyng.data.Repo): Boolean {
+        if (repo.prefs.state.opt("momentsHide") == today()) return false
+        if (birthdays(ctx).isNotEmpty()) return true
+        val since = System.currentTimeMillis() - 24L * 3600 * 1000
+        return repo.msgs.values.any { list -> list.any { it.ts > since && !it.isSys && !it.fromMe && detect(it.text).let { d -> d.date != null || d.track != null } } }
+    }
+}
+
+@Composable
+private fun BirthdayRow(name: String, modifier: Modifier, onClick: () -> Unit) {
+    val t = LocalTok.current
+    Row(modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).clickable(onClick = onClick).padding(horizontal = 4.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(44.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { T("🎂", size = 20.sp) }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            T(name, size = 15.sp, weight = FontWeight.SemiBold, maxLines = 1)
+            T("Birthday today · say happy birthday", size = 13.sp, color = t.soft, maxLines = 1)
+        }
     }
 }

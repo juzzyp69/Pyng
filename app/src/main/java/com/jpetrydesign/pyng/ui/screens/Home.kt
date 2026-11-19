@@ -616,7 +616,23 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                     Modifier.size(60.dp).onGloballyPositioned { searchAt[0] = it }.shadow(14.dp, CircleShape, clip = false, ambientColor = t.shadow.copy(alpha = 0.22f), spotColor = t.shadow.copy(alpha = 0.28f))
                         .glassRim(CircleShape).frost(CircleShape, if (t.solid) t.fab else t.fab.copy(alpha = if (t.dark) 0.14f else 0.2f), 9.dp).press(0.9f) { nav.go(Route.Search, fromBtn(searchAt[0])) },
                     contentAlignment = Alignment.Center,
-                ) { SolidSearch(t.ink, 24.dp) }
+                ) {
+                    SolidSearch(t.ink, 24.dp)
+                    // A soft glowing dot when today has a moment: a birthday, a plan or a package.
+                    val ctx0 = LocalContext.current
+                    val dot = remember(repo.msgs.size, repo.convs.values.maxOfOrNull { it.ts }, p.opt("momentsHide")) { Moments.worthADot(ctx0, repo) }
+                    if (dot) {
+                        val glow = androidx.compose.animation.core.rememberInfiniteTransition(label = "moDot")
+                        val g by glow.animateFloat(0.55f, 1f, androidx.compose.animation.core.infiniteRepeatable(tween(1400), androidx.compose.animation.core.RepeatMode.Reverse), label = "moDotA")
+                        val pulse = com.jpetrydesign.pyng.ui.kit.LocalMotion.current
+                        Box(
+                            Modifier.align(Alignment.TopEnd).padding(top = 11.dp, end = 11.dp).size(11.dp)
+                                .graphicsLayer { alpha = if (pulse) g else 1f }
+                                .shadow(6.dp, CircleShape, ambientColor = t.p, spotColor = t.p).clip(CircleShape).background(t.p)
+                                .border(1.5.dp, t.bg.copy(alpha = 0.8f), CircleShape),
+                        )
+                    }
+                }
                 Box(
                     Modifier.size(60.dp).onGloballyPositioned { newAt[0] = it }.shadow(16.dp, CircleShape, clip = false, ambientColor = t.plusFlat.copy(alpha = 0.35f), spotColor = t.plusFlat.copy(alpha = 0.45f))
                         .glassRim(CircleShape).frost(CircleShape, if (t.solid) t.plusFlat else t.plusFlat.copy(alpha = if (t.dark) 0.3f else 0.34f), 9.dp).press(0.9f) { nav.go(Route.NewChat(), fromBtn(newAt[0])) },
@@ -1945,38 +1961,6 @@ private fun SnoozeSheet(c: Conv?, onDismiss: () -> Unit) {
 }
 
 /** What's new in this update: the headlines, then a count of fixes. Shown once per update. */
-@Composable
-private fun WhatsNewSheet(r: Release?, onAll: () -> Unit, onDone: () -> Unit) {
-    val t = LocalTok.current
-    var shown by remember { mutableStateOf<Release?>(null) }
-    if (r != null) shown = r
-    val cur = shown
-    PadSheet(r != null, onDone, maxHeightFraction = 0.86f) {
-        if (cur == null) return@PadSheet
-        T("What's new", size = 24.sp, weight = FontWeight.Bold, letterSpacing = (-0.5).sp)
-        T("Pyng ${cur.version}", size = 13.5.sp, color = t.soft, modifier = Modifier.padding(top = 2.dp, bottom = 14.dp))
-        Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            cur.added.forEachIndexed { i, line ->
-                val head = line.substringBefore('\n'); val more = line.substringAfter('\n', "")
-                Row(Modifier.fillMaxWidth().enter(i)) {
-                    Box(Modifier.padding(top = 2.dp).size(30.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(Icons.spark, t.p, 16.dp) }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        T(head, size = 15.sp, weight = FontWeight.SemiBold)
-                        if (more.isNotEmpty()) T(more, size = 13.5.sp, color = t.soft, lineHeight = 19.sp)
-                    }
-                }
-            }
-            if (cur.fixed.isNotEmpty()) T("Plus ${cur.fixed.size} fixes, like: " + cur.fixed.take(3).joinToString("; ") { it.substringBefore('\n').replaceFirstChar { c -> c.lowercase() } } + ".", size = 13.sp, color = t.soft, lineHeight = 18.sp)
-        }
-        Spacer(Modifier.height(16.dp))
-        com.jpetrydesign.pyng.ui.kit.PillButton("Got it", onClick = onDone, modifier = Modifier.fillMaxWidth())
-        T("See everything that changed", size = 14.sp, weight = FontWeight.SemiBold, color = t.p,
-            modifier = Modifier.align(Alignment.CenterHorizontally).clip(RoundedCornerShape(16.dp)).clickable { onDone(); onAll() }.padding(horizontal = 12.dp, vertical = 12.dp))
-    }
-}
-
-
 /** A bottom sheet with the app's usual side margins. */
 @Composable
 private fun PadSheet(visible: Boolean, onDismiss: () -> Unit, maxHeightFraction: Float = 0.9f, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {

@@ -981,7 +981,7 @@ fun SendMini(style: String, t: com.jpetrydesign.pyng.ui.theme.Tok) {
  * then it all goes back into the button.
  */
 @Composable
-private fun MotionMini(style: com.jpetrydesign.pyng.ui.kit.Mo, t: com.jpetrydesign.pyng.ui.theme.Tok, big: Boolean = false) {
+internal fun MotionMini(style: com.jpetrydesign.pyng.ui.kit.Mo, t: com.jpetrydesign.pyng.ui.theme.Tok, big: Boolean = false) {
     val stage = remember { com.jpetrydesign.pyng.ui.kit.LiquidStage() }
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
         val w = maxWidth.value; val h = maxHeight.value
