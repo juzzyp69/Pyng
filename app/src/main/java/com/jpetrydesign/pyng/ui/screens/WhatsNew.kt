@@ -1,6 +1,7 @@
 package com.jpetrydesign.pyng.ui.screens
 
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -129,7 +130,8 @@ private fun HeroPager(cards: List<Highlight>, t: Tok) {
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // Tall enough for the picture and three lines of text, never more than most of a short screen.
-        val cardH = (maxWidth * 0.92f).coerceIn(280.dp, 330.dp)
+        // Cards without a picture stay short instead of leaving an empty box.
+        val cardH = if (cards.all { it.art == "icon" }) 150.dp else (maxWidth * 0.92f).coerceIn(280.dp, 330.dp)
         HorizontalPager(pager, Modifier.fillMaxWidth().height(cardH), pageSpacing = 12.dp) { page ->
             HeroCard(cards[page], t, Modifier.arrive(page.coerceAtMost(1), true))
         }
@@ -151,6 +153,23 @@ private fun HeroPager(cards: List<Highlight>, t: Tok) {
 @Composable
 private fun HeroCard(h: Highlight, t: Tok, modifier: Modifier) {
     val shape = RoundedCornerShape(28.dp)
+    if (h.art == "icon") {
+        // No picture for this one: a compact card, its icon beside the words.
+        Row(
+            modifier.fillMaxSize().clip(shape)
+                .background(Brush.verticalGradient(listOf(t.p.copy(alpha = if (t.dark) 0.26f else 0.16f), t.surface)))
+                .border(1.dp, t.edgeLine, shape).padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(52.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(Icons.spark, t.p, 24.dp, 1.9f) }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                T(h.title, size = 17.sp, weight = FontWeight.Bold, letterSpacing = (-0.3).sp, maxLines = 2)
+                if (h.body.isNotEmpty()) T(h.body, size = 13.sp, color = t.soft, lineHeight = 18.sp, maxLines = 3, modifier = Modifier.padding(top = 3.dp))
+            }
+        }
+        return
+    }
     Column(
         modifier.fillMaxSize().clip(shape)
             .background(Brush.verticalGradient(listOf(t.p.copy(alpha = if (t.dark) 0.26f else 0.16f), t.surface)))
@@ -199,6 +218,8 @@ private fun HeroArt(art: String, t: Tok) {
                 }
             }
         }
+        "bleep" -> BleepArt(t)
+        "groupname" -> GroupNameArt(t)
         else -> Box(Modifier.size(84.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(Icons.spark, t.p, 38.dp, 1.8f) }
     }
 }
@@ -222,6 +243,75 @@ private fun Line(raw: String, icon: String, ink: Color, bg: Color, modifier: Mod
         Column(Modifier.weight(1f)) {
             T(head, size = 14.5.sp, weight = FontWeight.SemiBold, lineHeight = 19.sp)
             if (more.isNotEmpty()) T(more, size = 13.sp, color = t.soft, lineHeight = 18.sp, modifier = Modifier.padding(top = 1.dp))
+        }
+    }
+}
+
+/** A voice message transcript with the switch beside it: flip it and the swear word bleeps, flip it back and it doesn't. */
+@Composable
+private fun BleepArt(t: Tok) {
+    var hide by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { while (true) { delay(1800); hide = !hide } }
+    Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp), verticalArrangement = Arrangement.Center) {
+        // The voice message: play button, waveform, then its transcript.
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(t.inBg).padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(30.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(Icons.play, t.p, 14.dp, 2.2f) }
+                Spacer(Modifier.width(10.dp))
+                Row(Modifier.weight(1f).height(24.dp), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    listOf(0.4f, 0.8f, 0.55f, 1f, 0.7f, 0.35f, 0.9f, 0.6f, 0.45f, 0.75f, 0.5f, 0.85f, 0.4f, 0.65f).forEach { h ->
+                        Box(Modifier.width(3.dp).height((24f * h).dp).clip(RoundedCornerShape(2.dp)).background(t.soft.copy(alpha = 0.7f)))
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                T("This is so ", size = 14.sp, maxLines = 1)
+                androidx.compose.animation.AnimatedContent(hide, label = "bleep", transitionSpec = {
+                    (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) + androidx.compose.animation.scaleIn(initialScale = 0.8f)) togetherWith
+                        androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(140))
+                }) { h -> T(if (h) "d***" else "damn", size = 14.sp, weight = FontWeight.SemiBold, color = if (h) t.soft else t.ink, maxLines = 1) }
+                T(" good", size = 14.sp, maxLines = 1)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            T("Hide swear words", size = 13.5.sp, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f), maxLines = 1)
+            Toggle(hide)
+        }
+    }
+}
+
+/** A group's header: renamed in Google Messages, the new name drops in and a check confirms it's the same for everyone. */
+@Composable
+private fun GroupNameArt(t: Tok) {
+    val names = listOf("Weekend crew", "Ski trip 🏔️")
+    var i by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) { while (true) { delay(2200); i = (i + 1) % names.size } }
+    Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(t.sheet).border(1.dp, t.edgeLine, RoundedCornerShape(26.dp)).padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Three faces, overlapped like a group photo.
+            Box(Modifier.size(44.dp)) {
+                listOf(Triple("AM", 0.dp, 0.dp), Triple("NK", 18.dp, 4.dp), Triple("MR", 6.dp, 20.dp)).forEach { (n, x, y) ->
+                    Box(Modifier.padding(start = x, top = y).size(24.dp).clip(CircleShape).background(t.tone).border(1.5.dp, t.sheet, CircleShape), contentAlignment = Alignment.Center) {
+                        T(n, size = 8.sp, weight = FontWeight.Bold, color = t.p)
+                    }
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            androidx.compose.animation.AnimatedContent(i, label = "gname", transitionSpec = {
+                (androidx.compose.animation.slideInVertically { it / 2 } + androidx.compose.animation.fadeIn()) togetherWith
+                    (androidx.compose.animation.slideOutVertically { -it / 2 } + androidx.compose.animation.fadeOut())
+            }, modifier = Modifier.weight(1f)) { k -> T(names[k], size = 16.sp, weight = FontWeight.Bold, maxLines = 1) }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.clip(RoundedCornerShape(14.dp)).background(t.tone).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Ico(Icons.check, t.p, 14.dp, 2.4f)
+            Spacer(Modifier.width(6.dp))
+            T("Renamed in Google Messages · same for everyone", size = 12.sp, weight = FontWeight.SemiBold, color = t.p, maxLines = 1)
         }
     }
 }

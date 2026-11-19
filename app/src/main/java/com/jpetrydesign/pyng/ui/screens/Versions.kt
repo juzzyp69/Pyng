@@ -36,6 +36,10 @@ data class Release(val version: String, val date: String, val added: List<String
 val RELEASES = listOf(
     Release(
         "0.9.5.2", "Nov 19, 2026",
+        highlights = listOf(
+            Highlight("Swear words, your call", "Voice message transcripts keep words as said. Turn on Hide swear words in Settings, Chats to bleep them.", "bleep"),
+            Highlight("Group names come from Google Messages", "Rename a group there and it changes for everyone, then shows here in Pyng too.", "groupname"),
+        ),
         added = listOf(
             "Swear words, your call\nVoice message transcripts keep words as said. Turn on Hide swear words in Settings, Chats to bleep them",
             "Group names come from Google Messages\nTap a group's name to rename it there, so it changes for everyone and shows here too",
