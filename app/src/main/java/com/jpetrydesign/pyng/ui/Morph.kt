@@ -63,7 +63,7 @@ class Morph(val from: Rect, val radius: Float, val avatar: Rect? = null) {
 }
 
 /** How long the screen underneath stays put while a screen grows over it or shrinks back off it. */
-const val MORPH_HOLD = 900
+const val MORPH_HOLD = 1100
 
 /** Lets the chat header tell the flying photo where to land, and hides its own photo until it does. */
 class AvatarSlot {

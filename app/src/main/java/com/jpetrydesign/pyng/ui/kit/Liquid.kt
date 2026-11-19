@@ -398,7 +398,9 @@ fun LiquidDriver(stage: LiquidStage) {
             var last = withFrameNanos { it }
             while (stage.runs.isNotEmpty()) {
                 withFrameNanos { now ->
-                    val dt = min(0.034f, (now - last) / 1e9f); last = now
+                    // Follows real time even when frames come slowly (just in bigger steps), so a motion
+                    // always finishes in about the same time on any phone.
+                    val dt = min(0.1f, (now - last) / 1e9f); last = now
                     stage.frame(dt)
                 }
             }

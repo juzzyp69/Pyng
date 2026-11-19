@@ -43,12 +43,23 @@ SZ=$(adb shell wm size | grep -oE '[0-9]+x[0-9]+' | tail -1); W=${SZ%x*}; H=${SZ
 DN=$(adb shell wm density | grep -oE '[0-9]+' | tail -1)
 px() { echo $(( $1 * DN / 160 )); }
 WAIT=6 shot 00e-home-before
-adb shell input tap $(( W - $(px 50) )) $(( H - $(px 98) ))
-sleep 0.1; adb exec-out screencap -p > "$OUT/00f-search-pouring.png"
-sleep 1; adb exec-out screencap -p > "$OUT/00g-search-open.png"
+grab() { adb exec-out screencap -p > "$OUT/$1.png"; }
+# The search button sits left of the new message button: 20dp margin, 60dp button, 14dp gap, then half a button.
+adb shell input tap $(( W - $(px 124) )) $(( H - $(px 98) ))
+sleep 0.1; grab 00f-search-pouring
+sleep 0.3; grab 00f2-search-pouring
+sleep 1; grab 00g-search-open
+adb shell input keyevent 4; sleep 0.3; adb shell input keyevent 4
+sleep 0.1; grab 00h-search-draining
+sleep 1.2; grab 00i-search-closed
+# Open the first chat in the list and catch it growing, then going back into its row.
+adb shell input tap $(( W / 2 )) 1200
+sleep 0.1; grab 00j-chat-growing
+sleep 0.3; grab 00j2-chat-growing
+sleep 1.2; grab 00k-chat-open
 adb shell input keyevent 4
-sleep 0.15; adb exec-out screencap -p > "$OUT/00h-search-draining.png"
-sleep 1.2; adb exec-out screencap -p > "$OUT/00i-search-closed.png"
+sleep 0.15; grab 00l-chat-draining
+sleep 1.2; grab 00m-chat-closed
 echo "shot search morph"
 # New in 0.9.5 next.
 WAIT=6 shot 09-home-cats --ez cats true
