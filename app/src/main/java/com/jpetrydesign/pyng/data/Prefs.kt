@@ -96,7 +96,7 @@ val DEFAULT_TOGGLES = mapOf(
 val DEFAULT_OPTS = mapOf(
     "autoDl" to "Always", "quality" to "High", "swipe" to "Archive", "swipeR" to "Read/Unread",
     "stamps" to "Grouped", "gifRating" to "pg", "gradient" to "Across the screen", "statusStyle" to "Icon and text", "sendStyle" to "Jelly", "photoGroups" to "Peek", "font" to "Google",
-    "quietFrom" to "22:00", "quietTo" to "07:00", "glass" to "Frost",
+    "quietFrom" to "22:00", "quietTo" to "07:00", "glass" to "Frost", "motion" to "Rise",
 )
 
 /** A theme you made and named, kept to use again for the app or any chat. */

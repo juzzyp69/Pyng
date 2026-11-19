@@ -511,6 +511,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                         c = c, index = i, pinMark = layout == "List" && c.id in pinnedIds, count = countOf(c), unread = unreadOf(c),
                         typing = typingOf(c), selected = wide && (nav.top as? Route.Thread)?.id == c.id,
                         onOpen = { nav.openChat(c.id) }, onMenu = { menuFor = c },
+                        onOpenFrom = if (wide) null else ({ m -> nav.openChat(c.id, from = m) }),
                         lifted = ghostId == c.id,
                         onLift = if (layout == "List") null else ({ at, center, size -> liftAt(c.id, at, center, size, true) }), home = dh,
                         onSwipe = { side -> swipeAct(repo, c, if (side > 0) p.opt("swipeR") else p.opt("swipe")) },
@@ -607,14 +608,18 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                 horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically,
             ) {
                 // Frosted glass: light blur, mostly see-through, with a bright rim instead of a heavy shadow.
+                val searchAt = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+                val newAt = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+                // Search and New message grow out of their buttons.
+                fun fromBtn(c: androidx.compose.ui.layout.LayoutCoordinates?) = c?.takeIf { it.isAttached }?.boundsInRoot()?.let { com.jpetrydesign.pyng.ui.Morph(it, it.width / 2) }
                 Box(
-                    Modifier.size(60.dp).shadow(14.dp, CircleShape, clip = false, ambientColor = t.shadow.copy(alpha = 0.22f), spotColor = t.shadow.copy(alpha = 0.28f))
-                        .glassRim(CircleShape).frost(CircleShape, if (t.solid) t.fab else t.fab.copy(alpha = if (t.dark) 0.14f else 0.2f), 9.dp).press(0.9f) { nav.go(Route.Search) },
+                    Modifier.size(60.dp).onGloballyPositioned { searchAt[0] = it }.shadow(14.dp, CircleShape, clip = false, ambientColor = t.shadow.copy(alpha = 0.22f), spotColor = t.shadow.copy(alpha = 0.28f))
+                        .glassRim(CircleShape).frost(CircleShape, if (t.solid) t.fab else t.fab.copy(alpha = if (t.dark) 0.14f else 0.2f), 9.dp).press(0.9f) { nav.go(Route.Search, fromBtn(searchAt[0])) },
                     contentAlignment = Alignment.Center,
                 ) { SolidSearch(t.ink, 24.dp) }
                 Box(
-                    Modifier.size(60.dp).shadow(16.dp, CircleShape, clip = false, ambientColor = t.plusFlat.copy(alpha = 0.35f), spotColor = t.plusFlat.copy(alpha = 0.45f))
-                        .glassRim(CircleShape).frost(CircleShape, if (t.solid) t.plusFlat else t.plusFlat.copy(alpha = if (t.dark) 0.3f else 0.34f), 9.dp).press(0.9f) { nav.go(Route.NewChat()) },
+                    Modifier.size(60.dp).onGloballyPositioned { newAt[0] = it }.shadow(16.dp, CircleShape, clip = false, ambientColor = t.plusFlat.copy(alpha = 0.35f), spotColor = t.plusFlat.copy(alpha = 0.45f))
+                        .glassRim(CircleShape).frost(CircleShape, if (t.solid) t.plusFlat else t.plusFlat.copy(alpha = if (t.dark) 0.3f else 0.34f), 9.dp).press(0.9f) { nav.go(Route.NewChat(), fromBtn(newAt[0])) },
                     contentAlignment = Alignment.Center,
                 ) { SolidCompose(if (t.solid) t.plusInk else t.ink, if (t.solid) t.plusFlat else t.plusFlat, 27.dp) }
             }
@@ -736,6 +741,8 @@ fun ConvRow(
     lifted: Boolean = false,
     onLift: ((Offset, Offset, androidx.compose.ui.unit.Dp) -> Unit)? = null,
     home: DragHolder? = null,
+    /** Opens the chat growing out of this row (the row's box and its photo, in window pixels). */
+    onOpenFrom: ((com.jpetrydesign.pyng.ui.Morph) -> Unit)? = null,
 ) {
     val repo = LocalRepo.current
     val t = LocalTok.current
@@ -774,6 +781,7 @@ fun ConvRow(
     val liftNow by androidx.compose.runtime.rememberUpdatedState(onLift)
     val menuNow by androidx.compose.runtime.rememberUpdatedState(onMenu)
     val openNow by androidx.compose.runtime.rememberUpdatedState(onOpen)
+    val openFromNow by androidx.compose.runtime.rememberUpdatedState(onOpenFrom)
     val seen = remember { SeenRows.contains(c.id) }
     androidx.compose.runtime.SideEffect { SeenRows.add(c.id) }
     Column(
@@ -811,7 +819,17 @@ fun ConvRow(
                     .clip(RoundedCornerShape(22.dp))
                     .background(if (dx.value != 0f) t.bg else if (selected) t.tone else Color.Transparent)
                     .pointerInput(c.id) {
-                        detectTapGestures(onTap = { openNow() }, onLongPress = { at ->
+                        detectTapGestures(onTap = {
+                            val rc = rowCoords[0]; val from = openFromNow
+                            if (from != null && rc != null && rc.isAttached) {
+                                val b = rc.boundsInRoot(); val ins = inset.toPx(); val avPx = av.toPx()
+                                val padV = (if (compact) 9.dp else 14.dp).toPx()
+                                from(com.jpetrydesign.pyng.ui.Morph(
+                                    androidx.compose.ui.geometry.Rect(b.left - ins, b.top, b.right + ins, b.bottom), 22.dp.toPx(),
+                                    androidx.compose.ui.geometry.Rect(b.left, b.top + padV, b.left + avPx, b.top + padV + avPx),
+                                ))
+                            } else openNow()
+                        }, onLongPress = { at ->
                             val h = home?.home; val rc = rowCoords[0]; val lift = liftNow
                             if (lift != null && h != null && rc != null) runCatching {
                                 val b = h.localBoundingBoxOf(rc)

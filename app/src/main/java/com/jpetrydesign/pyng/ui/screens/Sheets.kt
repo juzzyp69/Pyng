@@ -39,6 +39,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.drawBehind
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.WindowInsets
@@ -107,11 +110,66 @@ fun MessageMenu(
     var reminding by remember(m) { mutableStateOf(false) }
     if (m != null) androidx.activity.compose.BackHandler { if (more) more = false else onDismiss() }
     val k = remember { androidx.compose.animation.core.Animatable(0f) }
+    // Liquid motion: the reaction bar rises out of the message on a neck and the menu drips out below,
+    // then both are pulled back into the message when you let go.
+    val mo = com.jpetrydesign.pyng.ui.kit.LocalMo.current
+    val liquid = mo.liquid
+    val stage = remember { com.jpetrydesign.pyng.ui.kit.LiquidStage() }
+    val barA = remember { androidx.compose.animation.core.Animatable(if (liquid) 0f else 1f) }
+    val actA = remember { androidx.compose.animation.core.Animatable(if (liquid) 0f else 1f) }
+    var geo by remember { mutableStateOf(MenuGeo()) }
+    var budded by remember { mutableStateOf(false) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val density0 = androidx.compose.ui.platform.LocalDensity.current
+    val glass0 = popGlass(t)
+    val settle = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
     androidx.compose.runtime.LaunchedEffect(m != null) {
-        if (m != null) { if (motion) k.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.72f, stiffness = 420f)) else k.snapTo(1f) }
+        if (m != null) {
+            if (liquid) {
+                barA.snapTo(0f); actA.snapTo(0f); budded = false
+                scope.launch {
+                    val g = androidx.compose.runtime.snapshotFlow { geo }.first { it.bub != null && (it.bar != null || it.act != null) }
+                    val d = density0.density
+                    val src = com.jpetrydesign.pyng.ui.kit.LRect.of(g.bub!!, with(density0) { 20.dp.toPx() }, d)
+                    budded = true
+                    kotlinx.coroutines.coroutineScope {
+                        g.bar?.let { r ->
+                            launch {
+                                val sim = com.jpetrydesign.pyng.ui.kit.budSim(src, com.jpetrydesign.pyng.ui.kit.LRect.of(r, r.height / 2, d), false, mo)
+                                sim.onReveal = { scope.launch { barA.animateTo(1f, androidx.compose.animation.core.tween(if (mo == com.jpetrydesign.pyng.ui.kit.Mo.Drop) 360 else 300, easing = settle)) } }
+                                stage.play(sim, glass0, t.edgeLine); if (barA.value < 1f) barA.animateTo(1f, androidx.compose.animation.core.tween(140))
+                            }
+                        }
+                        g.act?.let { r ->
+                            launch {
+                                kotlinx.coroutines.delay(60)
+                                val sim = com.jpetrydesign.pyng.ui.kit.budSim(src, com.jpetrydesign.pyng.ui.kit.LRect.of(r, with(density0) { 22.dp.toPx() }, d), false, mo)
+                                sim.onReveal = { scope.launch { actA.animateTo(1f, androidx.compose.animation.core.tween(if (mo == com.jpetrydesign.pyng.ui.kit.Mo.Drop) 360 else 300, easing = settle)) } }
+                                stage.play(sim, glass0, t.edgeLine); if (actA.value < 1f) actA.animateTo(1f, androidx.compose.animation.core.tween(140))
+                            }
+                        }
+                    }
+                }
+            }
+            if (motion) k.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.72f, stiffness = 420f)) else k.snapTo(1f)
+        } else if (liquid && budded) {
+            // The bar and menu fade, then drain back into the message while the dim lifts.
+            val g = geo
+            val d = density0.density
+            launch { k.animateTo(0f, androidx.compose.animation.core.tween(380)) }
+            kotlinx.coroutines.coroutineScope { launch { barA.animateTo(0f, androidx.compose.animation.core.tween(110)) }; actA.animateTo(0f, androidx.compose.animation.core.tween(110)) }
+            val bub = g.bub
+            if (bub != null) kotlinx.coroutines.coroutineScope {
+                val src = com.jpetrydesign.pyng.ui.kit.LRect.of(bub, with(density0) { 20.dp.toPx() }, d)
+                g.bar?.let { r -> launch { stage.play(com.jpetrydesign.pyng.ui.kit.budSim(src, com.jpetrydesign.pyng.ui.kit.LRect.of(r, r.height / 2, d), true, mo), glass0, t.edgeLine) } }
+                g.act?.let { r -> launch { stage.play(com.jpetrydesign.pyng.ui.kit.budSim(src, com.jpetrydesign.pyng.ui.kit.LRect.of(r, with(density0) { 22.dp.toPx() }, d), true, mo), glass0, t.edgeLine) } }
+            }
+            budded = false
+            if (k.value > 0f) k.animateTo(0f, androidx.compose.animation.core.tween(120))
+        }
         else if (motion) k.animateTo(0f, androidx.compose.animation.core.tween(160)) else k.snapTo(0f)
     }
-    if (m == null && k.value <= 0.01f) return
+    if (m == null && k.value <= 0.01f && !stage.busy && !budded) return
     val cur = last ?: return
     val p = repo.prefs.state
     val myId = conv?.me?.id.orEmpty()
@@ -129,10 +187,11 @@ fun MessageMenu(
 
     Box(
         Modifier.fillMaxSize().zIndex(25f)
-            .graphicsLayer { alpha = k.value.coerceIn(0f, 1f) }
-            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = if (t.dark) 0.4f else 0.18f))
+            .graphicsLayer { if (!liquid) alpha = k.value.coerceIn(0f, 1f) }
+            .drawBehind { drawRect(androidx.compose.ui.graphics.Color.Black.copy(alpha = (if (t.dark) 0.4f else 0.18f) * (if (liquid) k.value.coerceIn(0f, 1f) else 1f))) }
             .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { close() },
     ) {
+        if (liquid) com.jpetrydesign.pyng.ui.kit.LiquidCanvas(stage, Modifier.fillMaxSize())
         val topSafe = WindowInsets.statusBars.getTop(density) + with(density) { 12.dp.roundToPx() }
         val bottomSafe = WindowInsets.navigationBars.getBottom(density) + with(density) { 12.dp.roundToPx() }
         val whoPanel: @Composable (MenuFit) -> Unit = { f ->
@@ -338,12 +397,32 @@ fun MessageMenu(
                 val a = lastAnchor
                 val bubX = (if (a != null) (if (me) a.right.toInt() - u.width else a.left.toInt()) else if (me) W - side - u.width else side).coerceIn(0, maxOf(0, W - u.width))
                 val edgeX = { w: Int -> if (me) (bubX + u.width - w).coerceIn(side, maxOf(side, W - side - w)) else bubX.coerceIn(side, maxOf(side, W - side - w)) }
-                val lift = ((1f - k.value) * 24f).toInt()
+                val lift = if (liquid) 0 else ((1f - k.value) * 24f).toInt()
                 var yy = y
                 wP?.let { it.placeRelative(side, yy + lift); yy += it.height + gap }
-                bP?.let { it.placeRelative(edgeX(it.width), yy + lift); yy += it.height + gap }
-                u.placeRelative(bubX, yy); yy += u.height + gap
-                aP?.let { it.placeRelative(if (pick.strip) side else edgeX(it.width), yy - lift) }
+                // Each part comes in its own way once the liquid has mostly formed it.
+                fun arrive(sc: androidx.compose.ui.graphics.GraphicsLayerScope, a: Float, down: Boolean) {
+                    sc.alpha = a
+                    if (liquid && a < 1f) {
+                        val q = 1f - a
+                        when (mo) {
+                            com.jpetrydesign.pyng.ui.kit.Mo.Drop -> { val z = 0.9f + 0.1f * a; sc.scaleX = z; sc.scaleY = z }
+                            com.jpetrydesign.pyng.ui.kit.Mo.Pour -> sc.translationY = (if (down) -10f else 10f) * sc.density * q
+                            else -> sc.translationY = 7f * sc.density * q
+                        }
+                        val bl = (if (mo == com.jpetrydesign.pyng.ui.kit.Mo.Drop) 7f else 5f) * sc.density * q
+                        if (bl > 0.5f && android.os.Build.VERSION.SDK_INT >= 31) sc.renderEffect = androidx.compose.ui.graphics.BlurEffect(bl, bl, androidx.compose.ui.graphics.TileMode.Decal)
+                    }
+                }
+                var barR: androidx.compose.ui.geometry.Rect? = null
+                bP?.let { val bx = edgeX(it.width); it.placeRelativeWithLayer(bx, yy + lift) { arrive(this, barA.value, false) }; barR = androidx.compose.ui.geometry.Rect(bx.toFloat(), (yy + lift).toFloat(), (bx + it.width).toFloat(), (yy + lift + it.height).toFloat()); yy += it.height + gap }
+                u.placeRelative(bubX, yy)
+                val bubR = androidx.compose.ui.geometry.Rect(bubX.toFloat(), yy.toFloat(), (bubX + u.width).toFloat(), (yy + u.height).toFloat())
+                yy += u.height + gap
+                var actR: androidx.compose.ui.geometry.Rect? = null
+                aP?.let { val ax = if (pick.strip) side else edgeX(it.width); it.placeRelativeWithLayer(ax, yy - lift) { arrive(this, actA.value, true) }; actR = androidx.compose.ui.geometry.Rect(ax.toFloat(), (yy - lift).toFloat(), (ax + it.width).toFloat(), (yy - lift + it.height).toFloat()) }
+                val ng = MenuGeo(bubR, barR, actR)
+                if (m != null && ng != geo) geo = ng
             }
         }
         // The full picker slides up from the bottom, like the keyboard's emoji panel.
@@ -501,3 +580,10 @@ fun SelectTextSheet(m: Msg?, onDismiss: () -> Unit) {
         com.jpetrydesign.pyng.ui.kit.PillButton("Copy all", { copy(ctx, cur.text); onDismiss() }, Modifier.padding(horizontal = 16.dp).fillMaxWidth(), primary = false, height = 50.dp)
     }
 }
+
+/** Where the held message, its reaction bar and its menu sit on screen, for the liquid to join them. */
+private data class MenuGeo(
+    val bub: androidx.compose.ui.geometry.Rect? = null,
+    val bar: androidx.compose.ui.geometry.Rect? = null,
+    val act: androidx.compose.ui.geometry.Rect? = null,
+)

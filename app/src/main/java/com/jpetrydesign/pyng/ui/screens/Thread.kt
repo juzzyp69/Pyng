@@ -863,7 +863,7 @@ private fun ThreadHeader(t: Tok, c: Conv?, typing: Boolean, wide: Boolean, onBac
         ) {
             if (c != null) {
                 val w = whoOf(c)
-                Box(Modifier.edge(CircleShape, elevation = 6.dp)) { WhoAvatar(w, 46.dp, 15.sp) }
+                Box(com.jpetrydesign.pyng.ui.avatarSlotOf(Modifier).edge(CircleShape, elevation = 6.dp)) { WhoAvatar(w, 46.dp, 15.sp) }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f, fill = false)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {

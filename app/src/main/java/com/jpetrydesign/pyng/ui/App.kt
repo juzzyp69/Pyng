@@ -124,7 +124,14 @@ class Nav(start: Route) {
         if (back.size > 1) { forward = true; stack.clear(); stack.addAll(back) }
     }
 
-    fun go(r: Route) { forward = true; stack.add(r) }
+    /** Screens that grew out of something you tapped, and so drain back into it. */
+    val morphs = mutableMapOf<Route, Morph>()
+    private fun noteMorph(r: Route, from: Morph?) {
+        morphs.keys.retainAll(stack.toSet())
+        if (from != null) morphs[r] = from else morphs.remove(r)
+    }
+
+    fun go(r: Route, from: Morph? = null) { forward = true; stack.add(r); noteMorph(r, from) }
     fun replace(r: Route) { forward = true; stack.clear(); stack.add(r) }
     fun back(): Boolean {
         if (stack.size <= 1) return false
@@ -142,10 +149,12 @@ class Nav(start: Route) {
     }
 
     /** Opens a chat, replacing any chat already open, so back goes to the list. */
-    fun openChat(id: String, highlight: String? = null) {
+    fun openChat(id: String, highlight: String? = null, from: Morph? = null) {
         forward = true
         while (stack.size > 1 && stack.last() !is Route.Home) stack.removeAt(stack.lastIndex)
-        stack.add(Route.Thread(id, highlight))
+        val r = Route.Thread(id, highlight)
+        stack.add(r)
+        noteMorph(r, from)
     }
 }
 
@@ -170,6 +179,8 @@ fun PyngRoot(repo: Repo, nav: Nav) {
     val actx = androidx.compose.ui.platform.LocalContext.current
     val systemAnim = remember { runCatching { android.provider.Settings.Global.getFloat(actx.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) }.getOrDefault(1f) > 0f }
     val motion = !repo.prefs.state.on("reduceMotion") && systemAnim
+    // The motion style: Rise, Pour, Drop, Simple or Minimal. Reduce motion always means Minimal.
+    val mo = if (!motion) com.jpetrydesign.pyng.ui.kit.Mo.Minimal else com.jpetrydesign.pyng.ui.kit.Mo.of(repo.prefs.state.opt("motion"))
     val scheme = if (t.dark) darkColorScheme(primary = t.p, background = t.bg, surface = t.bg, onBackground = t.ink, onSurface = t.ink)
     else lightColorScheme(primary = t.p, background = t.bg, surface = t.bg, onBackground = t.ink, onSurface = t.ink)
     var toast by remember { mutableStateOf<Toast?>(null) }
@@ -203,7 +214,7 @@ fun PyngRoot(repo: Repo, nav: Nav) {
         val textScale = com.jpetrydesign.pyng.ui.kit.textScaleOf(repo.prefs.state.textSize)
         val scaled = androidx.compose.ui.unit.Density(baseDensity.density, baseDensity.fontScale * textScale)
         val peek = remember { PeekState() }
-        CompositionLocalProvider(com.jpetrydesign.pyng.ui.kit.LocalGlass provides (repo.prefs.state.opt("glass") == "Liquid Glass"), LocalTok provides t, LocalRepo provides repo, LocalMotion provides motion, androidx.compose.ui.platform.LocalDensity provides scaled, LocalNav provides nav, LocalPeek provides peek) {
+        CompositionLocalProvider(com.jpetrydesign.pyng.ui.kit.LocalGlass provides (repo.prefs.state.opt("glass") == "Liquid Glass"), LocalTok provides t, LocalRepo provides repo, LocalMotion provides motion, com.jpetrydesign.pyng.ui.kit.LocalMo provides mo, androidx.compose.ui.platform.LocalDensity provides scaled, LocalNav provides nav, LocalPeek provides peek) {
             // Everything on screen feeds the in-app banner's frosted glass, but only while a banner
             // is up (and a moment after, while it slides away), so normal scrolling costs nothing extra.
             val appHaze = remember { dev.chrisbanes.haze.HazeState() }
@@ -241,24 +252,58 @@ fun PyngRoot(repo: Repo, nav: Nav) {
     }
 }
 
-private fun transition(forward: Boolean, motion: Boolean): ContentTransform =
-    if (!motion) fadeIn(tween(0)) togetherWith fadeOut(tween(0))
-    else if (forward) (slideInHorizontally(spring(dampingRatio = 0.86f, stiffness = 380f)) { it / 5 } + fadeIn(tween(220))) togetherWith
+private fun transition(forward: Boolean, mo: com.jpetrydesign.pyng.ui.kit.Mo): ContentTransform {
+    val M = com.jpetrydesign.pyng.ui.kit.Mo
+    // Minimal: a quick fade. Simple: a short, gentle slide. The liquid styles each settle their own way.
+    if (mo == M.Minimal) return fadeIn(tween(120)) togetherWith fadeOut(tween(90))
+    val sp = when (mo) {
+        M.Simple -> spring<androidx.compose.ui.unit.IntOffset>(dampingRatio = 1f, stiffness = 520f)
+        M.Pour -> spring(dampingRatio = 0.9f, stiffness = 300f)
+        M.Drop -> spring(dampingRatio = 0.76f, stiffness = 420f)
+        else -> spring(dampingRatio = 0.86f, stiffness = 380f)
+    }
+    val far = if (mo == M.Simple) 12 else 5
+    return if (forward) (slideInHorizontally(sp) { it / far } + fadeIn(tween(220))) togetherWith
         (slideOutHorizontally(tween(220)) { -it / 10 } + fadeOut(tween(180)))
-    else (slideInHorizontally(spring(dampingRatio = 0.86f, stiffness = 380f)) { -it / 10 } + fadeIn(tween(220))) togetherWith
-        (slideOutHorizontally(tween(220)) { it / 5 } + fadeOut(tween(160)))
+    else (slideInHorizontally(sp) { -it / 10 } + fadeIn(tween(220))) togetherWith
+        (slideOutHorizontally(tween(220)) { it / far } + fadeOut(tween(160)))
+}
+
+/** Screens that grow out of what you tapped stay over (or under) the last one until they're done moving. */
+private fun androidx.compose.animation.AnimatedContentTransitionScope<Route?>.navSpec(nav: Nav, mo: com.jpetrydesign.pyng.ui.kit.Mo, allowMorph: Boolean): ContentTransform {
+    val into = targetState; val out = initialState
+    val hold = { androidx.compose.animation.EnterTransition.None togetherWith fadeOut(tween(1, delayMillis = MORPH_HOLD)) }
+    return when {
+        allowMorph && mo.liquid && nav.forward && into != null && nav.morphs[into] != null -> hold()
+        allowMorph && mo.liquid && !nav.forward && out != null && nav.morphs[out] != null -> hold().apply { targetContentZIndex = -1f }
+        else -> transition(nav.forward, mo)
+    }
+}
+
+/** The screen itself, grown out of what you tapped when it was opened that way. */
+@Composable
+private fun androidx.compose.animation.AnimatedVisibilityScope.NavScreen(r: Route, nav: Nav, wide: Boolean, allowMorph: Boolean) {
+    val mo = com.jpetrydesign.pyng.ui.kit.LocalMo.current
+    val m = remember(r) { if (allowMorph && mo.liquid) nav.morphs[r] else null }
+    if (m == null) { Screen(r, nav, wide); return }
+    val repo = LocalRepo.current
+    val avatar: (@Composable (androidx.compose.ui.unit.Dp) -> Unit)? = (r as? Route.Thread)?.let { th ->
+        { size -> repo.convs[th.id]?.let { com.jpetrydesign.pyng.ui.screens.WhoAvatar(com.jpetrydesign.pyng.ui.screens.whoOf(it), size, (size.value / 3.1f).sp) } }
+    }
+    MorphScreen(m, avatar) { Screen(r, nav, wide) }
+}
 
 /** Renders the top of the back stack with a slide in the right direction. */
 @Composable
 private fun Pane(nav: Nav, modifier: Modifier, wide: Boolean) {
-    val motion = LocalMotion.current
+    val mo = com.jpetrydesign.pyng.ui.kit.LocalMo.current
     BackHandler(enabled = nav.stack.size > 1) { nav.back() }
     // Going to another screen puts the keyboard away. A screen that wants it (like New message) asks again.
     val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     LaunchedEffect(nav.top) { focus.clearFocus(); kb?.hide() }
-    AnimatedContent(nav.top, modifier, transitionSpec = { transition(nav.forward, motion) }, label = "nav") { r ->
-        Screen(r, nav, wide)
+    AnimatedContent<Route?>(nav.top, modifier, transitionSpec = { navSpec(nav, mo, allowMorph = true) }, label = "nav") { r ->
+        if (r != null) NavScreen(r, nav, wide, allowMorph = true)
     }
 }
 
@@ -266,7 +311,7 @@ private fun Pane(nav: Nav, modifier: Modifier, wide: Boolean) {
 @Composable
 private fun WideLayout(nav: Nav, width: androidx.compose.ui.unit.Dp) {
     val t = LocalTok.current
-    val motion = LocalMotion.current
+    val mo = com.jpetrydesign.pyng.ui.kit.LocalMo.current
     val top = nav.top
     val fullScreen = top is Route.Setup || top is Route.Viewer || top is Route.Log
     if (fullScreen) { Pane(nav, Modifier.fillMaxSize(), wide = true); return }
@@ -277,11 +322,12 @@ private fun WideLayout(nav: Nav, width: androidx.compose.ui.unit.Dp) {
     BackHandler(enabled = nav.stack.size > 1) { nav.back() }
     Row(Modifier.fillMaxSize()) {
         Box(Modifier.width(leftW).fillMaxHeight()) {
-            AnimatedContent(leftTop, transitionSpec = { transition(nav.forward, motion) }, label = "left") { r -> Screen(r, nav, true) }
+            // Search and New message grow out of their buttons in the list pane too.
+            AnimatedContent<Route?>(leftTop, transitionSpec = { navSpec(nav, mo, allowMorph = true) }, label = "left") { r -> if (r != null) NavScreen(r, nav, true, allowMorph = true) }
         }
         Box(Modifier.width(1.dp).fillMaxHeight().background(t.hair))
         Box(Modifier.weight(1f).fillMaxHeight()) {
-            AnimatedContent(rightTop, transitionSpec = { transition(nav.forward, motion) }, label = "right") { r ->
+            AnimatedContent(rightTop, transitionSpec = { navSpec(nav, mo, allowMorph = false) }, label = "right") { r ->
                 if (r == null) WideEmpty() else Screen(r, nav, true)
             }
         }
