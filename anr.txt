@@ -1,0 +1,1 @@
+    dir=/data/app/~~emPjuRIyFENOanrLhaYPew==/com.jpetrydesign.pyng-QzkK42J6932Uj1sT5Sx3tA==/base.apk publicDir=/data/app/~~emPjuRIyFENOanrLhaYPew==/com.jpetrydesign.pyng-QzkK42J6932Uj1sT5Sx3tA==/base.apk data=/data/user/0/com.jpetrydesign.pyng
