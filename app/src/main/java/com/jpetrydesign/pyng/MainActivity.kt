@@ -202,6 +202,8 @@ class MainActivity : FragmentActivity() {
         app.repo.foreground = false
         lastStop = System.currentTimeMillis()
         if (!app.repo.demo) com.jpetrydesign.pyng.data.Link.background(app)
+        // Leaving Pyng: every unread chat has an alert, so the app icon shows the real count.
+        if (!app.repo.demo) runCatching { com.jpetrydesign.pyng.data.Notifier.tidy(this, app.repo, restore = true) }
     }
 
     private fun unlock() {

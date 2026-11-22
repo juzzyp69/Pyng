@@ -26,6 +26,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -713,7 +715,8 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
         MoveToCategorySheet(CatMove.conv) { CatMove.conv = null }
         SnoozeSheet(SnoozeFor.conv) { SnoozeFor.conv = null }
         // After an update: a short card with what's new, once.
-        val fresh = RELEASES.firstOrNull()?.takeIf { it.version == com.jpetrydesign.pyng.BuildConfig.VERSION_NAME }
+        // Small fix-up releases have no highlights and don't pop a card.
+        val fresh = RELEASES.firstOrNull()?.takeIf { it.version == com.jpetrydesign.pyng.BuildConfig.VERSION_NAME && it.highlights.isNotEmpty() }
         WhatsNewSheet(if (fresh != null && p.setupDone && !askPerms && p.seenVersion != fresh.version) fresh else null, onAll = { nav.go(Route.Section("versions")) }) {
             repo.prefs.edit { it.copy(seenVersion = com.jpetrydesign.pyng.BuildConfig.VERSION_NAME) }
         }
@@ -844,6 +847,7 @@ fun ConvRow(
                                 from(com.jpetrydesign.pyng.ui.Morph(
                                     androidx.compose.ui.geometry.Rect(b.left - ins, b.top, b.right + ins, b.bottom), 22.dp.toPx(),
                                     androidx.compose.ui.geometry.Rect(b.left, b.top + padV, b.left + avPx, b.top + padV + avPx),
+                                    c.id,
                                 ))
                             } else openNow()
                         }, onLongPress = { at ->
@@ -883,7 +887,8 @@ fun ConvRow(
                     Modifier.fillMaxWidth().padding(horizontal = inset).padding(vertical = if (compact) 9.dp else 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    WhoAvatar(who, av, 17.sp)
+                    // Hidden while its copy is flying into (or back out of) the chat, so it's only ever seen once.
+                    Box(Modifier.graphicsLayer { alpha = if (com.jpetrydesign.pyng.ui.FlyingAvatar.key == c.id) 0f else 1f }) { WhoAvatar(who, av, 17.sp) }
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1385,7 +1390,16 @@ fun RowMenu(c: Conv?, onDismiss: () -> Unit, onEditPins: (() -> Unit)? = null) {
             exit = androidx.compose.animation.fadeOut(tween(140)) + androidx.compose.animation.scaleOut(tween(140), targetScale = 0.94f),
         ) {
             val cur = last ?: return@AnimatedVisibility
-            PeekBody(cur, repo, t, motion, onDismiss, onEditPins, open = { onDismiss(); nav?.openChat(cur.id) })
+            Box(Modifier.fillMaxSize()) {
+                PeekBody(cur, repo, t, motion, onDismiss, onEditPins, open = { onDismiss(); nav?.openChat(cur.id) })
+                // A small floating close button, clear of the status bar.
+                Box(
+                    Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 8.dp, end = 16.dp)
+                        .size(40.dp).clip(CircleShape).pane(CircleShape)
+                        .clickable(onClick = onDismiss),
+                    contentAlignment = Alignment.Center,
+                ) { Ico(Icons.close, t.ink, 16.dp, 2.4f) }
+            }
         }
     }
 }
@@ -1431,14 +1445,65 @@ private fun PeekBody(cur: Conv, repo: com.jpetrydesign.pyng.data.Repo, t: com.jp
         kotlinx.coroutines.delay(70)
         bottom.play()
     }
+    // Tapping or swiping the empty space around the cards closes them. Touches that start on a card
+    // (or its buttons) are left alone, so a near-miss on a button never closes it.
+    val outer = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    val cards = remember { arrayOfNulls<LayoutCoordinates>(2) }
+    val drag = remember(cur.id) { Animatable(0f) }
+    val dismissNow by androidx.compose.runtime.rememberUpdatedState(onDismiss)
+    val scope = rememberCoroutineScope()
     Column(
-        Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePaddingCompat()
+        Modifier.fillMaxSize()
+            .onGloballyPositioned { outer[0] = it }
+            .pointerInput(cur.id) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    val oc = outer[0]
+                    val pad = 8.dp.toPx()
+                    val onCard = oc == null || !oc.isAttached || cards.any { cc ->
+                        cc != null && cc.isAttached && oc.localBoundingBoxOf(cc).inflate(pad).contains(down.position)
+                    }
+                    if (onCard) return@awaitEachGesture
+                    val vt = androidx.compose.ui.input.pointer.util.VelocityTracker()
+                    vt.addPosition(down.uptimeMillis, down.position)
+                    var total = 0f
+                    var moved = false
+                    var lifted = false
+                    while (true) {
+                        val ev = awaitPointerEvent(PointerEventPass.Initial)
+                        val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!ch.pressed) { lifted = true; break }
+                        val dy = ch.position.y - ch.previousPosition.y
+                        total += dy
+                        if (!moved && abs(total) > viewConfiguration.touchSlop) moved = true
+                        if (moved) {
+                            ch.consume(); vt.addPosition(ch.uptimeMillis, ch.position)
+                            scope.launch { drag.snapTo(drag.value + dy) }
+                        }
+                    }
+                    if (!moved) { if (lifted) dismissNow() }
+                    else {
+                        val v = vt.calculateVelocity().y
+                        val far = abs(drag.value) > 96.dp.toPx() || (abs(v) > 1200f && kotlin.math.sign(v) == kotlin.math.sign(drag.value))
+                        if (far) {
+                            val away = kotlin.math.sign(drag.value) * size.height * 0.6f
+                            scope.launch { drag.animateTo(away, androidx.compose.animation.core.tween(200)) }
+                            dismissNow()
+                        } else scope.launch { drag.animateTo(0f, spring(dampingRatio = 0.72f, stiffness = 520f)) }
+                    }
+                }
+            }
+            .graphicsLayer {
+                translationY = drag.value
+                alpha = 1f - (abs(drag.value) / (size.height * 0.5f)).coerceIn(0f, 0.85f)
+            }
+            .statusBarsPadding().navigationBarsPadding().imePaddingCompat()
             .verticalScrollCompat().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Column(
-            Modifier.widthIn(max = 460.dp).fillMaxWidth().jelly(top, 28.dp, originY = 1f)
+            Modifier.widthIn(max = 460.dp).fillMaxWidth().onGloballyPositioned { cards[0] = it }.jelly(top, 28.dp, originY = 1f)
                 .shadow(22.dp, cardShape, clip = false, ambientColor = t.shadow.copy(alpha = 0.18f), spotColor = t.shadow.copy(alpha = 0.22f))
                 .clip(cardShape).background(card).padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -1502,7 +1567,7 @@ private fun PeekBody(cur: Conv, repo: com.jpetrydesign.pyng.data.Repo, t: com.jp
         }
         // Actions: the everyday four, then the rest in one compact row.
         Column(
-            Modifier.widthIn(max = 460.dp).fillMaxWidth().jelly(bottom, 40.dp, originY = 0f)
+            Modifier.widthIn(max = 460.dp).fillMaxWidth().onGloballyPositioned { cards[1] = it }.jelly(bottom, 40.dp, originY = 0f)
                 .shadow(22.dp, cardShape, clip = false, ambientColor = t.shadow.copy(alpha = 0.16f), spotColor = t.shadow.copy(alpha = 0.2f))
                 .clip(cardShape).background(card).padding(horizontal = 10.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),

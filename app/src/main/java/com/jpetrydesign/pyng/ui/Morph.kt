@@ -52,13 +52,14 @@ import com.jpetrydesign.pyng.ui.theme.LocalTok
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
 
 /**
  * Where a screen grows out of: the button or row you tapped, in window pixels, with its corner radius.
  * [avatar] is the photo in that row, which flies up into the chat's header.
  */
-class Morph(val from: Rect, val radius: Float, val avatar: Rect? = null) {
+class Morph(val from: Rect, val radius: Float, val avatar: Rect? = null, val key: Any? = null) {
     /** The screen it was opened from. Going back to that screen drains it back into what you tapped. */
     var under: Any? = null
 }
@@ -73,6 +74,11 @@ class AvatarSlot {
 }
 
 val LocalAvatarSlot = staticCompositionLocalOf<AvatarSlot?> { null }
+
+/** The row whose photo is in the air right now. That row hides its own photo, so it's never seen twice. */
+object FlyingAvatar {
+    var key by mutableStateOf<Any?>(null)
+}
 
 /** Marks the photo the flying one lands on. Does nothing outside a morph. */
 fun Modifier.avatarSlot(): Modifier = composed {
@@ -135,21 +141,25 @@ fun AnimatedVisibilityScope.MorphScreen(m: Morph, grow: Boolean, shrink: Boolean
         val revealMs = if (mo == Mo.Drop) 320 else 260
         sim.onReveal = { scope.launch { shown.animateTo(1f, tween(revealMs, easing = Settle)) } }
         if (flying) scope.launch {
-            snapshotFlow { slot.rect }.filterNotNull().first()
-            fly.animateTo(1f, spring(dampingRatio = 0.82f, stiffness = 260f))
-            // Hand over to the header's own photo only once the chat has fully faded in.
-            snapshotFlow { shown.value >= 0.999f }.first { it }
+            withTimeoutOrNull(2600) {
+                snapshotFlow { slot.rect }.filterNotNull().first()
+                fly.animateTo(1f, spring(dampingRatio = 0.82f, stiffness = 260f))
+                // Hand over to the header's own photo only once the chat has fully faded in.
+                snapshotFlow { shown.value >= 0.999f }.first { it }
+            }
             flying = false; slot.hidden = false
         }
-        stage.play(sim, t.bg)
-        if (shown.value < 1f) shown.animateTo(1f, tween(120))
+        // If the motion ever stalls, the chat shows anyway: it's never left hidden behind it.
+        val played = withTimeoutOrNull(2600) { stage.play(sim, t.bg) }
+        if (shown.value < 1f) { if (played == null) shown.snapTo(1f) else shown.animateTo(1f, tween(120)) }
         growing = false
     }
     // Going back: the content fades, then the screen drains back into what opened it.
     LaunchedEffect(exiting) {
         if (!exiting) return@LaunchedEffect
         // Backing out mid-growth: let it finish forming first so the two never fight.
-        snapshotFlow { growing }.first { !it }
+        withTimeoutOrNull(1500) { snapshotFlow { growing }.first { !it } }
+        growing = false
         val b = box ?: run { gone = true; return@LaunchedEffect }
         val (s, d) = simRects(b)
         if (avatar != null && m.avatar != null && slot.rect != null) {
@@ -158,8 +168,19 @@ fun AnimatedVisibilityScope.MorphScreen(m: Morph, grow: Boolean, shrink: Boolean
         }
         shown.animateTo(0f, tween(110))
         growing = true
-        stage.play(budSim(s, d, rev = true, style = mo), t.bg)
+        withTimeoutOrNull(2600) { stage.play(budSim(s, d, rev = true, style = mo), t.bg) }
         gone = true
+    }
+
+    // While the photo is in the air (either way), the row it came from keeps its own photo hidden.
+    LaunchedEffect(Unit) {
+        val k = m.key ?: return@LaunchedEffect
+        snapshotFlow { flying && !gone }.collect { up ->
+            if (up) FlyingAvatar.key = k else if (FlyingAvatar.key == k) FlyingAvatar.key = null
+        }
+    }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose { if (m.key != null && FlyingAvatar.key == m.key) FlyingAvatar.key = null }
     }
 
     // Nothing below reads a moving value while composing: each frame only re-draws or re-places, so the
@@ -178,7 +199,9 @@ fun AnimatedVisibilityScope.MorphScreen(m: Morph, grow: Boolean, shrink: Boolean
                     alpha = a
                     if (liquid) {
                         stage.tick
-                        stage.paths().firstOrNull()?.let { clip = true; shape = PathShape(it) }
+                        // Only clip to a real outline; a broken one would hide the whole screen.
+                        stage.paths().firstOrNull()?.takeIf { val r = it.getBounds(); !r.isEmpty && !r.width.isNaN() && !r.height.isNaN() }
+                            ?.let { clip = true; shape = PathShape(it) }
                     }
                     if (a < 1f) {
                         val k = 1f - a

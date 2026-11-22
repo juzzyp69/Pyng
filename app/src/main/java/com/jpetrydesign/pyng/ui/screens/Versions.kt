@@ -36,6 +36,17 @@ data class Release(val version: String, val date: String, val added: List<String
  */
 val RELEASES = listOf(
     Release(
+        "0.9.6.1", "Nov 21, 2026",
+        added = listOf(
+            "Close a held chat your way\nTap or swipe the space around the cards, or tap the X in the corner",
+        ),
+        fixed = listOf(
+            "Chats always open, even if the opening motion stalls",
+            "A chat's photo is only seen once as it flies into the chat",
+            "The app icon counts every unread text, and shows again for unread chats when you leave Pyng",
+        ),
+    ),
+    Release(
         "0.9.6", "Nov 21, 2026",
         highlights = listOf(
             Highlight("Liquid Glass, for real", "Clear, glossy glass with a glint that moves as you scroll, on cards, sheets and controls. Frost is now fully frosted.", "glass"),

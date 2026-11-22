@@ -383,7 +383,8 @@ class LiquidStage {
             var left = dt
             while (left > 0f) { val h = min(left, 1f / 240f); r.sim.step(h); r.sim.e += h; left -= h }
             val p = Path(); r.sim.draw(LP(p, density)); r.path = p
-            if (r.sim.finished()) over.add(r)
+            // A motion that somehow never settles still ends, so nothing waiting on it is ever stuck.
+            if (r.sim.finished() || r.sim.e > 2.5f) over.add(r)
         }
         over.forEach { it.done.complete(Unit); runs.remove(it) }
         tick++
