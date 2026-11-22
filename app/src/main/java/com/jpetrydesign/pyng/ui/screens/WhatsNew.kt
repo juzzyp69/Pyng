@@ -84,7 +84,9 @@ fun WhatsNewSheet(r: Release?, onAll: () -> Unit, onDone: () -> Unit) {
                     T("Pyng ${cur.version} · ${cur.date}", size = 13.sp, color = t.soft, maxLines = 1)
                 }
                 Box(Modifier.clip(RoundedCornerShape(12.dp)).background(t.tone).padding(horizontal = 10.dp, vertical = 5.dp)) {
-                    T("${cur.added.size} new · ${cur.fixed.size} fixed", size = 11.5.sp, weight = FontWeight.SemiBold, color = t.p, maxLines = 1)
+                    // A fixes-only update just says how many fixes, never "0 new".
+                    val tally = listOfNotNull(cur.added.size.takeIf { it > 0 }?.let { "$it new" }, cur.fixed.size.takeIf { it > 0 }?.let { "$it fixed" }).joinToString(" · ")
+                    T(tally, size = 11.5.sp, weight = FontWeight.SemiBold, color = t.p, maxLines = 1)
                 }
             }
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {

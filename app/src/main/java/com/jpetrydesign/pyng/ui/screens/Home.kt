@@ -715,8 +715,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
         MoveToCategorySheet(CatMove.conv) { CatMove.conv = null }
         SnoozeSheet(SnoozeFor.conv) { SnoozeFor.conv = null }
         // After an update: a short card with what's new, once.
-        // Small fix-up releases have no highlights and don't pop a card.
-        val fresh = RELEASES.firstOrNull()?.takeIf { it.version == com.jpetrydesign.pyng.BuildConfig.VERSION_NAME && it.highlights.isNotEmpty() }
+        val fresh = RELEASES.firstOrNull()?.takeIf { it.version == com.jpetrydesign.pyng.BuildConfig.VERSION_NAME }
         WhatsNewSheet(if (fresh != null && p.setupDone && !askPerms && p.seenVersion != fresh.version) fresh else null, onAll = { nav.go(Route.Section("versions")) }) {
             repo.prefs.edit { it.copy(seenVersion = com.jpetrydesign.pyng.BuildConfig.VERSION_NAME) }
         }
