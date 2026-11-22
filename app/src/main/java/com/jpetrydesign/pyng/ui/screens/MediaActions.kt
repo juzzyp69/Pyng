@@ -19,13 +19,19 @@ fun Repo.pathOf(ref: MediaRef): String = ref.localPath.ifEmpty { media[ref.id].o
  * The files behind [refs], downloading any that aren't here yet (waits up to a minute).
  * Returns the ones that made it, as (path, attachment).
  */
-suspend fun Repo.filesFor(refs: List<MediaRef>): List<Pair<String, MediaRef>> {
+suspend fun Repo.filesFor(refs: List<MediaRef>, onWait: ((Float) -> Unit)? = null): List<Pair<String, MediaRef>> {
     val missing = refs.filter { pathOf(it).isEmpty() }
     if (missing.isNotEmpty()) {
-        toast(if (missing.size == 1) "Downloading…" else "Downloading ${missing.size}…")
+        if (onWait == null) toast(if (missing.size == 1) "Downloading…" else "Downloading ${missing.size}…")
         missing.forEach { ensureMedia(it, manual = true) }
         var waited = 0
-        while (refs.any { pathOf(it).isEmpty() } && waited < 60_000) { delay(400); waited += 400 }
+        while (refs.any { pathOf(it).isEmpty() } && waited < 60_000) {
+            // Google doesn't say how far a download has got, so this part creeps up gently, and each
+            // file that arrives moves it on.
+            val have = refs.count { pathOf(it).isNotEmpty() }.toFloat() / refs.size
+            onWait?.invoke(maxOf(have, 1f - kotlin.math.exp(-waited / 5000f)) * 0.35f)
+            delay(200); waited += 200
+        }
     }
     return refs.mapNotNull { r -> pathOf(r).takeIf { it.isNotEmpty() && File(it).exists() }?.let { it to r } }
 }
@@ -43,11 +49,20 @@ fun shareFiles(ctx: Context, files: List<Pair<String, MediaRef>>) {
     }.onFailure { Toast.makeText(ctx, "Couldn't share", Toast.LENGTH_SHORT).show() }
 }
 
-/** Saves to Pictures, Movies or Downloads (in a Messages folder), with one toast for the lot. */
-fun saveFiles(ctx: Context, files: List<Pair<String, MediaRef>>) {
-    if (files.isEmpty()) return
+/**
+ * Saves to Pictures, Movies or Downloads (in a Messages folder), with one toast for the lot.
+ * [onProgress] follows the real copying, by bytes, across every file.
+ */
+suspend fun saveFiles(ctx: Context, files: List<Pair<String, MediaRef>>, onProgress: ((Float) -> Unit)? = null, quiet: Boolean = false): Int {
+    if (files.isEmpty()) { if (!quiet) Toast.makeText(ctx, "Couldn't save", Toast.LENGTH_SHORT).show(); return 0 }
     var ok = 0
-    val saved = files.mapNotNull { (p, r) -> saveOne(ctx, p, r.mime, r.name)?.let { r to it } }
+    val total = files.sumOf { File(it.first).length() }.coerceAtLeast(1L)
+    var done = 0L
+    val saved = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        files.mapNotNull { (p, r) ->
+            saveOne(ctx, p, r.mime, r.name) { n -> done += n; val f = done.toFloat() / total; onProgress?.invoke(f) }?.let { r to it }
+        }
+    }
     ok = saved.size
     // Files (not photos or videos) land in Downloads with a notification to open them.
     saved.filter { (r, _) -> !r.isImage && !r.isVideo }.forEach { (r, uri) -> savedFileNotice(ctx, uri, r.mime, r.name.ifBlank { "File" }) }
@@ -57,7 +72,8 @@ fun saveFiles(ctx: Context, files: List<Pair<String, MediaRef>>) {
         kinds.all { it.isVideo } -> if (ok == 1) "video" else "videos"
         else -> if (ok == 1) "file" else "files"
     }
-    Toast.makeText(ctx, if (ok == 0) "Couldn't save" else if (ok < files.size) "Saved $ok of ${files.size}" else "Saved $ok $what", Toast.LENGTH_SHORT).show()
+    if (!quiet || ok < files.size) Toast.makeText(ctx, if (ok == 0) "Couldn't save" else if (ok < files.size) "Saved $ok of ${files.size}" else "Saved $ok $what", Toast.LENGTH_SHORT).show()
+    return ok
 }
 
 private fun savedFileNotice(ctx: Context, uri: Uri, mime: String, name: String) = runCatching {
@@ -80,7 +96,7 @@ private fun savedFileNotice(ctx: Context, uri: Uri, mime: String, name: String) 
     androidx.core.app.NotificationManagerCompat.from(ctx).notify(uri.hashCode(), n)
 }
 
-private fun saveOne(ctx: Context, path: String, mime: String, name: String): Uri? = runCatching {
+private fun saveOne(ctx: Context, path: String, mime: String, name: String, onBytes: ((Long) -> Unit)? = null): Uri? = runCatching {
     val video = mime.startsWith("video/")
     val image = mime.startsWith("image/")
     val ext = mime.substringAfter('/').substringBefore(';').substringBefore('+').ifBlank { if (video) "mp4" else "jpg" }
@@ -91,10 +107,37 @@ private fun saveOne(ctx: Context, path: String, mime: String, name: String): Uri
     }
     val where: Uri = if (video) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else if (image) MediaStore.Images.Media.EXTERNAL_CONTENT_URI else MediaStore.Downloads.EXTERNAL_CONTENT_URI
     val uri = ctx.contentResolver.insert(where, values)!!
-    ctx.contentResolver.openOutputStream(uri)!!.use { out -> File(path).inputStream().use { it.copyTo(out) } }
+    ctx.contentResolver.openOutputStream(uri)!!.use { out ->
+        File(path).inputStream().use { inp ->
+            val buf = ByteArray(128 * 1024)
+            var since = 0L
+            while (true) {
+                val n = inp.read(buf); if (n < 0) break
+                out.write(buf, 0, n); since += n
+                // Report in steps, so a big video doesn't flood the screen with updates.
+                if (since >= 512 * 1024) { onBytes?.invoke(since); since = 0 }
+            }
+            if (since > 0) onBytes?.invoke(since)
+        }
+    }
     uri
 }.getOrNull()
 
 /** Web links in a message's text, cleaned of trailing punctuation. */
 fun linksIn(text: String): List<String> =
     Regex("https?://[^\\s]+").findAll(text).map { it.value.trimEnd('.', ',', ')', '!', '?', ';', ':', '"', '\'') }.distinct().toList()
+
+/** How far along each message's save is (0 to 1), by message, so its save button can fill to match. */
+object Saves {
+    val progress = androidx.compose.runtime.mutableStateMapOf<String, Float>()
+    val done = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+}
+
+/** Saves a message's photos and videos (or a whole photo group), tracking real progress under [key]. */
+suspend fun Repo.saveTracked(ctx: Context, key: String, refs: List<MediaRef>) {
+    if (Saves.progress.containsKey(key)) return
+    Saves.progress[key] = 0.02f
+    val files = filesFor(refs) { Saves.progress[key] = maxOf(0.02f, it) }
+    val ok = saveFiles(ctx, files, onProgress = { Saves.progress[key] = 0.35f + 0.65f * it.coerceIn(0f, 1f) }, quiet = true)
+    if (ok > 0) { Saves.progress[key] = 1f; Saves.done[key] = true } else Saves.progress.remove(key)
+}

@@ -274,7 +274,8 @@ fun MessageRow(m: Msg, x: RowCtx, a: RowActs) {
                         }
                         if (!me && a.onSave != null && !x.selecting && m.media.any { (it.isImage || it.isVideo) && !Stickers.isSticker(it) }) {
                             Spacer(Modifier.width(8.dp))
-                            SaveDot(t, a.onSave, Modifier.padding(bottom = if (m.reactions.isNotEmpty()) 16.dp else 0.dp))
+                            // Centered beside the photo (nudged up past the reactions when there are some).
+                            SaveDot(t, m.key, a.onSave, Modifier.align(Alignment.CenterVertically).padding(bottom = if (m.reactions.isNotEmpty()) 16.dp else 0.dp))
                         }
                     }
                     if (m.failed) {
@@ -830,36 +831,38 @@ fun Modifier.holdable(onLong: (() -> Unit)?, onClick: () -> Unit): Modifier = co
 }
 
 /**
- * Save, beside a photo or video someone sent: tap and it fills with color from the bottom like liquid
- * rising, then turns into a check.
+ * Save, beside a photo or video someone sent (or a whole photo group). Blank until you tap it; then it
+ * fills from the bottom like liquid rising, following how much has really been saved, and turns into
+ * a check when it's done.
  */
 @Composable
-private fun SaveDot(t: Tok, onSave: () -> Unit, modifier: Modifier = Modifier) {
-    val fill = remember { Animatable(0f) }
-    val scope = rememberCoroutineScope()
-    var done by remember { mutableStateOf(false) }
+private fun SaveDot(t: Tok, key: String, onSave: () -> Unit, modifier: Modifier = Modifier) {
+    val target = Saves.progress[key] ?: 0f
+    val done = Saves.done[key] == true
+    val fill by androidx.compose.animation.core.animateFloatAsState(
+        if (done) 1f else target, androidx.compose.animation.core.spring(dampingRatio = 0.85f, stiffness = 140f), label = "saveFill",
+    )
+    val working = Saves.progress.containsKey(key) && !done
     Box(
         modifier.size(36.dp).clip(CircleShape).background(t.surface)
             .drawBehind {
-                val h = size.height * fill.value
-                // A gently curved surface on top of the rising color.
+                // Nothing at all until there's something to show.
+                if (fill <= 0.001f) return@drawBehind
+                val h = size.height * fill
+                // A gently curved surface on the rising color, flattening as it fills.
+                val bulge = size.height * 0.12f * kotlin.math.min(fill * 4f, 1f) * (1f - fill)
                 val path = androidx.compose.ui.graphics.Path().apply {
                     moveTo(0f, size.height); lineTo(0f, size.height - h)
-                    quadraticTo(size.width / 2f, size.height - h - size.height * 0.12f * (1f - fill.value), size.width, size.height - h)
+                    quadraticTo(size.width / 2f, size.height - h - bulge, size.width, size.height - h)
                     lineTo(size.width, size.height); close()
                 }
                 drawPath(path, t.p)
             }
-            .clickable(enabled = !done) {
-                onSave()
-                scope.launch {
-                    fill.animateTo(1f, tween(520, easing = androidx.compose.animation.core.FastOutSlowInEasing))
-                    done = true
-                }
-            }
-            .semantics { contentDescription = "Save" },
+            .clickable(enabled = !done && !working) { onSave() }
+            .semantics { contentDescription = if (done) "Saved" else "Save" },
         contentAlignment = Alignment.Center,
     ) {
-        Ico(if (done) Icons.check else Icons.download, if (fill.value > 0.55f) t.onFill else t.soft, 17.dp, 2.2f)
+        Ico(if (done) Icons.check else Icons.download, if (fill > 0.55f) t.onFill else t.soft, 17.dp, 2.2f)
     }
+}
 }

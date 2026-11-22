@@ -558,7 +558,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                         onReply = { replyTo = m },
                                         onOpenMedia = { ref -> if (selecting) toggle(selected, m.key) else view(m, ref) },
                                         onRetry = { if (bundle == null) repo.retry(m) else bundle.map { it.first }.distinctBy { it.key }.filter { it.failed }.forEach { repo.retry(it) } },
-                                        onSave = { val refs = bundle?.map { it.second } ?: m.media.filter { it.isImage || it.isVideo }; scope.launch { saveFiles(ctx, repo.filesFor(refs)) } },
+                                        onSave = { val refs = bundle?.map { it.second } ?: m.media.filter { it.isImage || it.isVideo }; scope.launch { repo.saveTracked(ctx, m.key, refs) } },
                                         onPlaced = { bubbleCoords[m.key] = it },
                                         onOpenItem = { bm, r -> if (selecting) toggle(selected, bm.key) else view(bm, r) },
                                         onLongItem = { bm -> if (!selecting) { openMenu(bm); info = null } },
