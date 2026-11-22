@@ -712,17 +712,45 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         lock.lock()
         try {
             val att = local.media.firstOrNull()
-            val r = hub.io {
-                if (att != null) it.sendMedia(local.convId, att.localPath, att.mime, att.name, local.text, local.replyTo)
-                else it.sendText(local.convId, local.text, local.replyTo)
+            // The first send after the phone's been idle can hit a connection that quietly went stale.
+            // That's a hiccup, not a real failure: wait for the link, and try again (up to three times).
+            var r = Result.failure<String>(Exception("Not sent"))
+            for (attempt in 0 until 3) {
+                if (attempt > 0) {
+                    delay(if (attempt == 1) 900L else 2500L)
+                    kotlinx.coroutines.withTimeoutOrNull(8_000) { while (!hub.engine.isConnected) delay(250) }
+                }
+                r = hub.io {
+                    if (att != null) it.sendMedia(local.convId, att.localPath, att.mime, att.name, local.text, local.replyTo)
+                    else it.sendText(local.convId, local.text, local.replyTo)
+                }
+                if (r.isSuccess || !transientSendError(r.exceptionOrNull()?.message)) break
+                android.util.Log.w("Pyng", "Send hiccup, trying again: " + r.exceptionOrNull()?.message)
             }
             val list = msgs[local.convId] ?: return
             msgs[local.convId] = list.map { m ->
                 if (m.tmpId != local.tmpId) m
                 // Keep the app's own temporary id so the bubble keeps its place; remember Google's to match its echo.
-                else r.fold({ tmp -> if (tmp.isNotEmpty()) tmpAlias[tmp] = m.tmpId; m.copy(status = "OUTGOING_SENDING") }, { e -> m.copy(error = e.message ?: "Not sent") })
+                else r.fold({ tmp -> if (tmp.isNotEmpty()) tmpAlias[tmp] = m.tmpId; m.copy(status = "OUTGOING_SENDING") }, { e -> m.copy(error = friendlySendError(e.message)) })
             }
         } finally { lock.unlock() }
+    }
+
+    /** Network blips (a dropped or timed-out connection) that are worth simply trying again. */
+    // Timeouts aren't retried on their own: the text may have gone and only the answer got lost, and
+    // a second try would send it twice.
+    private fun transientSendError(msg: String?): Boolean {
+        val m = msg?.lowercase() ?: return true
+        if ("timeout" in m || "deadline" in m) return false
+        return listOf("eof", "connection reset", "broken pipe", "refused", "no such host", "unreachable", "tls", "not connected", "use of closed").any { it in m }
+    }
+
+    /** What shows under a message that didn't go: plain words, never a web address or code. */
+    private fun friendlySendError(msg: String?): String = when {
+        msg == null -> "Not sent"
+        transientSendError(msg) || "post \"" in msg.lowercase() || "timeout" in msg.lowercase() || "deadline" in msg.lowercase() -> "Connection dropped"
+        msg.length > 40 || "http" in msg -> "Not sent"
+        else -> msg
     }
 
     fun retry(m: Msg) {
