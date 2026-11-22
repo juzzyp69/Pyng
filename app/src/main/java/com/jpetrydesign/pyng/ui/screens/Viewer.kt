@@ -198,7 +198,7 @@ fun PhotoViewer(
                         contentPadding = PaddingValues(horizontal = inset), pageSpacing = spacing,
                         userScrollEnabled = !zoomed && abs(dismiss.value) < 1f && !single,
                         beyondViewportPageCount = 1,
-                        key = { i -> list[i].first.key + "|" + list[i].second.id },
+                        key = { i -> list[i].first.key + "|" + list[i].second.id + "|" + i },
                     ) { page ->
                         val pr = list[page].second
                         val isCur = page == pager.currentPage

@@ -40,6 +40,7 @@ val RELEASES = listOf(
         fixed = listOf(
             "Notifications are only for new texts again: older unread chats never come back to the shade",
             "Opening Pyng clears your text notifications and the app icon's count, without marking anything read",
+            "Fixed a crash opening some chats with several photos in one message",
         ),
     ),
     Release(

@@ -225,7 +225,7 @@ private fun PeekStyle(items: List<Pair<Msg, MediaRef>>, me: Boolean, w: Dp, h: D
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = if (me) PaddingValues(start = (maxW - w).coerceAtLeast(0.dp)) else PaddingValues(end = (maxW - w).coerceAtLeast(0.dp)),
         ) {
-            itemsIndexed(items, key = { _, it -> it.first.key + "|" + it.second.id }) { _, item ->
+            itemsIndexed(items, key = { i, it -> it.first.key + "|" + it.second.id + "|" + i }) { _, item ->
                 Box(Modifier.size(w, h).tileGestures(item.first, item.second, a)) { TileContent(item.first, item.second, x, a) }
             }
         }
