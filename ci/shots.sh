@@ -33,7 +33,14 @@ shot() {
   echo "shot $name"
 }
 
-# New in 0.9.5.1 first: What's new cards, the Motion tab, and liquid motion caught mid-flight.
+# 0.9.6 first: the new viewer and the two glass looks.
+WAIT=8 shot 00v-viewer --es route thread:c1 --es open viewer
+WAIT=8 shot 00w-viewer-video --es route thread:c1 --es open viewer-video
+WAIT=6 shot 00x-liquid-settings --es route settings --es glass "'Liquid Glass'"
+WAIT=6 shot 00y-liquid-appearance --es route appearance --es glass "'Liquid Glass'"
+WAIT=6 shot 00z-frost-appearance --es route appearance
+WAIT=6 shot 00za-liquid-home --es glass "'Liquid Glass'"
+# New in 0.9.5.1: What's new cards, the Motion tab, and liquid motion caught mid-flight.
 WAIT=7 shot 00-whatsnew --ez whatsnew true
 WAIT=6 shot 00b-motion-tab --es route appearance --es open studio:home:motion
 WAIT=3 shot 00c-menu-budding --es route thread:c1 --es open menu
