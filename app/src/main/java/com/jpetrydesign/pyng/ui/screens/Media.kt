@@ -52,6 +52,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -143,6 +145,8 @@ object Voice {
     val waves = mutableStateMapOf<String, FloatArray>()
     val texts = mutableStateMapOf<String, String>()
     val working = mutableStateMapOf<String, Boolean>()
+    /** Words heard so far while a transcript is still being worked out, so they appear as they come. */
+    val live = mutableStateMapOf<String, String>()
 
     fun toggle(k: String, path: String, startAt: Float = -1f) {
         val cur = mp
@@ -260,38 +264,67 @@ fun VoicePlayer(m: Msg, ref: MediaRef, path: String, busy: Boolean, shape: Round
             Spacer(Modifier.height(6.dp))
             Box(Modifier.fillMaxWidth().padding(horizontal = 6.dp).height(1.dp).background(fg.copy(alpha = 0.16f)))
             Spacer(Modifier.height(7.dp))
-            if (working || text.isNullOrBlank()) {
-                T(if (working) "Transcribing…" else "No words heard in this one", size = 14.sp, color = sub, lineHeight = 19.sp, modifier = Modifier.padding(horizontal = 8.dp))
+            if (working) {
+                // Words appear as they're heard, with a soft pulsing dot while it keeps listening.
+                val sofar = Voice.live[k].orEmpty()
+                Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.Bottom) {
+                    T(sofar.ifEmpty { "Listening…" }, size = 14.sp, color = if (sofar.isEmpty()) sub else fg, lineHeight = 19.sp, modifier = Modifier.weight(1f, fill = false).animateContentSize())
+                    Spacer(Modifier.width(6.dp))
+                    val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "stt")
+                    val a by pulse.animateFloat(0.25f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(600), androidx.compose.animation.core.RepeatMode.Reverse), label = "sttDot")
+                    Box(Modifier.padding(bottom = 6.dp).size(6.dp).graphicsLayer { alpha = a }.clip(CircleShape).background(fg))
+                }
+            } else if (text.isNullOrBlank()) {
+                T("No words heard in this one", size = 14.sp, color = sub, lineHeight = 19.sp, modifier = Modifier.padding(horizontal = 8.dp))
             } else {
                 // Three lines to start. Long ones get a toggle to read the whole thing, like Google Messages.
                 var open by remember(k) { mutableStateOf(false) }
                 var cut by remember(k, text) { mutableStateOf(false) }
+                val clip = androidx.compose.ui.platform.LocalClipboardManager.current
                 androidx.compose.material3.Text(
                     text, maxLines = if (open) Int.MAX_VALUE else 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     onTextLayout = { if (!open) cut = it.hasVisualOverflow },
                     style = androidx.compose.ui.text.TextStyle(fontFamily = com.jpetrydesign.pyng.ui.theme.Geist, fontSize = 14.sp, lineHeight = 19.sp, color = fg),
-                    modifier = Modifier.padding(horizontal = 8.dp).animateContentSize(),
+                    // Hold the words to copy them.
+                    modifier = Modifier.padding(horizontal = 8.dp).animateContentSize().pointerInput(text) {
+                        detectTapGestures(onLongPress = { clip.setText(androidx.compose.ui.text.AnnotatedString(text)); repo.toast("Transcript copied") })
+                    },
                 )
-                if (cut || open) Row(
-                    Modifier.padding(start = 2.dp, top = 6.dp).clip(RoundedCornerShape(12.dp)).background(chip).clickable { open = !open }.padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Ico(if (open) "M6 15l6-6 6 6" else "M6 9l6 6 6-6", fg, 13.dp, 2.4f)
-                    Spacer(Modifier.width(5.dp))
-                    T(if (open) "Hide transcript" else "Full transcript", size = 12.5.sp, weight = FontWeight.SemiBold, color = fg)
+                Row(Modifier.padding(start = 2.dp, top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (cut || open) Row(
+                        Modifier.clip(RoundedCornerShape(12.dp)).background(chip).clickable { open = !open }.padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Ico(if (open) "M6 15l6-6 6 6" else "M6 9l6 6 6-6", fg, 13.dp, 2.4f)
+                        Spacer(Modifier.width(5.dp))
+                        T(if (open) "Hide transcript" else "Full transcript", size = 12.5.sp, weight = FontWeight.SemiBold, color = fg)
+                    }
+                    // Not quite right? Hear it again.
+                    Row(
+                        Modifier.clip(RoundedCornerShape(12.dp)).clickable {
+                            if (path.isEmpty()) return@clickable
+                            Transcripts.forget(ctx, k)
+                            if (hasMic(ctx)) scope.launch { Transcripts.run(ctx, k, path) { repo.toast(it) } } else askMic.launch(Manifest.permission.RECORD_AUDIO)
+                        }.padding(horizontal = 8.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Ico(Icons.refresh, sub, 12.dp, 2.2f)
+                        Spacer(Modifier.width(4.dp))
+                        T("Redo", size = 12.sp, weight = FontWeight.SemiBold, color = sub)
+                    }
                 }
             }
         } else if (path.isNotEmpty()) {
             Spacer(Modifier.height(4.dp))
             Row(
-                Modifier.padding(start = 48.dp).clip(RoundedCornerShape(10.dp)).clickable {
+                Modifier.padding(start = 48.dp).clip(RoundedCornerShape(12.dp)).background(chip).clickable {
                     if (hasMic(ctx)) scope.launch { Transcripts.run(ctx, k, path) { repo.toast(it) } } else askMic.launch(Manifest.permission.RECORD_AUDIO)
-                }.padding(horizontal = 6.dp, vertical = 3.dp),
+                }.padding(horizontal = 10.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Ico(Icons.textSize, sub, 14.dp, 2f)
+                Ico(Icons.textSize, fg, 14.dp, 2f)
                 Spacer(Modifier.width(5.dp))
-                T("Transcribe", size = 12.5.sp, weight = FontWeight.SemiBold, color = sub)
+                T("Transcribe", size = 12.5.sp, weight = FontWeight.SemiBold, color = fg)
             }
         }
     }
@@ -383,6 +416,22 @@ object Transcripts {
 
     fun load(ctx: Context, key: String): String? = runCatching { file(ctx, key).takeIf { it.exists() }?.readText() }.getOrNull()
 
+    /** Drops a transcript so it can be worked out again. */
+    fun forget(ctx: Context, key: String) { Voice.texts.remove(key); runCatching { file(ctx, key).delete() } }
+
+    /**
+     * Tidies what the recognizer hands back: capitals at the start of sentences, a proper "I",
+     * no doubled spaces, and a full stop at the end if it trails off without one.
+     */
+    fun tidy(raw: String): String {
+        var t = raw.replace(Regex("\\s+"), " ").trim()
+        if (t.isEmpty()) return t
+        t = t.replace(Regex("(?<=^|\\s)i(?=(\\s|'|’|$|[.,!?]))"), "I")
+        t = Regex("(^|[.!?]\\s+)([a-z])").replace(t) { it.groupValues[1] + it.groupValues[2].uppercase() }
+        if (t.last().isLetterOrDigit()) t += "."
+        return t
+    }
+
     suspend fun run(ctx: Context, key: String, path: String, say: (String) -> Unit) {
         if (Voice.working[key] == true) return
         Voice.working[key] = true
@@ -391,13 +440,16 @@ object Transcripts {
             // The recognizer takes plain 16 kHz mono audio, so the recording is converted first.
             val pcm = withContext(Dispatchers.IO) { runCatching { toPcm16k(ctx, path) }.getOrNull() }
             if (pcm == null) { say("Couldn't read this voice message"); return }
-            val text = withTimeoutOrNull(240_000) { recognizeAll(ctx, pcm) }
+            Voice.live.remove(key)
+            val raw = withTimeoutOrNull(240_000) { recognizeAll(ctx, pcm) { Voice.live[key] = it } }
             pcm.delete()
-            if (text == null) { say("Couldn't transcribe this one"); return }
+            if (raw == null) { say("Couldn't transcribe this one"); return }
+            val text = tidy(raw)
             Voice.texts[key] = text
             runCatching { file(ctx, key).writeText(text) }
         } finally {
             Voice.working.remove(key)
+            Voice.live.remove(key)
         }
     }
 
@@ -431,7 +483,7 @@ object Transcripts {
      * So the audio is cut into short pieces at natural pauses, each piece is heard on its own with a
      * little silence around it, and the pieces are joined back up.
      */
-    private suspend fun recognizeAll(ctx: Context, pcm: File): String? {
+    private suspend fun recognizeAll(ctx: Context, pcm: File, onLive: (String) -> Unit = {}): String? {
         val bytes = withContext(Dispatchers.IO) { pcm.readBytes() }
         val n = bytes.size / 2
         if (n == 0) return ""
@@ -465,17 +517,22 @@ object Transcripts {
                     o.write(ByteArray(16_000 * 2 / 10 * 8))        // and some after, so the last words finish
                 }
             }
-            val heard = withTimeoutOrNull(60_000) { recognize(ctx, piece, formatted = true) }
-                ?: withTimeoutOrNull(60_000) { recognize(ctx, piece, formatted = false) }
+            val before = out.joinToString(" ")
+            val live: (String) -> Unit = { p -> onLive(tidyLive((before + " " + p).trim())) }
+            val heard = withTimeoutOrNull(60_000) { recognize(ctx, piece, formatted = true, onLive = live) }
+                ?: withTimeoutOrNull(60_000) { recognize(ctx, piece, formatted = false, onLive = live) }
             piece.delete()
             if (heard == null && out.isEmpty() && i == bounds.size - 2) return null
             heard?.trim()?.takeIf { it.isNotEmpty() }?.let { out += it }
+            onLive(tidyLive(out.joinToString(" ")))
         }
         return out.joinToString(" ")
     }
 
+    private fun tidyLive(s: String) = s.replace(Regex("\\s+"), " ").trim().replaceFirstChar { it.uppercase() }
+
     @android.annotation.SuppressLint("NewApi")
-    private suspend fun recognize(ctx: Context, pcm: File, formatted: Boolean): String? = withContext(Dispatchers.Main) {
+    private suspend fun recognize(ctx: Context, pcm: File, formatted: Boolean, onLive: (String) -> Unit = {}): String? = withContext(Dispatchers.Main) {
         val onDevice = runCatching { SpeechRecognizer.isOnDeviceRecognitionAvailable(ctx) }.getOrDefault(false)
         if (!onDevice && !SpeechRecognizer.isRecognitionAvailable(ctx)) return@withContext null
         val sr = if (onDevice) SpeechRecognizer.createOnDeviceSpeechRecognizer(ctx) else SpeechRecognizer.createSpeechRecognizer(ctx)
@@ -493,9 +550,9 @@ object Transcripts {
                     override fun onRmsChanged(rmsdB: Float) {}
                     override fun onBufferReceived(buffer: ByteArray?) {}
                     override fun onEndOfSpeech() {}
-                    override fun onPartialResults(partialResults: Bundle?) { best(partialResults).takeIf { it.isNotEmpty() }?.let { pending = it } }
+                    override fun onPartialResults(partialResults: Bundle?) { best(partialResults).takeIf { it.isNotEmpty() }?.let { pending = it; onLive(all()) } }
                     override fun onEvent(eventType: Int, params: Bundle?) {}
-                    override fun onSegmentResults(segmentResults: Bundle) { best(segmentResults).takeIf { it.isNotEmpty() }?.let { parts += it }; pending = "" }
+                    override fun onSegmentResults(segmentResults: Bundle) { best(segmentResults).takeIf { it.isNotEmpty() }?.let { parts += it }; pending = ""; onLive(all()) }
                     override fun onEndOfSegmentedSession() { done(all()) }
                     override fun onResults(results: Bundle?) { best(results).takeIf { it.isNotEmpty() }?.let { parts += it; pending = "" }; done(all()) }
                     override fun onError(error: Int) {
@@ -517,6 +574,8 @@ object Transcripts {
                     .putExtra(RecognizerIntent.EXTRA_SEGMENTED_SESSION, RecognizerIntent.EXTRA_AUDIO_SOURCE)
                 // Punctuation and capitals, where the phone's speech engine can do it.
                 if (formatted) intent.putExtra(RecognizerIntent.EXTRA_ENABLE_FORMATTING, RecognizerIntent.FORMATTING_OPTIMIZE_QUALITY)
+                // Hears which language it is, for voice messages that aren't in the phone's language.
+                if (Build.VERSION.SDK_INT >= 34) intent.putExtra(RecognizerIntent.EXTRA_ENABLE_LANGUAGE_DETECTION, true)
                 sr.startListening(intent)
                 cont.invokeOnCancellation { runCatching { sr.cancel() } }
             }

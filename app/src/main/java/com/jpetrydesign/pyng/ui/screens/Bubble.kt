@@ -813,7 +813,7 @@ private fun StatusLine(st: Triple<String, String, Boolean>?, face: Who?, t: Tok)
                     val icon = when { v.third -> Icons.read; v.first.startsWith("Sending") -> Icons.clock; else -> Icons.check }
                     Ico(icon, ink, 14.dp, 2.1f); Spacer(Modifier.width(4.dp))
                 }
-                T(v.first, size = 11.5.sp, weight = if (v.third) FontWeight.SemiBold else FontWeight.Medium, color = ink)
+                T(v.first, size = 10.5.sp, weight = if (v.third) FontWeight.SemiBold else FontWeight.Medium, color = ink)
             }
         }
     }
