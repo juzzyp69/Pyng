@@ -1,5 +1,6 @@
 package com.jpetrydesign.pyng.ui.screens
 
+import com.jpetrydesign.pyng.ui.kit.pane
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -311,7 +312,7 @@ fun VersionHistory() {
     val current = BuildConfig.VERSION_NAME.removeSuffix(".0")
     Column(Modifier.fillMaxWidth().padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         RELEASES.forEach { r ->
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(t.card).padding(14.dp)) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).pane(RoundedCornerShape(26.dp)).padding(14.dp)) {
                 Row(Modifier.padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         T("Pyng ${r.version}", size = 19.sp, weight = FontWeight.Bold, letterSpacing = (-0.4).sp)

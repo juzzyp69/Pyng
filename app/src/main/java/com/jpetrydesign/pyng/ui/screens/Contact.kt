@@ -1,5 +1,6 @@
 package com.jpetrydesign.pyng.ui.screens
 
+import com.jpetrydesign.pyng.ui.kit.pane
 import android.content.Intent
 import android.net.Uri
 import android.provider.ContactsContract
@@ -166,7 +167,7 @@ fun ContactScreen(nav: Nav, convId: String) {
                         }
                         acts.forEachIndexed { i, (label, icon, go) ->
                             Column(
-                                Modifier.weight(1f).enter(2 + i, pop = true).clip(RoundedCornerShape(20.dp)).background(if (t.dark) t.card else Color.White).press(0.94f, go).padding(vertical = 11.dp),
+                                Modifier.weight(1f).enter(2 + i, pop = true).clip(RoundedCornerShape(20.dp)).pane(RoundedCornerShape(20.dp)).press(0.94f, go).padding(vertical = 11.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
                                 Ico(icon, t.p, 19.dp, 1.9f)

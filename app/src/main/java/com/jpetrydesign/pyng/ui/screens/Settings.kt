@@ -1,5 +1,6 @@
 package com.jpetrydesign.pyng.ui.screens
 
+import com.jpetrydesign.pyng.ui.kit.pane
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ContentValues
@@ -113,7 +114,7 @@ fun SettingsScreen(nav: Nav) {
     val pal = Palettes.byKey(p.themeKey, p.c1, p.c2)
     Page("Settings", { nav.back() }) {
         val shape = RoundedCornerShape(26.dp)
-        Row(Modifier.enter(0).fillMaxWidth().clip(shape).background(t.card).clickable { nav.go(Route.Profile) }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.enter(0).fillMaxWidth().clip(shape).pane(shape).clickable { nav.go(Route.Profile) }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Avatar(p.profilePhoto.ifEmpty { null }, initialsOf(p.profileName.ifBlank { "Me" }), 58.dp, t.tone, t.p, 20.sp)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
@@ -232,7 +233,7 @@ private fun Categories() {
         }
     }
     Spacer(Modifier.height(10.dp))
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(t.card).padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).pane(RoundedCornerShape(24.dp)).padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         androidx.compose.foundation.text.BasicTextField(
             input, { if (it.length <= 24) input = it }, singleLine = true,
             textStyle = androidx.compose.ui.text.TextStyle(color = t.ink, fontSize = 15.sp),
@@ -262,7 +263,7 @@ private fun BlockedWords() {
         input = ""
     }
     T("Texts with any of these words go to Spam & blocked, with no alert. Matching ignores capital letters.", size = 13.sp, color = t.soft, lineHeight = 18.sp, modifier = Modifier.padding(start = 4.dp, bottom = 12.dp))
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(t.card).padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).pane(RoundedCornerShape(24.dp)).padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         androidx.compose.foundation.text.BasicTextField(
             input, { input = it }, singleLine = true,
             textStyle = androidx.compose.ui.text.TextStyle(color = t.ink, fontSize = 15.sp),
@@ -707,7 +708,7 @@ fun ListScreen(nav: Nav, kind: String) {
         }
         items.forEachIndexed { i, it ->
             val c = repo.convs[it.convId]
-            Column(Modifier.enter(i).fillMaxWidth().padding(bottom = 10.dp).clip(RoundedCornerShape(22.dp)).background(t.card).clickable(onClick = it.open).padding(14.dp)) {
+            Column(Modifier.enter(i).fillMaxWidth().padding(bottom = 10.dp).clip(RoundedCornerShape(22.dp)).pane(RoundedCornerShape(22.dp)).clickable(onClick = it.open).padding(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (c != null) { val w = whoOf(c); WhoAvatar(w, 42.dp) } else Avatar(null, "#", 42.dp)
                     Spacer(Modifier.width(12.dp))

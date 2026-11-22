@@ -175,6 +175,11 @@ fun wallBrushes(name: String, t: Tok): List<Brush> {
             RadialSpec(t.s.a(if (d) 0x40 else 0x59), 0.15f, 0.2f, 0.7f),
             RadialSpec(t.p.a(if (d) 0x40 else 0x33), 0.9f, 0.75f, 0.6f),
         ).map { it.brush() }
+        "GlowLiquid" -> listOf(
+            RadialSpec(t.s.a(if (d) 0x2E else 0x55), 1f, 0f, 0.9f),
+            RadialSpec(t.p.a(if (d) 0x33 else 0x2E), 0f, 1f, 0.85f),
+            RadialSpec(t.p.a(if (d) 0x1A else 0x1F), 0.15f, 0.25f, 0.55f),
+        ).map { it.brush() }
         "Glow" -> listOf(
             RadialSpec(t.s.a(if (d) 0x1A else 0x33), 1f, 0f, 0.8f),
             RadialSpec(t.p.a(if (d) 0x1F else 0x17), 0f, 1f, 0.7f),

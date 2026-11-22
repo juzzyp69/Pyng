@@ -1,5 +1,6 @@
 package com.jpetrydesign.pyng.ui.screens
 
+import com.jpetrydesign.pyng.ui.kit.pane
 import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.imePadding
@@ -471,7 +472,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                         Row(
                             Modifier.fillMaxWidth().padding(bottom = 8.dp)
                                 .onGloballyPositioned { c -> dh.home?.let { h -> runCatching { dh.zone = h.localBoundingBoxOf(c) } } }
-                                .clip(RoundedCornerShape(26.dp)).background(t.card).padding(16.dp),
+                                .clip(RoundedCornerShape(26.dp)).pane(RoundedCornerShape(26.dp)).padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Box(Modifier.size(44.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(Icons.pinned, t.p, 20.dp) }
@@ -1145,7 +1146,7 @@ private fun PinName(pin: Pin, size: Float, max: Dp) {
         return
     }
     if (look.names == "Chip") {
-        Box(Modifier.shadow(2.dp, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp)).background(t.card).padding(horizontal = 8.dp, vertical = 2.dp)) {
+        Box(Modifier.shadow(2.dp, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp)).pane(RoundedCornerShape(10.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) {
             T(if (pin.typing) "Typing…" else pin.c.shortTitle, size = size.sp, weight = if (hot) FontWeight.SemiBold else FontWeight.Medium, color = if (pin.typing) t.p else t.ink, maxLines = 1, modifier = Modifier.widthIn(max = max - 16.dp))
         }
         return
@@ -1181,7 +1182,7 @@ private class WavyShape(private val phase: Float) : androidx.compose.ui.graphics
 private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: String, reveal: Int = 0) {
     val t = LocalTok.current
     val cardShape = RoundedCornerShape(32.dp)
-    val cardMod = Modifier.fillMaxWidth().padding(bottom = 14.dp).clip(cardShape).background(t.card).cardEdge(cardShape)
+    val cardMod = Modifier.fillMaxWidth().padding(bottom = 14.dp).clip(cardShape).pane(cardShape)
     val look = pinLookOf(LocalRepo.current.prefs.state)
     val limit = mapOf("Grid" to 8, "Large" to 6, "Cards" to 6, "Spotlight" to 7, "Honeycomb" to 7)[layout] ?: 12
     val pins = all.take(limit)
@@ -1231,7 +1232,7 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
                             Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
                                 PinItem(pin, n, ctl, Modifier.enterOnce("pin:$layout:" + pin.c.id, n, pop = true)) {
                                     Column(
-                                        (if (tiles) Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(t.card).cardEdge(RoundedCornerShape(22.dp)).padding(vertical = 10.dp) else Modifier),
+                                        (if (tiles) Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).pane(RoundedCornerShape(22.dp)).padding(vertical = 10.dp) else Modifier),
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                     ) {
                                         val faceAv = if (tiles) av * 0.82f else av
@@ -1300,7 +1301,7 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
                 pins.forEachIndexed { i, pin ->
                     PinItem(pin, i, ctl, Modifier.enterOnce("pin:$layout:" + pin.c.id, i, pop = true)) {
                         Row(
-                            Modifier.clip(RoundedCornerShape(999.dp)).background(t.card).cardEdge(RoundedCornerShape(999.dp)).padding(start = 5.dp, end = 16.dp, top = 5.dp, bottom = 5.dp),
+                            Modifier.clip(RoundedCornerShape(999.dp)).pane(RoundedCornerShape(999.dp)).padding(start = 5.dp, end = 16.dp, top = 5.dp, bottom = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             PinFace(pin, 34.dp, 12f, style, 16.dp)
@@ -1317,7 +1318,7 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
                 val first = if (spot) pins.firstOrNull() else null
                 if (first != null) {
                     PinItem(first, 0, ctl, Modifier.fillMaxWidth().enterOnce("pin:$layout:" + first.c.id, 0, pop = true)) {
-                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(t.card).cardEdge(RoundedCornerShape(24.dp)).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).pane(RoundedCornerShape(24.dp)).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                             PinFace(first, 62.dp, 18f, style, 20.dp)
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
@@ -1334,7 +1335,7 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
                         row.forEachIndexed { i, pin ->
                             PinItem(pin, (if (spot) 1 else 0) + r * cols + i, ctl, Modifier.weight(1f).enterOnce("pin:$layout:" + pin.c.id, 1 + r * cols + i, pop = true)) {
                                 Column(
-                                    Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(t.card).cardEdge(RoundedCornerShape(24.dp))
+                                    Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).pane(RoundedCornerShape(24.dp))
                                         .padding(if (spot) PaddingValues(horizontal = 6.dp, vertical = 14.dp) else PaddingValues(14.dp)),
                                     horizontalAlignment = if (spot) Alignment.CenterHorizontally else Alignment.Start,
                                 ) {
@@ -1679,7 +1680,7 @@ private fun jellyFrames(t: Float, frames: Array<FloatArray>): FloatArray {
 private fun UnknownCard(n: Int, onReview: () -> Unit) {
     val t = LocalTok.current
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp).clip(RoundedCornerShape(20.dp)).background(t.card).clickable(onClick = onReview)
+        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp).clip(RoundedCornerShape(20.dp)).pane(RoundedCornerShape(20.dp)).clickable(onClick = onReview)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1701,7 +1702,7 @@ private fun UnknownSheet(visible: Boolean, list: List<Conv>, nav: Nav, onDismiss
         T("From numbers that aren't in your contacts. Nothing here is hidden unless you choose to.", size = 13.5.sp, color = t.soft, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
         list.forEach { c ->
             Row(
-                Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(20.dp)).background(t.card).clickable { onDismiss(); nav.openChat(c.id) }.padding(12.dp),
+                Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(20.dp)).pane(RoundedCornerShape(20.dp)).clickable { onDismiss(); nav.openChat(c.id) }.padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 WhoAvatar(whoOf(c), 40.dp)
@@ -1862,7 +1863,7 @@ private fun NewCategorySheet(visible: Boolean, onDone: (String?) -> Unit) {
     PadSheet(visible, { onDone(null) }) {
         T("New category", size = 20.sp, weight = FontWeight.SemiBold)
         T("Give it a short name. Then hold any chat and tap Move to add it.", size = 13.5.sp, color = t.soft, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
-        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(t.card).padding(horizontal = 16.dp, vertical = 14.dp)) {
+        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).pane(RoundedCornerShape(22.dp)).padding(horizontal = 16.dp, vertical = 14.dp)) {
             androidx.compose.foundation.text.BasicTextField(
                 name, { if (it.length <= 24) name = it }, singleLine = true,
                 textStyle = androidx.compose.ui.text.TextStyle(color = t.ink, fontSize = 16.sp),

@@ -1,5 +1,6 @@
 package com.jpetrydesign.pyng.ui.screens
 
+import com.jpetrydesign.pyng.ui.kit.pane
 import android.Manifest
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
@@ -380,7 +381,7 @@ private fun StyleStep(onDone: () -> Unit) {
             // Reactions, and a chat for everything else.
             Box(
                 Modifier.fillMaxWidth().height(220.dp).enter(2).edge(RoundedCornerShape(26.dp), elevation = 8.dp)
-                    .clip(RoundedCornerShape(26.dp)).background(if (t.dark) t.card else Color.White),
+                    .clip(RoundedCornerShape(26.dp)).pane(RoundedCornerShape(26.dp)),
             ) {
                 androidx.compose.animation.Crossfade(tabs[tab], label = "stylePreview") { name ->
                     when (name) {

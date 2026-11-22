@@ -1,5 +1,6 @@
 package com.jpetrydesign.pyng.ui.screens
 
+import com.jpetrydesign.pyng.ui.kit.pane
 import com.jpetrydesign.pyng.data.splitLooks
 import com.jpetrydesign.pyng.data.editLook
 import com.jpetrydesign.pyng.data.lookFor
@@ -138,7 +139,7 @@ fun AppearanceScreen(nav: Nav) {
                 .let { if (pal.name in it) it else listOf(pal.name) + it.dropLast(1) }
                 .mapNotNull { n -> if (n == pal.name) pal else Palettes.all.firstOrNull { it.name == n } }
             SectionLabel("App theme")
-            Column(Modifier.enter(0).fillMaxWidth().clip(shape).background(if (t.dark) t.card else Color.White).padding(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(Modifier.enter(0).fillMaxWidth().clip(shape).pane(shape).padding(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Column(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
                         .background(Brush.linearGradient(listOf(t.tone, if (t.dark) t.surface else t.bg)))
@@ -756,7 +757,7 @@ private fun LightSlider(value: Hsl, onL: (Float) -> Unit) {
 private fun StudioCard(title: String, summary: String, modifier: Modifier, onClick: () -> Unit) {
     val t = LocalTok.current
     val shape = RoundedCornerShape(24.dp)
-    Column(modifier.clip(shape).background(if (t.dark) t.card else Color.White).press(0.97f, onClick).padding(8.dp)) {
+    Column(modifier.clip(shape).pane(shape).press(0.97f, onClick).padding(8.dp)) {
         Box(Modifier.fillMaxWidth().height(118.dp).clip(RoundedCornerShape(18.dp)).background(if (t.dark) t.surface else t.bg)) {
             if (title.startsWith("Chat")) ChatStylePreview(compact = true) else HomeStylePreview(compact = true)
         }
@@ -806,7 +807,7 @@ private fun StyleStudio(kind: String?, onClose: () -> Unit) {
             // Live preview.
             Box(
                 Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(if (chat) 270.dp else 230.dp)
-                    .edge(RoundedCornerShape(28.dp), elevation = 10.dp).clip(RoundedCornerShape(28.dp)).background(if (t.dark) t.card else Color.White),
+                    .edge(RoundedCornerShape(28.dp), elevation = 10.dp).clip(RoundedCornerShape(28.dp)).pane(RoundedCornerShape(28.dp)),
             ) {
                 // On the Send tab the preview plays your send animation on a loop.
                 if (chat && tab == "sendStyle") SendPreview(LocalRepo.current.prefs.state.opt("sendStyle").ifBlank { "Jelly" })
@@ -944,7 +945,7 @@ fun PinSample(look: PinLook, big: Boolean = false) {
         tones.forEachIndexed { i, tone ->
             val hot = i == 0
             Column(
-                (if (look.back == "Tiles") Modifier.clip(RoundedCornerShape(10.dp)).background(if (t.dark) t.card else Color.White).padding(4.dp) else Modifier),
+                (if (look.back == "Tiles") Modifier.clip(RoundedCornerShape(10.dp)).pane(RoundedCornerShape(10.dp)).padding(4.dp) else Modifier),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Box(Modifier.size(av)) {
@@ -969,7 +970,7 @@ fun PinSample(look: PinLook, big: Boolean = false) {
                     val w = av * 0.8f
                     when {
                         hot && look.sign == "Pill" -> Box(Modifier.size(w + 6.dp, 8.dp).clip(RoundedCornerShape(4.dp)).background(accent))
-                        look.names == "Chip" -> Box(Modifier.clip(RoundedCornerShape(5.dp)).background(if (t.dark) t.card else Color.White).padding(horizontal = 4.dp, vertical = 2.dp)) {
+                        look.names == "Chip" -> Box(Modifier.clip(RoundedCornerShape(5.dp)).pane(RoundedCornerShape(5.dp)).padding(horizontal = 4.dp, vertical = 2.dp)) {
                             Box(Modifier.size(w * 0.8f, 4.dp).clip(RoundedCornerShape(2.dp)).background(t.soft.copy(alpha = 0.5f)))
                         }
                         look.names == "Bold" -> Box(Modifier.size(w, if (hot) 5.dp else 4.dp).clip(RoundedCornerShape(2.dp)).background(if (hot) t.ink else t.faint.copy(alpha = 0.6f)))
@@ -1095,7 +1096,7 @@ private fun SplitLooksRow(modifier: Modifier = Modifier) {
     val t = LocalTok.current
     val on = repo.prefs.state.opt("splitLooks") == "1"
     Row(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(if (t.dark) t.card else Color.White)
+        modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).pane(RoundedCornerShape(20.dp))
             .clickable { repo.prefs.setOpt("splitLooks", if (on) "" else "1") }.padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

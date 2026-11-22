@@ -116,6 +116,9 @@ import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import java.io.File
 import kotlin.math.roundToInt
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.layout
 import kotlin.math.abs
 import kotlin.math.max
@@ -181,20 +184,58 @@ fun Modifier.frost(shape: Shape, tint: Color, blur: Dp = 26.dp): Modifier = comp
     if (hz != null && !t.solid && LocalGlass.current) {
         // Liquid Glass: less tint and a lighter blur so more shows through, a lit rim along the top,
         // and a soft sheen across the upper half, like light on a curved surface.
-        val rimTop = Color.White.copy(alpha = if (t.dark) 0.26f else 0.62f)
-        val rimLow = Color.White.copy(alpha = if (t.dark) 0.04f else 0.12f)
-        val sheen = Color.White.copy(alpha = if (t.dark) 0.06f else 0.16f)
         this.clip(shape)
-            .hazeEffect(state = hz, style = HazeStyle(backgroundColor = t.bg, tint = HazeTint(tint.copy(alpha = tint.alpha * 0.55f)), blurRadius = blur * 0.72f, noiseFactor = 0f))
-            .drawWithContent {
-                drawContent()
-                drawRect(Brush.verticalGradient(0f to sheen, 0.5f to Color.Transparent))
-            }
-            .border(1.dp, Brush.verticalGradient(listOf(rimTop, rimLow, rimLow, rimTop.copy(alpha = rimTop.alpha * 0.4f))), shape)
+            .hazeEffect(state = hz, style = HazeStyle(backgroundColor = t.bg, tint = HazeTint(tint.copy(alpha = tint.alpha * 0.4f)), blurRadius = blur * 0.5f, noiseFactor = 0f))
+            .liquidShine(shape)
     } else if (hz != null && !t.solid) {
-        this.clip(shape).hazeEffect(state = hz, style = HazeStyle(backgroundColor = t.bg, tint = HazeTint(tint), blurRadius = blur, noiseFactor = 0f))
+        // Frost: a heavier, milkier blur, matte with no shine.
+        this.clip(shape).hazeEffect(state = hz, style = HazeStyle(backgroundColor = t.bg, tint = HazeTint(tint.copy(alpha = (tint.alpha * 1.25f).coerceAtMost(0.92f))), blurRadius = blur * 1.3f, noiseFactor = 0f))
+    } else if (!t.solid && LocalGlass.current) {
+        this.clip(shape).background(tint.copy(alpha = tint.alpha * 0.7f)).liquidShine(shape)
     } else {
         this.clip(shape).background(tint)
+    }
+}
+
+/**
+ * Liquid Glass's light: a glossy rim (bright along the top, catching again at the bottom), a sheen across
+ * the upper part, and a soft glint that slides along as the surface moves on screen, so scrolling makes
+ * the glass catch the light differently.
+ */
+fun Modifier.liquidShine(shape: Shape): Modifier = composed {
+    val t = LocalTok.current
+    val y = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    val screenH = with(androidx.compose.ui.platform.LocalDensity.current) { androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp.toPx() }.coerceAtLeast(1f)
+    val rimTop = Color.White.copy(alpha = if (t.dark) 0.34f else 0.95f)
+    val rimMid = Color.White.copy(alpha = if (t.dark) 0.03f else 0.12f)
+    val rimLow = Color.White.copy(alpha = if (t.dark) 0.14f else 0.5f)
+    val sheen = Color.White.copy(alpha = if (t.dark) 0.09f else 0.3f)
+    val glint = Color.White.copy(alpha = if (t.dark) 0.1f else 0.28f)
+    this.onGloballyPositioned { c -> y.floatValue = c.positionInRoot().y }
+        .drawWithContent {
+            drawContent()
+            drawRect(Brush.verticalGradient(0f to sheen, 0.42f to Color.Transparent))
+            // The glint: a soft diagonal band whose place follows where the glass sits on screen.
+            val k = (y.floatValue / screenH).coerceIn(-0.5f, 1.5f)
+            val cx = size.width * (0.15f + 0.7f * k)
+            val band = size.width * 0.35f
+            drawRect(Brush.linearGradient(listOf(Color.Transparent, glint, Color.Transparent), Offset(cx - band, 0f), Offset(cx + band, size.height)))
+        }
+        .border(1.2.dp, Brush.verticalGradient(listOf(rimTop, rimMid, rimMid, rimLow)), shape)
+}
+
+/**
+ * A card, panel or tile, drawn in the glass look you picked: Liquid Glass is clear with a glossy rim,
+ * a sheen and a glint that moves as you scroll; Frost is milky and matte; Solid is plain.
+ */
+fun Modifier.pane(shape: Shape): Modifier = composed {
+    val t = LocalTok.current
+    val liquid = LocalGlass.current && !t.solid
+    when {
+        t.solid -> this.background(if (t.dark) t.card.compositeOver(t.bg) else Color.White)
+        liquid -> this.background(Color.White.copy(alpha = if (t.dark) 0.05f else 0.34f)).liquidShine(shape)
+        else -> this.background(Color.White.copy(alpha = if (t.dark) 0.07f else 0.72f))
+            .border(1.dp, Color.White.copy(alpha = if (t.dark) 0.06f else 0.85f), shape)
     }
 }
 
@@ -246,7 +287,9 @@ fun Modifier.enter(index: Int, pop: Boolean = false): Modifier = composed {
 
 @Composable
 fun Glow(t: Tok = LocalTok.current, modifier: Modifier = Modifier.fillMaxSize()) {
-    val brushes = remember(t) { wallBrushes("Glow", t) }
+    // Liquid Glass needs color behind it to bend and show, so its glow is a little richer.
+    val liquid = LocalGlass.current && !t.solid
+    val brushes = remember(t, liquid) { wallBrushes(if (liquid) "GlowLiquid" else "Glow", t) }
     Box(modifier.background(t.bg).drawBehind { brushes.forEach { drawRect(it) } })
 }
 
@@ -402,7 +445,8 @@ fun Toggle(on: Boolean, modifier: Modifier = Modifier) {
 fun Seg(options: List<String>, selected: String, onPick: (String) -> Unit, modifier: Modifier = Modifier, height: Dp = 38.dp) {
     val t = LocalTok.current
     val mo = LocalMo.current
-    androidx.compose.foundation.layout.BoxWithConstraints(modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(t.neutral).padding(4.dp)) {
+    val liquidSeg = LocalGlass.current && !t.solid
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).then(if (liquidSeg) Modifier.pane(RoundedCornerShape(14.dp)) else Modifier.background(t.neutral)).padding(4.dp)) {
         val n = options.size.coerceAtLeast(1)
         val gap = 4.dp
         val cell = (maxWidth - gap * (n - 1)) / n
@@ -433,7 +477,8 @@ fun Seg(options: List<String>, selected: String, onPick: (String) -> Unit, modif
                     val h = (height - 8.dp).roundToPx()
                     val p = m.measure(androidx.compose.ui.unit.Constraints.fixed(w, h))
                     layout(w, h) { p.place((step * l).roundToInt(), 0) }
-                }.clip(RoundedCornerShape(10.dp)).background(hl),
+                }.clip(RoundedCornerShape(10.dp)).background(if (liquidSeg) hl.copy(alpha = if (t.dark) 0.16f else 0.75f) else hl)
+                    .then(if (liquidSeg) Modifier.liquidShine(RoundedCornerShape(10.dp)) else Modifier),
             )
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
@@ -615,7 +660,7 @@ fun Page(title: String, onBack: () -> Unit, sub: String? = null, trailing: (@Com
 @Composable
 fun Card(modifier: Modifier = Modifier, radius: Dp = 26.dp, bg: Color = LocalTok.current.card, content: @Composable ColumnScope.() -> Unit) {
     val shape = RoundedCornerShape(radius)
-    Column(modifier.fillMaxWidth().clip(shape).background(bg).cardEdge(shape), content = content)
+    Column(modifier.fillMaxWidth().clip(shape).then(if (bg == LocalTok.current.card) Modifier.pane(shape) else Modifier.background(bg).cardEdge(shape)), content = content)
 }
 
 @Composable
@@ -689,7 +734,10 @@ fun Sheet(visible: Boolean, onDismiss: () -> Unit, maxHeightFraction: Float = 0.
                 Column(
                     Modifier.fillMaxWidth().widthIn(max = 640.dp).heightIn(max = maxH)
                         .offset { androidx.compose.ui.unit.IntOffset(0, drag.roundToInt()) }
-                        .clip(shape).background(t.sheet)
+                        .clip(shape).then(
+                            if (LocalGlass.current && !t.solid) Modifier.background(t.sheet.copy(alpha = if (t.dark) 0.84f else 0.8f)).liquidShine(shape)
+                            else Modifier.background(t.sheet),
+                        )
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
                         .navigationBarsPadding().padding(bottom = 12.dp),
                 ) {

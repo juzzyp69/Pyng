@@ -1,5 +1,6 @@
 package com.jpetrydesign.pyng.ui.screens
 
+import com.jpetrydesign.pyng.ui.kit.pane
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -129,7 +130,7 @@ private fun Quiet(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(Triple("Photos", Icons.gallery, nPhotos), Triple("Videos", Icons.video, nVideos), Triple("Links", Icons.link, nLinks), Triple("Files", Icons.file, nFiles)).forEach { (name, icon, n) ->
                 Column(
-                    Modifier.weight(1f).clip(RoundedCornerShape(20.dp)).background(t.card).clickable { onKind(name) }.padding(top = 12.dp, bottom = 10.dp),
+                    Modifier.weight(1f).clip(RoundedCornerShape(20.dp)).pane(RoundedCornerShape(20.dp)).clickable { onKind(name) }.padding(top = 12.dp, bottom = 10.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Box(Modifier.size(40.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(icon, t.p, 19.dp, 2f) }
@@ -141,7 +142,7 @@ private fun Quiet(
         }
         if (latest.isNotEmpty()) {
             Heading(t, "Latest shared")
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(t.card)) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).pane(RoundedCornerShape(22.dp))) {
                 latest.forEachIndexed { i, s ->
                     if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(t.hair))
                     Row(
@@ -162,7 +163,7 @@ private fun Quiet(
             Heading(t, "Recent searches")
             androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 recent.forEach { w ->
-                    Box(Modifier.height(34.dp).clip(RoundedCornerShape(17.dp)).background(t.card).clickable { onFill(w) }.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                    Box(Modifier.height(34.dp).clip(RoundedCornerShape(17.dp)).pane(RoundedCornerShape(17.dp)).clickable { onFill(w) }.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
                         T(w, size = 13.5.sp, color = t.soft, maxLines = 1)
                     }
                 }
@@ -220,7 +221,7 @@ private fun SharedList(t: Tok, conv: Conv?, title: String, items: List<Shared>, 
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(items, key = { s -> s.m.key + (if (s is Shared.Link) s.url else (s as Shared.Media).ref.id) }) { s ->
                 Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(t.card).clickable { open(ctx, s, onOpen) }.padding(8.dp),
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).pane(RoundedCornerShape(20.dp)).clickable { open(ctx, s, onOpen) }.padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     SharedThumb(t, s, 64.dp, RoundedCornerShape(14.dp))
