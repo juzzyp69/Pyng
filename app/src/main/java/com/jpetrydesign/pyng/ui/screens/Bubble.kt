@@ -865,4 +865,3 @@ private fun SaveDot(t: Tok, key: String, onSave: () -> Unit, modifier: Modifier 
         Ico(if (done) Icons.check else Icons.download, if (fill > 0.55f) t.onFill else t.soft, 17.dp, 2.2f)
     }
 }
-}
