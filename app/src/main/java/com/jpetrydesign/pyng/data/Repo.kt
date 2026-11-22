@@ -242,7 +242,8 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         if (c.id in prefs.state.snoozed && !c.fromMe && c.unread && c.ts > (old?.ts ?: 0L)) prefs.edit { p -> p.copy(snoozed = p.snoozed - c.id) }
         fillPreview(c)
         if (old == null || old.avatarId != c.avatarId) ensureAvatars(c.others.map { it.id })
-        if (old != null && old.unread && !c.unread) onRead?.invoke(c.id)
+        // Read anywhere (here, Google Messages, another device): its alert goes, so the icon count stays true.
+        if (!c.unread && c.id !in prefs.state.markedUnread && (old == null || old.unread)) onRead?.invoke(c.id)
         saveCacheSoon()
     }
 
@@ -351,6 +352,8 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
                     seedPins()
                     purgeTrash()
                     sweepCodes()
+                    // With fresh read states, clear alerts for anything already read.
+                    runCatching { Notifier.tidy(app, this@Repo) }
                     break
                 }
                 loadError = r.exceptionOrNull()?.message

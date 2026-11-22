@@ -45,7 +45,7 @@ class PyngApp : Application(), ImageLoaderFactory {
         hub = Hub(filesDir.resolve("engine").absolutePath)
         repo = Repo(this, hub, Prefs(this), appScope)
         repo.onIncoming = { conv, msg -> Notifier.show(this, repo, conv, msg) }
-        repo.onRead = { id -> Notifier.cancel(this, id) }
+        repo.onRead = { id -> Notifier.cancel(this, id, repo.convs[id]?.title) }
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)

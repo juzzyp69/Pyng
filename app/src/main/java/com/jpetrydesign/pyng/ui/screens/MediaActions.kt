@@ -61,8 +61,8 @@ fun saveFiles(ctx: Context, files: List<Pair<String, MediaRef>>) {
 }
 
 private fun savedFileNotice(ctx: Context, uri: Uri, mime: String, name: String) = runCatching {
-    val nm = ctx.getSystemService(android.app.NotificationManager::class.java)
-    nm.createNotificationChannel(android.app.NotificationChannel("saves", "Saved files", android.app.NotificationManager.IMPORTANCE_LOW).apply { description = "Files you save from a chat" })
+    // Saved files go in the quiet channel, so they never add to the app icon's count.
+    com.jpetrydesign.pyng.data.Notifier.channels(ctx)
     val open = android.app.PendingIntent.getActivity(
         ctx, uri.hashCode(), android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
         android.app.PendingIntent.FLAG_IMMUTABLE,
@@ -71,10 +71,10 @@ private fun savedFileNotice(ctx: Context, uri: Uri, mime: String, name: String) 
         ctx, uri.hashCode() + 1, android.content.Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
         android.app.PendingIntent.FLAG_IMMUTABLE,
     )
-    val n = androidx.core.app.NotificationCompat.Builder(ctx, "saves")
+    val n = androidx.core.app.NotificationCompat.Builder(ctx, com.jpetrydesign.pyng.data.Notifier.CH_QUIET)
         .setSmallIcon(com.jpetrydesign.pyng.R.drawable.ic_stat_check)
         .setContentTitle(name).setContentText("Saved to Downloads")
-        .setContentIntent(open).setAutoCancel(true)
+        .setContentIntent(open).setAutoCancel(true).setSilent(true)
         .addAction(0, "Open", open).addAction(0, "Show in folder", folder)
         .build()
     androidx.core.app.NotificationManagerCompat.from(ctx).notify(uri.hashCode(), n)

@@ -41,6 +41,8 @@ import java.util.concurrent.TimeUnit
 object Notifier {
     const val CH_MESSAGES = "messages"
     const val CH_LINK = "link-hidden"
+    /** Reminders and saved files: shown, but never counted on the app icon. Only unread chats are. */
+    const val CH_QUIET = "pyng-other"
     const val KEY_REPLY = "reply"
 
     /** A chat's own channel (its sound and importance), once you've set one up; otherwise the shared one. */
@@ -73,6 +75,11 @@ object Notifier {
         nm.createNotificationChannel(NotificationChannel(CH_MESSAGES, "Messages", NotificationManager.IMPORTANCE_HIGH).apply {
             description = "New messages"
         })
+        nm.createNotificationChannel(NotificationChannel(CH_QUIET, "Reminders and saved files", NotificationManager.IMPORTANCE_DEFAULT).apply {
+            description = "Message reminders and files you save. These don't count on the app icon."
+            setShowBadge(false)
+        })
+        runCatching { nm.deleteNotificationChannel("saves") }
         // Android needs a notification for the background connection. Its channel starts switched
         // off, so nothing shows; only texts from your chats notify.
         runCatching { nm.deleteNotificationChannel("link") }
@@ -208,8 +215,9 @@ object Notifier {
         }
         val code = conv.id.hashCode()
         val placeholder = conv.id.startsWith("gm:")
-        // A real text for a chat that was only a placeholder: drop the placeholder alert.
-        if (!placeholder) placeholders.entries.removeAll { (pid, txt) -> (txt.trim() == m.text.trim()).also { same -> if (same) runCatching { NotificationManagerCompat.from(ctx).cancel(pid, 1) } } }
+        // A real text for a chat that was only a stand-in (from Google Messages' alert, before Pyng had
+        // the text): drop the stand-in, matched by who it's from or by the text, so it can't get stuck.
+        if (!placeholder) dropStandIns(ctx, conv, m.text)
         else placeholders[conv.id] = m.text
         val open = PendingIntent.getActivity(
             ctx, code,
@@ -227,6 +235,9 @@ object Notifier {
             .setAutoCancel(true)
             .setShortcutId(conv.id)
             .setContentIntent(open)
+            // Each chat counts once on the app icon, however many texts are in it.
+            .setNumber(1)
+            .setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
             .setOnlyAlertOnce(dupe)
             .setSilent(dupe || hush)
         if (!p.on("vibrate") || alerts?.vibrate == "Off") b.setVibrate(longArrayOf(0L))
@@ -293,9 +304,52 @@ object Notifier {
         show(ctx, repo, c, m)
     }
 
-    fun cancel(ctx: Context, convId: String) {
+    fun cancel(ctx: Context, convId: String, title: String? = null) {
         history.remove(convId)
         runCatching { NotificationManagerCompat.from(ctx).cancel(convId, 1) }
+        if (title != null) dropStandIns(ctx, title)
+    }
+
+    /** Removes stand-in alerts for a chat: by its name, or (when given) by the same text. */
+    private fun dropStandIns(ctx: Context, conv: Conv, text: String) {
+        val names = setOf(conv.title.trim().lowercase(), conv.shortTitle.trim().lowercase()).filter { it.isNotEmpty() }
+        placeholders.entries.removeAll { (pid, txt) ->
+            val who = pid.removePrefix("gm:").trim().lowercase()
+            (who in names || txt.trim() == text.trim()).also { if (it) runCatching { NotificationManagerCompat.from(ctx).cancel(pid, 1) } }
+        }
+        names.forEach { n -> runCatching { NotificationManagerCompat.from(ctx).cancel("gm:$n", 1) } }
+    }
+
+    private fun dropStandIns(ctx: Context, title: String) {
+        val n = title.trim().lowercase()
+        placeholders.entries.removeAll { (pid, _) -> (pid.removePrefix("gm:").trim().lowercase() == n).also { if (it) runCatching { NotificationManagerCompat.from(ctx).cancel(pid, 1) } } }
+    }
+
+    /**
+     * Makes what's in the notification shade match what's actually unread: any chat that's been read
+     * (here, in Google Messages, or on another device) loses its alert, and so does any stand-in whose
+     * chat is read. Runs when Pyng opens and after chats sync, so the app icon's count is never stuck.
+     */
+    fun tidy(ctx: Context, repo: Repo) {
+        val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
+        val active = runCatching { nm.activeNotifications }.getOrNull() ?: return
+        fun named(n: String) = repo.convs.values.filter { it.title.trim().lowercase() == n || it.shortTitle.trim().lowercase() == n }
+        for (sbn in active) {
+            val tag = sbn.tag ?: continue
+            if (sbn.id != 1) continue
+            if (tag.startsWith("gm:")) {
+                val who = tag.removePrefix("gm:").trim().lowercase()
+                // A stand-in goes once its chat has caught up with it and been read, or after a day.
+                val chats = named(who)
+                val caughtUp = chats.isNotEmpty() && chats.none { it.unread } && chats.any { it.ts >= sbn.postTime - 120_000 }
+                if (caughtUp || System.currentTimeMillis() - sbn.postTime > 24L * 3600 * 1000) {
+                    placeholders.remove(tag); runCatching { nm.cancel(tag, 1) }
+                }
+            } else {
+                val c = repo.convs[tag] ?: continue
+                if (!c.unread && tag !in repo.prefs.state.markedUnread) { history.remove(tag); runCatching { nm.cancel(tag, 1) } }
+            }
+        }
     }
 
     fun linkNotification(ctx: Context) = NotificationCompat.Builder(ctx, CH_LINK)
@@ -514,7 +568,7 @@ class ReminderWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
             Intent(ctx, MainActivity::class.java).setAction("open").putExtra("chat", conv).putExtra("msg", msg).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val n = NotificationCompat.Builder(ctx, Notifier.CH_MESSAGES)
+        val n = NotificationCompat.Builder(ctx, Notifier.CH_QUIET)
             .setSmallIcon(R.drawable.ic_stat_message)
             .setContentTitle("Reminder · $title")
             .setContentText(text.ifBlank { "Tap to see the message" })
