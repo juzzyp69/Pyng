@@ -1,5 +1,8 @@
 package com.jpetrydesign.pyng.ui.screens
 
+import com.jpetrydesign.pyng.data.splitLooks
+import com.jpetrydesign.pyng.data.editLook
+import com.jpetrydesign.pyng.data.lookFor
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.translate
@@ -125,7 +128,8 @@ fun AppearanceScreen(nav: Nav) {
     var pick by remember { mutableStateOf(demo?.removePrefix("pick:")?.takeIf { demo.startsWith("pick:") }) }
     var studio by remember { mutableStateOf(demo?.removePrefix("studio:")?.substringBefore(':')?.takeIf { demo.startsWith("studio:") }) }
     remember { demo?.takeIf { it.startsWith("studio:") }?.split(':')?.getOrNull(2)?.let { StudioTab.pending = it } }
-    val pal = Palettes.byKey(p.themeKey, p.c1, p.c2)
+    val shownLook = p.lookFor(t.dark)
+    val pal = Palettes.byKey(shownLook.key, shownLook.c1, shownLook.c2)
     Box(Modifier.fillMaxSize()) {
         Page("Appearance", { nav.back() }) {
             // App theme: a live sample of your chats in the current color, a quick row of favorites, and Change for the full set.
@@ -161,13 +165,37 @@ fun AppearanceScreen(nav: Nav) {
                         val on = x.name == pal.name
                         Box(
                             Modifier.size(32.dp).then(if (on) Modifier.border(2.dp, t.p, CircleShape) else Modifier).padding(if (on) 4.dp else 3.dp)
-                                .clip(CircleShape).background(swatchOf(x)).clickable { repo.prefs.edit { it.copy(themeKey = x.name) } },
+                                .clip(CircleShape).background(swatchOf(x)).clickable { repo.prefs.editLook(t.dark) { it.copy(key = x.name) } },
                         )
                     }
                 }
             }
             SectionLabel("Mode")
             Seg(listOf("Light", "Dark", "Match system"), p.mode, { m -> repo.prefs.edit { it.copy(mode = m) } })
+            if (p.mode == "Match system") {
+                Spacer(Modifier.height(10.dp))
+                SplitLooksRow()
+                // Each half, with its color: tap one to change it.
+                if (p.splitLooks) Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    listOf(false, true).forEach { dk ->
+                        val l = p.lookFor(dk)
+                        val lp = Palettes.byKey(l.key, l.c1, l.c2)
+                        Row(
+                            Modifier.weight(1f).clip(RoundedCornerShape(20.dp)).background(if (dk) Color(0xFF17181C) else Color.White)
+                                .border(1.dp, t.edgeLine, RoundedCornerShape(20.dp))
+                                .clickable { StripTarget.dark = dk; nav.openStrip() }.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(Modifier.size(30.dp).clip(CircleShape).background(swatchOf(lp)))
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                T(if (dk) "Dark" else "Light", size = 12.sp, weight = FontWeight.SemiBold, color = if (dk) Color.White.copy(alpha = 0.6f) else Color.Black.copy(alpha = 0.5f))
+                                T(lp.name, size = 14.5.sp, weight = FontWeight.SemiBold, color = if (dk) Color.White else Color.Black, maxLines = 1)
+                            }
+                        }
+                    }
+                }
+            }
             SectionLabel("Glass")
             Seg(listOf("Frost", "Liquid Glass", "Solid"), p.opt("glass"), { g -> repo.prefs.setOpt("glass", g) })
             // Style studio: open Chat style or Home style to see every choice with a live preview.
@@ -535,7 +563,17 @@ fun ColorStrip(onDone: () -> Unit) {
     val t = LocalTok.current
     val motion = LocalMotion.current
     val p = repo.prefs.state
-    var tab by remember { mutableStateOf(if (p.themeKey.startsWith("Custom")) "Custom" else if (Palettes.duos.any { it.name == p.themeKey }) "Duotones" else "Colors") }
+    // With light and dark set apart, you pick which one you're coloring, and the app shows it as you go.
+    val sysDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val split = p.splitLooks
+    var editDark by remember { mutableStateOf(StripTarget.dark.also { StripTarget.dark = null } ?: (split && sysDark)) }
+    val ed = split && editDark
+    androidx.compose.runtime.DisposableEffect(split, editDark) {
+        com.jpetrydesign.pyng.ui.LookPreview.dark = if (split) editDark else null
+        onDispose { com.jpetrydesign.pyng.ui.LookPreview.dark = null }
+    }
+    val lk = p.lookFor(ed)
+    var tab by remember { mutableStateOf(if (lk.key.startsWith("Custom")) "Custom" else if (Palettes.duos.any { it.name == lk.key }) "Duotones" else "Colors") }
     var target by remember { mutableStateOf("c1") }
     val lib = remember { ThemeLibrary() }
     BackHandler(onBack = onDone)
@@ -552,20 +590,22 @@ fun ColorStrip(onDone: () -> Unit) {
                 Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         T("App color", size = 12.sp, weight = FontWeight.Medium, color = t.soft)
-                        T(Palettes.byKey(p.themeKey, p.c1, p.c2).name, size = 18.sp, weight = FontWeight.SemiBold, letterSpacing = (-0.3).sp)
+                        T(Palettes.byKey(lk.key, lk.c1, lk.c2).name, size = 18.sp, weight = FontWeight.SemiBold, letterSpacing = (-0.3).sp)
                     }
                     PillButton("Done", onDone, height = 40.dp)
                 }
                 // See the color in both looks without leaving the sheet.
                 Seg(listOf("Light", "Dark", "Match system"), p.mode, { m -> repo.prefs.edit { it.copy(mode = m) } }, Modifier.padding(horizontal = 20.dp))
+                if (p.mode == "Match system") SplitLooksRow(Modifier.padding(horizontal = 20.dp))
+                if (split) Seg(listOf("Light look", "Dark look"), if (editDark) "Dark look" else "Light look", { editDark = it == "Dark look" }, Modifier.padding(horizontal = 20.dp))
                 // Themes you saved, ready to use for the whole app.
                 MyThemes(
                     lib,
-                    isOn = { st -> p.themeKey.startsWith("Custom") && p.c1 == st.c1 && (st.mode == "Mono") == (p.themeKey == "Custom color") && (st.mode == "Mono" || p.c2 == st.c2) },
-                    onPick = { st -> repo.prefs.edit { it.copy(themeKey = if (st.mode == "Mono") "Custom color" else "Custom duotone", c1 = st.c1, c2 = st.c2) } },
-                    onSave = if (tab == "Custom" && p.themeKey.startsWith("Custom")) ({
-                        val mode = if (p.themeKey == "Custom duotone") "Duotone" else "Mono"
-                        lib.saving = com.jpetrydesign.pyng.data.SavedTheme(java.util.UUID.randomUUID().toString(), suggestName(mode, p.c1, p.savedThemes.map { it.name }), mode, p.c1, p.c2)
+                    isOn = { st -> lk.key.startsWith("Custom") && lk.c1 == st.c1 && (st.mode == "Mono") == (lk.key == "Custom color") && (st.mode == "Mono" || lk.c2 == st.c2) },
+                    onPick = { st -> repo.prefs.editLook(ed) { it.copy(key = if (st.mode == "Mono") "Custom color" else "Custom duotone", c1 = st.c1, c2 = st.c2) } },
+                    onSave = if (tab == "Custom" && lk.key.startsWith("Custom")) ({
+                        val mode = if (lk.key == "Custom duotone") "Duotone" else "Mono"
+                        lib.saving = com.jpetrydesign.pyng.data.SavedTheme(java.util.UUID.randomUUID().toString(), suggestName(mode, lk.c1, p.savedThemes.map { it.name }), mode, lk.c1, lk.c2)
                     }) else null,
                     side = 20.dp,
                 )
@@ -573,17 +613,17 @@ fun ColorStrip(onDone: () -> Unit) {
                 if (tab != "Custom") {
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         (if (tab == "Duotones") Palettes.duos else Palettes.favorites + Palettes.colors).forEach { x ->
-                            Swatch(x.name, swatchOf(x), p.themeKey == x.name) { repo.prefs.edit { it.copy(themeKey = x.name) } }
+                            Swatch(x.name, swatchOf(x), lk.key == x.name) { repo.prefs.editLook(ed) { it.copy(key = x.name) } }
                         }
                     }
                 } else {
                     Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        val duo = p.themeKey == "Custom duotone"
+                        val duo = lk.key == "Custom duotone"
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf("Custom color", "Custom duotone").forEach { key ->
-                                val on = p.themeKey == key || (key == "Custom color" && !p.themeKey.startsWith("Custom"))
+                                val on = lk.key == key || (key == "Custom color" && !lk.key.startsWith("Custom"))
                                 Box(Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(19.dp)).background(if (on) t.plusBg else Brush.linearGradient(listOf(t.neutral, t.neutral)))
-                                    .clickable { repo.prefs.edit { it.copy(themeKey = key) } }, contentAlignment = Alignment.Center) {
+                                    .clickable { repo.prefs.editLook(ed) { it.copy(key = key) } }, contentAlignment = Alignment.Center) {
                                     T(key, size = 13.5.sp, weight = FontWeight.SemiBold, color = if (on) t.plusInk else t.ink)
                                 }
                             }
@@ -592,16 +632,16 @@ fun ColorStrip(onDone: () -> Unit) {
                             listOf("c1" to "Main", "c2" to "Accent").forEach { (k, label) ->
                                 val on = target == k
                                 Row(Modifier.weight(1f).height(34.dp).clip(RoundedCornerShape(17.dp)).background(if (on) t.tone else t.surface).clickable { target = k }, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                                    Box(Modifier.size(14.dp).clip(CircleShape).background((if (k == "c1") p.c1 else p.c2).color()))
+                                    Box(Modifier.size(14.dp).clip(CircleShape).background((if (k == "c1") lk.c1 else lk.c2).color()))
                                     Spacer(Modifier.width(8.dp)); T(label, size = 13.sp, weight = FontWeight.SemiBold, color = if (on) t.p else t.soft)
                                 }
                             }
                         }
-                        val cur = if (duo && target == "c2") p.c2 else p.c1
+                        val cur = if (duo && target == "c2") lk.c2 else lk.c1
                         ColorWheel(cur) { h ->
-                            repo.prefs.edit { pr ->
-                                val key = if (pr.themeKey.startsWith("Custom")) pr.themeKey else "Custom color"
-                                if (duo && target == "c2") pr.copy(c2 = h, themeKey = key) else pr.copy(c1 = h, themeKey = key)
+                            repo.prefs.editLook(ed) { l ->
+                                val key = if (l.key.startsWith("Custom")) l.key else "Custom color"
+                                if (duo && target == "c2") l.copy(c2 = h, key = key) else l.copy(c1 = h, key = key)
                             }
                         }
                     }
@@ -1044,3 +1084,26 @@ internal fun MotionMini(style: com.jpetrydesign.pyng.ui.kit.Mo, t: com.jpetrydes
 
 /** A tab for Style studio to open on (used when a link or the demo asks for one). */
 object StudioTab { var pending: String? = null }
+
+/** Which half the color sheet opens on, when you tap the Light or Dark card. */
+object StripTarget { var dark: Boolean? = null }
+
+/** "Customize light & dark": on, light and dark each get their own color; off, one color does both. */
+@Composable
+private fun SplitLooksRow(modifier: Modifier = Modifier) {
+    val repo = LocalRepo.current
+    val t = LocalTok.current
+    val on = repo.prefs.state.opt("splitLooks") == "1"
+    Row(
+        modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(if (t.dark) t.card else Color.White)
+            .clickable { repo.prefs.setOpt("splitLooks", if (on) "" else "1") }.padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            T("Customize light & dark", size = 15.sp, weight = FontWeight.SemiBold)
+            T(if (on) "Light and dark each have their own color" else "Off: one color, made light or dark for you", size = 12.5.sp, color = t.soft, lineHeight = 17.sp)
+        }
+        Spacer(Modifier.width(12.dp))
+        com.jpetrydesign.pyng.ui.kit.Toggle(on)
+    }
+}

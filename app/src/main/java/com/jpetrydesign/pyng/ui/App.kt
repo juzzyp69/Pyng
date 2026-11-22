@@ -1,5 +1,7 @@
 package com.jpetrydesign.pyng.ui
 
+import com.jpetrydesign.pyng.data.lookFor
+
 import dev.chrisbanes.haze.hazeSource
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -158,12 +160,17 @@ class Nav(start: Route) {
     }
 }
 
+/** Lets the color sheet show the light or dark look while you edit it, whatever the phone is set to. */
+object LookPreview { var dark by androidx.compose.runtime.mutableStateOf<Boolean?>(null) }
+
 @Composable
 fun rememberTok(repo: Repo): Tok {
     val p = repo.prefs.state
     val sysDark = isSystemInDarkTheme()
-    val dark = p.mode == "Dark" || (p.mode == "Match system" && sysDark)
-    val pal = Palettes.byKey(p.themeKey, p.c1, p.c2)
+    // While you're editing one half of a split light/dark look, the app shows that half.
+    val dark = LookPreview.dark ?: (p.mode == "Dark" || (p.mode == "Match system" && sysDark))
+    val look = p.lookFor(dark)
+    val pal = Palettes.byKey(look.key, look.c1, look.c2)
     // Solid glass (or Reduce transparency) draws plain surfaces instead of blurring what's behind.
     val solid = p.on("reduceBlur") || p.opt("glass") == "Solid"
     return remember(pal, dark, solid, p.on("highContrast")) { tok(pal, dark, solid, p.on("highContrast")) }

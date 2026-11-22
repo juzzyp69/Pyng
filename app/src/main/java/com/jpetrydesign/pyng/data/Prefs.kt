@@ -286,3 +286,28 @@ class Prefs(context: Context) {
     }.getOrDefault(false)
     fun setOpt(key: String, value: String) = edit { it.copy(opts = it.opts + (key to value)) }
 }
+
+/** One app color: a named palette, or a custom color or duotone with its two colors. */
+data class AppLook(val key: String, val c1: Hsl, val c2: Hsl)
+
+private fun hslOf(s: String): Hsl? = s.split(',').mapNotNull { it.toFloatOrNull() }.takeIf { it.size == 3 }?.let { Hsl(it[0], it[1], it[2]) }
+private fun Hsl.flat() = "$h,$s,$l"
+
+/** Light and dark set apart: only when Mode is Match system and you've turned it on. */
+val AppPrefs.splitLooks get() = mode == "Match system" && opt("splitLooks") == "1"
+
+/**
+ * The app color for the light or dark look. With light and dark set apart, the dark look has its own
+ * color (starting from the light one); otherwise both use the same color, lightened or deepened.
+ */
+fun AppPrefs.lookFor(dark: Boolean): AppLook =
+    if (dark && splitLooks) AppLook(opt("dk:theme").ifBlank { themeKey }, hslOf(opt("dk:c1")) ?: c1, hslOf(opt("dk:c2")) ?: c2)
+    else AppLook(themeKey, c1, c2)
+
+/** Changes the light or dark look's color (the dark one only when they're set apart). */
+fun Prefs.editLook(dark: Boolean, f: (AppLook) -> AppLook) = edit { p ->
+    val now = p.lookFor(dark)
+    val next = f(now)
+    if (dark && p.splitLooks) p.copy(opts = p.opts + ("dk:theme" to next.key) + ("dk:c1" to next.c1.flat()) + ("dk:c2" to next.c2.flat()))
+    else p.copy(themeKey = next.key, c1 = next.c1, c2 = next.c2)
+}
