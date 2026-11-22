@@ -37,6 +37,7 @@ data class Release(val version: String, val date: String, val added: List<String
 val RELEASES = listOf(
     Release(
         "0.9.6.2", "Nov 21, 2026",
+        added = emptyList(),
         fixed = listOf(
             "Notifications are only for new texts again: older unread chats never come back to the shade",
             "Opening Pyng clears your text notifications and the app icon's count, without marking anything read",
