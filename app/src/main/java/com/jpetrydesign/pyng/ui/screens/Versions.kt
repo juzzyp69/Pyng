@@ -36,6 +36,14 @@ data class Release(val version: String, val date: String, val added: List<String
  */
 val RELEASES = listOf(
     Release(
+        "0.9.6.3", "Nov 22, 2026",
+        added = emptyList(),
+        fixed = listOf(
+            "Opening a chat is smooth again: it pours out of the row and shows right away, never a blank screen",
+            "Going back drains the chat into its row without a stutter",
+        ),
+    ),
+    Release(
         "0.9.6.2", "Nov 21, 2026",
         added = emptyList(),
         fixed = listOf(
