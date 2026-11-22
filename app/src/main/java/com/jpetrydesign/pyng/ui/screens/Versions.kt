@@ -36,6 +36,29 @@ data class Release(val version: String, val date: String, val added: List<String
  */
 val RELEASES = listOf(
     Release(
+        "0.9.6", "Nov 21, 2026",
+        highlights = listOf(
+            Highlight("Liquid Glass, for real", "Clear, glossy glass with a glint that moves as you scroll, on cards, sheets and controls. Frost is now fully frosted.", "glass"),
+            Highlight("Light & dark looks", "With Match system on, give light and dark their own colors. Turn it off to use one color for both.", "looks"),
+            Highlight("Transcripts that keep up", "Words appear as they're heard, with cleaner punctuation. Redo one, or hold it to copy.", "live"),
+        ),
+        added = listOf(
+            "Liquid Glass, for real\nClear, glossy glass with a glint that moves as you scroll, on cards, sheets and controls. Frost is now fully frosted",
+            "Light & dark looks\nWith Match system on, give light and dark their own colors, in Appearance",
+            "Transcripts that keep up\nWords appear as they're heard, with cleaner punctuation; Redo, or hold to copy",
+            "A full-screen viewer\nPhotos and videos fill the screen at their own shape, with one floating player and everything else behind the dots. Tap to hide it all",
+            "What's new shows the real thing\nCards play the feature itself, and ones without a picture stay small",
+            "Smaller read receipts\nDelivered, Sent and Read take up less room under your messages",
+        ),
+        fixed = listOf(
+            "Texts that fail on a dropped connection send again on their own",
+            "The app icon counts unread chats, one per person, and never gets stuck",
+            "Saved files and reminders don't count on the app icon",
+            "The save button stays blank until you tap it, then fills with the real progress",
+            "The save button sits centered beside the photo, and saves a whole photo group at once",
+        ),
+    ),
+    Release(
         "0.9.5.2", "Nov 19, 2026",
         highlights = listOf(
             Highlight("Swear words, your call", "Voice message transcripts keep words as said. Turn on Hide swear words in Settings, Chats to bleep them.", "bleep"),

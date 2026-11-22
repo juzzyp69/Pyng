@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -219,6 +220,9 @@ private fun HeroArt(art: String, t: Tok) {
             }
         }
         "bleep" -> BleepArt(t)
+        "glass" -> GlassArt(t)
+        "looks" -> LooksArt(t)
+        "live" -> LiveArt(t)
         "groupname" -> GroupNameArt(t)
         else -> Box(Modifier.size(84.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(Icons.spark, t.p, 38.dp, 1.8f) }
     }
@@ -312,6 +316,71 @@ private fun GroupNameArt(t: Tok) {
             Ico(Icons.check, t.p, 14.dp, 2.4f)
             Spacer(Modifier.width(6.dp))
             T("Renamed in Google Messages · same for everyone", size = 12.sp, weight = FontWeight.SemiBold, color = t.p, maxLines = 1)
+        }
+    }
+}
+
+/** A glass pill over a colorful glow, its glint sliding back and forth like light on liquid glass. */
+@Composable
+private fun GlassArt(t: Tok) {
+    val sweep = androidx.compose.animation.core.rememberInfiniteTransition(label = "glassArt")
+    val k by sweep.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(2600), androidx.compose.animation.core.RepeatMode.Reverse), label = "glint")
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.linearGradient(listOf(t.p.copy(alpha = 0.55f), t.s.copy(alpha = 0.45f), t.p.copy(alpha = 0.25f))),
+        ),
+        contentAlignment = Alignment.Center,
+    ) {
+        val shape = RoundedCornerShape(30.dp)
+        Box(
+            Modifier.fillMaxWidth(0.72f).height(60.dp).clip(shape)
+                .background(Color.White.copy(alpha = if (t.dark) 0.1f else 0.32f))
+                .drawWithContent {
+                    drawContent()
+                    drawRect(Brush.verticalGradient(0f to Color.White.copy(alpha = 0.35f), 0.45f to Color.Transparent))
+                    val cx = size.width * (0.1f + 0.8f * k); val band = size.width * 0.3f
+                    drawRect(Brush.linearGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.45f), Color.Transparent), androidx.compose.ui.geometry.Offset(cx - band, 0f), androidx.compose.ui.geometry.Offset(cx + band, size.height)))
+                }
+                .border(1.2.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.95f), Color.White.copy(alpha = 0.1f), Color.White.copy(alpha = 0.5f))), shape),
+            contentAlignment = Alignment.Center,
+        ) { T("RCS Message", size = 15.sp, weight = FontWeight.Medium, color = Color.White) }
+    }
+}
+
+/** The same chat in its light look and its dark look, side by side, each with its own color. */
+@Composable
+private fun LooksArt(t: Tok) {
+    val looks = listOf(Triple(Color(0xFFF6F4EF), Color(0xFF3F5A8A), Color(0xFF1C1E22)), Triple(Color(0xFF15161A), Color(0xFFB5476B), Color(0xFFF1F1F4)))
+    Row(Modifier.fillMaxSize().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        looks.forEachIndexed { i, (bg, accent, ink) ->
+            Column(Modifier.weight(1f).fillMaxSize().clip(RoundedCornerShape(18.dp)).background(bg).padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                T(if (i == 0) "Light" else "Dark", size = 11.sp, weight = FontWeight.Bold, color = ink.copy(alpha = 0.55f))
+                Box(Modifier.clip(RoundedCornerShape(12.dp)).background(ink.copy(alpha = 0.09f)).padding(horizontal = 10.dp, vertical = 6.dp)) { T("Dinner at 7?", size = 11.5.sp, color = ink, maxLines = 1) }
+                Box(Modifier.align(Alignment.End).clip(RoundedCornerShape(12.dp)).background(accent).padding(horizontal = 10.dp, vertical = 6.dp)) { T("Sounds good", size = 11.5.sp, color = Color.White, maxLines = 1) }
+            }
+        }
+    }
+}
+
+/** A voice message's words arriving one at a time, as they're heard. */
+@Composable
+private fun LiveArt(t: Tok) {
+    val words = "Hey, I'm running about ten minutes late, save me a seat!".split(' ')
+    var n by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) { while (true) { n = 0; delay(500); while (n < words.size) { delay(220); n++ }; delay(1800) } }
+    Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp), verticalArrangement = Arrangement.Center) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(t.inBg).padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(30.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(Icons.pause, t.p, 14.dp, 2.2f) }
+                Spacer(Modifier.width(10.dp))
+                Row(Modifier.weight(1f).height(24.dp), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    listOf(0.4f, 0.8f, 0.55f, 1f, 0.7f, 0.35f, 0.9f, 0.6f, 0.45f, 0.75f, 0.5f, 0.85f).forEachIndexed { i, h ->
+                        Box(Modifier.width(3.dp).height((24f * h).dp).clip(RoundedCornerShape(2.dp)).background(if (i < n) t.p else t.soft.copy(alpha = 0.5f)))
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            T(if (n == 0) "Listening…" else words.take(n).joinToString(" "), size = 14.sp, color = if (n == 0) t.soft else t.inInk, lineHeight = 19.sp, maxLines = 3)
         }
     }
 }
