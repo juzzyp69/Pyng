@@ -93,14 +93,8 @@ object Notifier {
     }
 
     private val history = mutableMapOf<String, MutableList<Pair<String, Msg>>>()
-    /** Texts that came in for each chat since it was last read, for the app icon's count. */
+    /** New texts in each chat since Pyng was last opened, for the app icon's count. */
     private val counts = mutableMapOf<String, Int>()
-
-    /** How many texts in a chat are waiting: everything since your last reply, or what's arrived since. Never less than 1. */
-    private fun unreadCount(repo: Repo, conv: Conv): Int {
-        val fromChat = repo.msgs[conv.id]?.filter { it.visible && !it.isSys }?.takeLastWhile { !it.fromMe }?.size ?: 0
-        return maxOf(fromChat, counts[conv.id] ?: 0, 1)
-    }
 
     fun canPost(ctx: Context) = Build.VERSION.SDK_INT < 33 ||
         ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
@@ -183,12 +177,11 @@ object Notifier {
 
     fun rememberGooglePhoto(convId: String, photo: Bitmap?) { if (photo != null) googlePhotos[convId] = circle(photo) ?: photo }
 
-    /** [quiet] puts a chat back in the shade without a sound or a pop-up (see [tidy]). */
-    fun show(ctx: Context, repo: Repo, conv: Conv, m: Msg, quiet: Boolean = false) {
+    fun show(ctx: Context, repo: Repo, conv: Conv, m: Msg) {
         val p = repo.prefs.state
         // A new code goes straight to the clipboard if you turned that on, so the keyboard can offer it.
         val otp = if (!m.fromMe) com.jpetrydesign.pyng.ui.screens.detect(m.text).code else null
-        if (otp != null && p.on("otpAuto") && !quiet) copyCode(ctx, otp)
+        if (otp != null && p.on("otpAuto")) copyCode(ctx, otp)
         if (!p.on("notif") || conv.id in p.muted || !canPost(ctx)) return
         // Texts with a word you blocked go to Spam quietly; chats in Trash wait there too.
         if (!m.fromMe && repo.hasBlockedWord(m.text)) return
@@ -200,7 +193,7 @@ object Notifier {
             history[conv.id]?.let { h -> if (h.isNotEmpty() && h.last().second.text.trim() == m.text.trim()) h.removeAt(h.lastIndex) }
         }
         lastAlert[conv.id] = System.currentTimeMillis() to m.text
-        if (!dupe && !quiet && !m.fromMe) counts[conv.id] = (counts[conv.id] ?: 0) + 1
+        if (!dupe && !m.fromMe) counts[conv.id] = (counts[conv.id] ?: 0) + 1
         val alerts = p.alerts[conv.id]
         if (alerts?.on == false) return
         val body = notifText(m).ifEmpty { return }
@@ -245,11 +238,11 @@ object Notifier {
             .setAutoCancel(true)
             .setShortcutId(conv.id)
             .setContentIntent(open)
-            // Every unread text counts on the app icon, like the stock app: 3 from one person shows 3.
-            .setNumber(unreadCount(repo, conv))
+            // Each new text counts on the app icon: 3 from one person shows 3. Opening Pyng clears it.
+            .setNumber((counts[conv.id] ?: 0).coerceAtLeast(1))
             .setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
-            .setOnlyAlertOnce(dupe || quiet)
-            .setSilent(dupe || hush || quiet)
+            .setOnlyAlertOnce(dupe)
+            .setSilent(dupe || hush)
         if (!p.on("vibrate") || alerts?.vibrate == "Off") b.setVibrate(longArrayOf(0L))
         // Chat bubbles: Android floats the chat over other apps when you allow bubbles for Pyng.
         if (android.os.Build.VERSION.SDK_INT >= 30 && p.on("bubbles") && !placeholder) runCatching {
@@ -340,7 +333,7 @@ object Notifier {
      * (here, in Google Messages, or on another device) loses its alert, and so does any stand-in whose
      * chat is read. Runs when Pyng opens and after chats sync, so the app icon's count is never stuck.
      */
-    fun tidy(ctx: Context, repo: Repo, restore: Boolean = false) {
+    fun tidy(ctx: Context, repo: Repo) {
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
         val active = runCatching { nm.activeNotifications }.getOrNull() ?: return
         fun named(n: String) = repo.convs.values.filter { it.title.trim().lowercase() == n || it.shortTitle.trim().lowercase() == n }
@@ -360,34 +353,20 @@ object Notifier {
                 if (!c.unread && tag !in repo.prefs.state.markedUnread) { history.remove(tag); counts.remove(tag); runCatching { nm.cancel(tag, 1) } }
             }
         }
-        if (restore) runCatching { restoreUnread(ctx, repo, active.mapNotNullTo(HashSet()) { sbn -> sbn.tag?.takeIf { sbn.id == 1 } }) }
     }
 
     /**
-     * Puts any unread chat that has no alert (swiped away, or it came in while Pyng was catching up)
-     * back in the shade quietly, so the app icon's count matches what's actually unread. Runs when
-     * you leave Pyng. Muted, snoozed, spam and trashed chats are left out, like they are on Home.
+     * Opening Pyng: every text alert leaves the shade and the app icon's count goes back to zero.
+     * Nothing is marked read; the chats stay unread in Pyng until you open them.
      */
-    private fun restoreUnread(ctx: Context, repo: Repo, showing: Set<String>) {
-        val p = repo.prefs.state
-        if (!p.on("notif") || !canPost(ctx)) return
-        val now = System.currentTimeMillis()
-        val trashed = repo.trashedChats()
-        repo.convs.values
-            .filter { c ->
-                (c.unread || c.id in p.markedUnread) && c.status == "active" && c.id !in showing &&
-                    c.id !in p.muted && c.id !in trashed && (p.snoozed[c.id] ?: 0L) <= now && p.alerts[c.id]?.on != false &&
-                    !repo.hasBlockedWord(c.preview) &&
-                    (c.id in p.notSpam || !p.on("spam") || com.jpetrydesign.pyng.ui.screens.spamCheck(c, c.preview) == null)
-            }
-            .sortedByDescending { it.ts }
-            .take(24)
-            .forEach { c ->
-                val last = repo.msgs[c.id]?.lastOrNull { !it.fromMe && it.visible && !it.isSys }
-                val m = last ?: Msg("", "back-" + c.ts, c.id, "", c.sender, c.sender.substringBefore(' '), false, "INCOMING_COMPLETE", "",
-                    c.preview.ifBlank { "New message" }, emptyList(), c.ts, emptyList(), "", 0, "text")
-                show(ctx, repo, c, m, quiet = true)
-            }
+    fun clearAll(ctx: Context) {
+        val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
+        val active = runCatching { nm.activeNotifications }.getOrNull() ?: return
+        for (sbn in active) {
+            val tag = sbn.tag ?: continue
+            if (sbn.id == 1) runCatching { nm.cancel(tag, 1) }
+        }
+        history.clear(); counts.clear(); placeholders.clear()
     }
 
     fun linkNotification(ctx: Context) = NotificationCompat.Builder(ctx, CH_LINK)

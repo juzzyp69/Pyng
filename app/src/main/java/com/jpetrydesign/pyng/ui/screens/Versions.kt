@@ -36,6 +36,13 @@ data class Release(val version: String, val date: String, val added: List<String
  */
 val RELEASES = listOf(
     Release(
+        "0.9.6.2", "Nov 21, 2026",
+        fixed = listOf(
+            "Notifications are only for new texts again: older unread chats never come back to the shade",
+            "Opening Pyng clears your text notifications and the app icon's count, without marking anything read",
+        ),
+    ),
+    Release(
         "0.9.6.1", "Nov 21, 2026",
         added = listOf(
             "Close a held chat your way\nTap or swipe the space around the cards, or tap the X in the corner",
@@ -43,7 +50,7 @@ val RELEASES = listOf(
         fixed = listOf(
             "Chats always open, even if the opening motion stalls",
             "A chat's photo is only seen once as it flies into the chat",
-            "The app icon counts every unread text, and shows again for unread chats when you leave Pyng",
+            "The app icon counts every new text",
         ),
     ),
     Release(

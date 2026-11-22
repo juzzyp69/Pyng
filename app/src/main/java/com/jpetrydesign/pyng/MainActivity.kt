@@ -193,8 +193,8 @@ class MainActivity : FragmentActivity() {
         if (repo.prefs.state.on("bioLock") && System.currentTimeMillis() - lastStop > 60_000 && lastStop > 0) locked = true
         if (locked) unlock()
         if (!repo.demo) com.jpetrydesign.pyng.data.Link.foreground(app)
-        // Opening Pyng clears alerts for chats that are already read, so the app icon's count is right.
-        if (!repo.demo) runCatching { com.jpetrydesign.pyng.data.Notifier.tidy(this, repo) }
+        // Opening Pyng clears every text alert and the app icon's count. Chats stay unread until you open them.
+        if (!repo.demo) runCatching { com.jpetrydesign.pyng.data.Notifier.clearAll(this) }
     }
 
     override fun onStop() {
@@ -202,8 +202,6 @@ class MainActivity : FragmentActivity() {
         app.repo.foreground = false
         lastStop = System.currentTimeMillis()
         if (!app.repo.demo) com.jpetrydesign.pyng.data.Link.background(app)
-        // Leaving Pyng: every unread chat has an alert, so the app icon shows the real count.
-        if (!app.repo.demo) runCatching { com.jpetrydesign.pyng.data.Notifier.tidy(this, app.repo, restore = true) }
     }
 
     private fun unlock() {
