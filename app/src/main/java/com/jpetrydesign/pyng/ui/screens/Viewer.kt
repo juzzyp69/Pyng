@@ -44,6 +44,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -156,49 +157,35 @@ fun PhotoViewer(
             reacting = false
             squish.snapTo(0f); squish.animateTo(1f, tween(520, easing = androidx.compose.animation.core.LinearEasing))
         }
+        // Video controls for whichever video is in the middle, so the floating player can drive it.
+        val vc = remember { VideoCtl() }
+        val mo = com.jpetrydesign.pyng.ui.kit.LocalMo.current
+        // While a video plays, the controls step aside after a few seconds; any tap brings them back.
+        LaunchedEffect(chrome, vc.playing) { if (chrome && vc.playing) { kotlinx.coroutines.delay(3000); chrome = false } }
+        var menu by remember { mutableStateOf(false) }
+        LaunchedEffect(pager.currentPage) { menu = false }
         Box(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = fade }.background(VBg))
-            val glow = ref.let { r -> r.localPath.ifEmpty { repo.media[r.id].orEmpty() }.ifEmpty { repo.media[r.thumbId].orEmpty().ifEmpty { r.previewPath } } }
+            // The same picture, heavily frosted, fills whatever the photo or video doesn't, instead of black bars.
+            // (For a video, its still frame.)
+            val glow = ref.let { r ->
+                val still = repo.media[r.thumbId].orEmpty().ifEmpty { r.previewPath }
+                if (r.isVideo) still else r.localPath.ifEmpty { repo.media[r.id].orEmpty() }.ifEmpty { still }
+            }
             androidx.compose.animation.Crossfade(glow, animationSpec = tween(420), label = "glow") { g ->
                 if (g.isNotEmpty()) AsyncImage(
                     File(g), null, contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.42f * fade; scaleX = 1.3f; scaleY = 1.3f }
-                        .blur(60.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Unbounded),
+                    modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.62f * fade; scaleX = 1.3f; scaleY = 1.3f }
+                        .blur(70.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Unbounded),
                 )
             }
-            Column(Modifier.fillMaxSize()) {
-                // Top: close, who sent it and when, where you are in the set, and more.
-                Box(Modifier.fillMaxWidth().statusBarsPadding().height(60.dp)) {
-                    androidx.compose.animation.AnimatedVisibility(showChrome, enter = fadeIn() + slideInVertically { -it / 3 }, exit = fadeOut() + slideOutVertically { -it / 3 }) {
-                        var more by remember { mutableStateOf(false) }
-                        Row(Modifier.fillMaxSize().padding(start = 6.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            CircleButton(Icons.close, "Close", onClose, tint = VInk)
-                            Column(Modifier.weight(1f).padding(start = 4.dp)) {
-                                T(if (m.fromMe) "You" else m.sender.ifBlank { conv?.title ?: "" }, size = 15.5.sp, weight = FontWeight.SemiBold, color = VInk, maxLines = 1)
-                                T(viewerDate(m.ts), size = 12.5.sp, color = VSoft, maxLines = 1)
-                            }
-                            if (!single) T(
-                                "${pager.currentPage + 1} of $n", size = 12.sp, weight = FontWeight.Medium, color = VInk,
-                                modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(VGlass).padding(horizontal = 10.dp, vertical = 5.dp),
-                            )
-                            Box {
-                                CircleButton(Icons.more, "More", { more = true }, tint = VInk, iconSize = 22.dp, stroke = 3.2f)
-                                DropdownMenu(more, { more = false }, containerColor = Color(0xFF1B1F1D), shape = RoundedCornerShape(18.dp)) {
-                                    DropdownMenuItem({ T("Forward", size = 15.sp, color = VInk) }, { more = false; onForward(m) }, leadingIcon = { Ico(Icons.forward, VInk, 18.dp) })
-                                    DropdownMenuItem({ T("Open in another app", size = 15.sp, color = VInk) }, {
-                                        more = false
-                                        if (path.isNotEmpty()) openFile(ctx, path, ref.mime) else repo.toast("Still downloading")
-                                    }, leadingIcon = { Ico(Icons.share, VInk, 18.dp) })
-                                    if (showInChat != null) DropdownMenuItem({ T("Show in chat", size = 15.sp, color = VInk) }, { more = false; showInChat(m) }, leadingIcon = { Ico(Icons.message, VInk, 18.dp) })
-                                    if (m.id.isNotEmpty()) DropdownMenuItem({ T("Delete", size = 15.sp, color = Color(0xFFFF8A80)) }, { more = false; onDelete(m) }, leadingIcon = { Ico(Icons.trash, Color(0xFFFF8A80), 18.dp) })
-                                }
-                            }
-                        }
-                    }
-                }
-                // The set. Neighbors sit to each side, smaller, dimmer and turned away.
-                BoxWithConstraintsScopeless { wPx ->
-                    val inset = if (single) 18.dp else with(LocalDensity.current) { (wPx * 0.15f).toDp() }
+            Box(Modifier.fillMaxSize().graphicsLayer { alpha = fade }.background(Color.Black.copy(alpha = 0.32f)))
+            // The set, full screen. Neighbors sit to each side, smaller, dimmer and turned away.
+            Box(Modifier.fillMaxSize().onSizeChanged { }) {
+                var wPx by remember { mutableFloatStateOf(0f) }
+                Box(Modifier.fillMaxSize().onSizeChanged { wPx = it.width.toFloat() })
+                if (wPx > 0f) {
+                    val inset = if (single) 0.dp else with(LocalDensity.current) { (wPx * 0.07f).toDp() }
                     val spacing = 10.dp
                     val spacingPx = with(LocalDensity.current) { spacing.toPx() }
                     HorizontalPager(
@@ -245,9 +232,9 @@ fun PhotoViewer(
                                 val p = (page - pager.currentPage) - pager.currentPageOffsetFraction
                                 if (single) 0f else min(abs(p), 1f) * 0.4f
                             }
-                            if (pr.isVideo) VideoPage(pr, current = isCur, dismissY = if (isCur) dismiss.value else 0f, onTap = { chrome = !chrome }, onDrag = drag, onDragEnd = dragEnd, dim = dim)
+                            if (pr.isVideo) VideoPage(pr, current = isCur, ctl = vc, rounded = !single, dismissY = if (isCur) dismiss.value else 0f, onTap = { chrome = !chrome }, onDrag = drag, onDragEnd = dragEnd, dim = dim)
                             else ZoomPage(
-                                pr, current = isCur,
+                                pr, current = isCur, rounded = !single,
                                 dismissY = if (isCur) dismiss.value else 0f,
                                 onZoomed = { z -> if (isCur) zoomed = z },
                                 onTap = { chrome = !chrome },
@@ -256,46 +243,106 @@ fun PhotoViewer(
                         }
                     }
                 }
-                // Bottom: thumbnails of the set, then Reply, react, Save and Share. Their space is kept.
-                Box(Modifier.fillMaxWidth().navigationBarsPadding().height(if (single) 84.dp else 142.dp), contentAlignment = Alignment.BottomCenter) {
-                    androidx.compose.animation.AnimatedVisibility(showChrome, enter = fadeIn() + slideInVertically { it / 3 }, exit = fadeOut() + slideOutVertically { it / 3 }) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            if (!single) Thumbs(list, pager.currentPage) { i -> scope.launch { pager.animateScrollToPage(i) } }
-                            Box(Modifier.height(76.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                val mine = m.reactions.firstOrNull { myId.isNotEmpty() && myId in it.by }?.emoji
-                                androidx.compose.animation.AnimatedContent(reacting, label = "acts",
-                                    transitionSpec = { (fadeIn(tween(160)) + scaleIn(spring(dampingRatio = 0.7f, stiffness = 500f), initialScale = 0.9f)) togetherWith fadeOut(tween(120)) }) { r ->
-                                    if (r) Row(
-                                        Modifier.height(50.dp).clip(RoundedCornerShape(25.dp)).background(VGlass).padding(horizontal = 5.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        repo.prefs.state.quickReacts.forEach { e ->
-                                            Box(
-                                                Modifier.size(40.dp).clip(CircleShape).background(if (e == mine) Color.White.copy(alpha = 0.22f) else Color.Transparent).press(0.85f) { onReact(m, e); reacting = false },
-                                                contentAlignment = Alignment.Center,
-                                            ) { T(e, size = 21.sp) }
+            }
+            // Controls float over the picture and drain away when you tap; tap again and they bud back.
+            val liquid = mo.liquid
+            fun appear(from: Float) = if (mo == com.jpetrydesign.pyng.ui.kit.Mo.Minimal) fadeIn(tween(120))
+                else fadeIn(tween(160)) + scaleIn(if (liquid) spring(dampingRatio = 0.55f, stiffness = 420f) else tween(220), initialScale = if (liquid) 0.55f else 0.92f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, from))
+            fun vanish(to: Float) = if (mo == com.jpetrydesign.pyng.ui.kit.Mo.Minimal) fadeOut(tween(90))
+                else fadeOut(tween(150)) + scaleOut(tween(200), targetScale = if (liquid) 0.5f else 0.94f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, to))
+            // Top: close, who sent it and when, and where you are in the set.
+            androidx.compose.animation.AnimatedVisibility(
+                showChrome, modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 8.dp, start = 12.dp, end = 12.dp),
+                enter = appear(0f), exit = vanish(0f),
+            ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(44.dp).clip(CircleShape).background(VPill).press(0.88f, onClose).semantics { contentDescription = "Close" }, contentAlignment = Alignment.Center) { Ico(Icons.close, VInk, 18.dp) }
+                    Spacer(Modifier.width(8.dp))
+                    Column(Modifier.weight(1f, fill = false).clip(RoundedCornerShape(22.dp)).background(VPill).padding(horizontal = 14.dp, vertical = 6.dp)) {
+                        T(if (m.fromMe) "You" else m.sender.ifBlank { conv?.title ?: "" }, size = 14.sp, weight = FontWeight.SemiBold, color = VInk, maxLines = 1)
+                        T(viewerDate(m.ts), size = 11.5.sp, color = VSoft, maxLines = 1)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    if (!single) {
+                        Spacer(Modifier.width(8.dp))
+                        T("${pager.currentPage + 1} of $n", size = 12.sp, weight = FontWeight.Medium, color = VInk,
+                            modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(VPill).padding(horizontal = 11.dp, vertical = 7.dp))
+                    }
+                }
+            }
+            // Bottom: the set's thumbnails (when there's more than one), then one floating player.
+            androidx.compose.animation.AnimatedVisibility(
+                showChrome, modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 14.dp, start = 14.dp, end = 14.dp),
+                enter = appear(1f), exit = vanish(1f),
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (!single) Thumbs(list, pager.currentPage) { i -> scope.launch { pager.animateScrollToPage(i) } }
+                    val mine = m.reactions.firstOrNull { myId.isNotEmpty() && myId in it.by }?.emoji
+                    androidx.compose.animation.AnimatedContent(reacting, label = "acts",
+                        transitionSpec = { (fadeIn(tween(160)) + scaleIn(spring(dampingRatio = 0.7f, stiffness = 500f), initialScale = 0.9f)) togetherWith fadeOut(tween(120)) }) { r ->
+                        if (r) Row(
+                            Modifier.height(52.dp).clip(RoundedCornerShape(26.dp)).background(VPill).padding(horizontal = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            repo.prefs.state.quickReacts.forEach { e ->
+                                Box(
+                                    Modifier.size(42.dp).clip(CircleShape).background(if (e == mine) Color.White.copy(alpha = 0.22f) else Color.Transparent).press(0.85f) { onReact(m, e); reacting = false },
+                                    contentAlignment = Alignment.Center,
+                                ) { T(e, size = 21.sp) }
+                            }
+                            Box(Modifier.size(42.dp).clip(CircleShape).press(0.85f) { reacting = false }, contentAlignment = Alignment.Center) { Ico(Icons.close, VInk, 18.dp) }
+                        } else Row(
+                            Modifier.widthIn(max = 520.dp).height(54.dp).clip(RoundedCornerShape(27.dp)).background(VPill).padding(horizontal = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (ref.isVideo) {
+                                // The player: play, time, scrubber and sound.
+                                CircleButton(if (vc.playing) Icons.pause else Icons.play, if (vc.playing) "Pause" else "Play", { vc.toggle() }, size = 42.dp, iconSize = 18.dp, tint = VInk)
+                                val shown = vc.scrub?.let { (it * vc.dur).toLong() } ?: vc.pos
+                                T(playClock(shown) + " / " + playClock(vc.dur), size = 12.sp, weight = FontWeight.Medium, color = VSoft, modifier = Modifier.padding(horizontal = 4.dp), maxLines = 1)
+                                androidx.compose.material3.Slider(
+                                    value = vc.scrub ?: if (vc.dur > 0) (vc.pos.toFloat() / vc.dur).coerceIn(0f, 1f) else 0f,
+                                    onValueChange = { vc.scrub = it },
+                                    onValueChangeFinished = { vc.scrub?.let { f -> vc.seek(f) }; vc.scrub = null },
+                                    enabled = vc.player != null && vc.dur > 0,
+                                    colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = VInk, activeTrackColor = VInk, inactiveTrackColor = VInk.copy(alpha = 0.25f)),
+                                    modifier = Modifier.weight(1f).height(36.dp),
+                                )
+                                CircleButton(Icons.volume, if (vc.muted) "Sound on" else "Mute", { vc.muted = !vc.muted }, size = 40.dp, iconSize = 18.dp, tint = if (vc.muted) VSoft else VInk)
+                            } else {
+                                if (m.id.isNotEmpty()) Row(
+                                    Modifier.height(42.dp).clip(RoundedCornerShape(21.dp)).press(0.92f) { onReply(m) }.padding(horizontal = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Ico(Icons.reply, VInk, 18.dp); Spacer(Modifier.width(7.dp))
+                                    T("Reply", size = 14.5.sp, weight = FontWeight.Medium, color = VInk)
+                                }
+                                if (m.id.isNotEmpty()) Box(Modifier.size(42.dp).clip(CircleShape).press(0.88f) { reacting = true }.semantics { contentDescription = "React" }, contentAlignment = Alignment.Center) {
+                                    if (mine != null) T(mine, size = 19.sp) else Ico(Icons.heart, VInk, 19.dp)
+                                }
+                            }
+                            // Everything else lives behind the dots.
+                            Box {
+                                CircleButton(Icons.more, "More", { menu = true }, size = 42.dp, tint = VInk, iconSize = 20.dp, stroke = 3.2f)
+                                DropdownMenu(menu, { menu = false }, containerColor = Color(0xF21B1F1D), shape = RoundedCornerShape(20.dp)) {
+                                    if (m.id.isNotEmpty() && ref.isVideo) DropdownMenuItem({ T("Reply", size = 15.sp, color = VInk) }, { menu = false; onReply(m) }, leadingIcon = { Ico(Icons.reply, VInk, 18.dp) })
+                                    if (m.id.isNotEmpty() && ref.isVideo) DropdownMenuItem({ T("React", size = 15.sp, color = VInk) }, { menu = false; reacting = true }, leadingIcon = { Ico(Icons.heart, VInk, 18.dp) })
+                                    DropdownMenuItem({ T("Save", size = 15.sp, color = VInk) }, { menu = false; if (path.isNotEmpty()) saveToGallery(ctx, path, ref.mime) else repo.toast("Still downloading") }, leadingIcon = { Ico(Icons.download, VInk, 18.dp) })
+                                    DropdownMenuItem({ T("Share", size = 15.sp, color = VInk) }, {
+                                        menu = false
+                                        if (path.isEmpty()) repo.toast("Still downloading")
+                                        else runCatching {
+                                            val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", File(path))
+                                            ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType(ref.mime).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Share"))
                                         }
-                                        Box(Modifier.size(40.dp).clip(CircleShape).press(0.85f) { reacting = false }, contentAlignment = Alignment.Center) { Ico(Icons.close, VInk, 18.dp) }
-                                    } else Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        if (m.id.isNotEmpty()) Row(
-                                            Modifier.height(46.dp).clip(RoundedCornerShape(23.dp)).background(VGlass).press(0.92f) { onReply(m) }.padding(horizontal = 16.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            Ico(Icons.reply, VInk, 18.dp); Spacer(Modifier.width(7.dp))
-                                            T("Reply", size = 14.5.sp, weight = FontWeight.Medium, color = VInk)
-                                        }
-                                        if (m.id.isNotEmpty()) GlassButton("React", { reacting = true }) {
-                                            if (mine != null) T(mine, size = 19.sp) else Ico(Icons.heart, VInk, 19.dp)
-                                        }
-                                        GlassButton("Save", { if (path.isNotEmpty()) saveToGallery(ctx, path, ref.mime) else repo.toast("Still downloading") }) { Ico(Icons.download, VInk, 19.dp) }
-                                        GlassButton("Share", {
-                                            if (path.isEmpty()) { repo.toast("Still downloading"); return@GlassButton }
-                                            runCatching {
-                                                val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", File(path))
-                                                ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType(ref.mime).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Share"))
-                                            }
-                                        }) { Ico(Icons.share, VInk, 19.dp) }
-                                    }
+                                    }, leadingIcon = { Ico(Icons.share, VInk, 18.dp) })
+                                    DropdownMenuItem({ T("Forward", size = 15.sp, color = VInk) }, { menu = false; onForward(m) }, leadingIcon = { Ico(Icons.forward, VInk, 18.dp) })
+                                    DropdownMenuItem({ T("Open in another app", size = 15.sp, color = VInk) }, {
+                                        menu = false
+                                        if (path.isNotEmpty()) openFile(ctx, path, ref.mime) else repo.toast("Still downloading")
+                                    }, leadingIcon = { Ico(Icons.compose, VInk, 18.dp) })
+                                    if (showInChat != null) DropdownMenuItem({ T("Show in chat", size = 15.sp, color = VInk) }, { menu = false; showInChat(m) }, leadingIcon = { Ico(Icons.message, VInk, 18.dp) })
+                                    if (m.id.isNotEmpty()) DropdownMenuItem({ T("Delete", size = 15.sp, color = Color(0xFFFF8A80)) }, { menu = false; onDelete(m) }, leadingIcon = { Ico(Icons.trash, Color(0xFFFF8A80), 18.dp) })
                                 }
                             }
                         }
@@ -305,6 +352,20 @@ fun PhotoViewer(
         }
     }
 }
+
+/** The middle video's player, shared with the floating controls. */
+private class VideoCtl {
+    var player by mutableStateOf<androidx.media3.exoplayer.ExoPlayer?>(null)
+    var playing by mutableStateOf(false)
+    var pos by mutableStateOf(0L)
+    var dur by mutableStateOf(0L)
+    var muted by mutableStateOf(false)
+    var scrub by mutableStateOf<Float?>(null)
+    fun toggle() { val p = player ?: return; if (p.isPlaying) p.pause() else p.play() }
+    fun seek(f: Float) { player?.seekTo((f * dur).toLong()); pos = (f * dur).toLong() }
+}
+
+private val VPill = Color(0x8C1B1F1D)
 
 /** Measures the width once, without the extra layout pass of BoxWithConstraints for every recomposition. */
 @Composable
@@ -387,7 +448,7 @@ private fun viewerDate(ts: Long): String =
 
 /** One photo: pinch or double-tap to zoom, drag while zoomed to look around, drag down to close. */
 @Composable
-private fun ZoomPage(ref: MediaRef, current: Boolean, dismissY: Float, onZoomed: (Boolean) -> Unit, onTap: () -> Unit, onDrag: (Float) -> Unit, onDragEnd: () -> Unit, dim: Float = 0f) {
+private fun ZoomPage(ref: MediaRef, current: Boolean, rounded: Boolean = true, dismissY: Float, onZoomed: (Boolean) -> Unit, onTap: () -> Unit, onDrag: (Float) -> Unit, onDragEnd: () -> Unit, dim: Float = 0f) {
     val repo = LocalRepo.current
     val t = LocalTok.current
     val full = ref.localPath.ifEmpty { repo.media[ref.id].orEmpty() }
@@ -461,10 +522,11 @@ private fun ZoomPage(ref: MediaRef, current: Boolean, dismissY: Float, onZoomed:
         // The picture's real shape (from Google, or from the file once it loads), so it fits between the bars.
         var loaded by remember(show) { mutableFloatStateOf(0f) }
         val ratio = if (loaded > 0f) loaded else if (ref.w > 0 && ref.h > 0) ref.w.toFloat() / ref.h else 0f
-        val shape = RoundedCornerShape(if (scale > 1.01f) 0.dp else 22.dp)
-        val imgMod = (if (ratio > 0f) Modifier.padding(vertical = 6.dp).aspectRatio(ratio) else Modifier.fillMaxSize())
+        // One photo fills the screen edge to edge; in a set, each is a card so its neighbors read as cards too.
+        val shape = RoundedCornerShape(if (scale > 1.01f || !rounded) 0.dp else 18.dp)
+        val imgMod = (if (ratio > 0f) Modifier.aspectRatio(ratio) else Modifier.fillMaxSize())
             .graphicsLayer { scaleX = scale; scaleY = scale; translationX = offset.x; translationY = offset.y }
-            .then(if (ratio > 0f && scale <= 1.01f) Modifier.shadow(26.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.5f), spotColor = Color.Black.copy(alpha = 0.6f)) else Modifier)
+            .then(if (ratio > 0f && scale <= 1.01f && rounded) Modifier.shadow(26.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.5f), spotColor = Color.Black.copy(alpha = 0.6f)) else Modifier)
             .clip(shape)
             .drawWithContent { drawContent(); if (dim > 0.005f) drawRect(Color.Black.copy(alpha = dim)) }
         if (show.isNotEmpty()) AsyncImage(
@@ -477,18 +539,20 @@ private fun ZoomPage(ref: MediaRef, current: Boolean, dismissY: Float, onZoomed:
     }
 }
 
-/** A video between the bars: plays right here with play/pause, a scrubber, time and sound. Drag down to close. */
+/**
+ * A video at its own shape, as big as the screen allows. Tap to show or hide the controls (they float
+ * over it, in the viewer); drag down to close.
+ */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
-private fun VideoPage(ref: MediaRef, current: Boolean, dismissY: Float, onTap: () -> Unit, onDrag: (Float) -> Unit, onDragEnd: () -> Unit, dim: Float = 0f) {
+private fun VideoPage(ref: MediaRef, current: Boolean, ctl: VideoCtl, rounded: Boolean, dismissY: Float, onTap: () -> Unit, onDrag: (Float) -> Unit, onDragEnd: () -> Unit, dim: Float = 0f) {
     val repo = LocalRepo.current
-    val t = LocalTok.current
     val ctx = LocalContext.current
     val full = ref.localPath.ifEmpty { repo.media[ref.id].orEmpty() }
     val thumb = repo.media[ref.thumbId].orEmpty().ifEmpty { ref.previewPath }
     LaunchedEffect(ref.id) { if (full.isEmpty()) repo.ensureMedia(ref, manual = true) }
     var ratio by remember { mutableFloatStateOf(if (ref.w > 0 && ref.h > 0) ref.w.toFloat() / ref.h else 16f / 9f) }
-    val shape = RoundedCornerShape(22.dp)
+    val shape = RoundedCornerShape(if (rounded) 18.dp else 0.dp)
     val player = remember(full, current) {
         if (full.isEmpty() || !current) null
         else androidx.media3.exoplayer.ExoPlayer.Builder(ctx).build().apply {
@@ -499,13 +563,9 @@ private fun VideoPage(ref: MediaRef, current: Boolean, dismissY: Float, onTap: (
         }
     }
     var playing by remember(player) { mutableStateOf(false) }
-    var pos by remember(player) { mutableStateOf(0L) }
-    var dur by remember(player) { mutableStateOf(0L) }
-    var muted by remember { mutableStateOf(false) }
-    var scrubbing by remember { mutableStateOf<Float?>(null) }
     DisposableEffect(player) {
         val l = object : androidx.media3.common.Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
+            override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying; if (current) ctl.playing = isPlaying }
             override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
                 if (videoSize.width > 0 && videoSize.height > 0) ratio = videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height
             }
@@ -514,18 +574,23 @@ private fun VideoPage(ref: MediaRef, current: Boolean, dismissY: Float, onTap: (
             }
         }
         player?.addListener(l)
-        onDispose { player?.removeListener(l); player?.release() }
+        if (current) { ctl.player = player; ctl.pos = 0L; ctl.dur = 0L; ctl.playing = false }
+        onDispose {
+            player?.removeListener(l); player?.release()
+            if (ctl.player === player) { ctl.player = null; ctl.playing = false }
+        }
     }
     LaunchedEffect(player) {
         while (player != null) {
-            if (scrubbing == null) pos = player.currentPosition
-            dur = player.duration.coerceAtLeast(0L)
+            if (ctl.scrub == null && ctl.player === player) ctl.pos = player.currentPosition
+            if (ctl.player === player) ctl.dur = player.duration.coerceAtLeast(0L)
             kotlinx.coroutines.delay(200)
         }
     }
-    LaunchedEffect(muted, player) { player?.volume = if (muted) 0f else 1f }
-    Column(
+    LaunchedEffect(ctl.muted, player) { player?.volume = if (ctl.muted) 0f else 1f }
+    Box(
         Modifier.fillMaxSize()
+            .pointerInput(ref.id) { detectTapGestures(onTap = { onTap() }) }
             .pointerInput(ref.id) {
                 detectVerticalDragGestures(onDragEnd = { onDragEnd() }, onDragCancel = { onDragEnd() }) { ch, dy -> onDrag(dy); ch.consume() }
             }
@@ -534,14 +599,14 @@ private fun VideoPage(ref: MediaRef, current: Boolean, dismissY: Float, onTap: (
                 val s = 1f - min(0.14f, abs(dismissY) / 2600f)
                 scaleX = s; scaleY = s
             },
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+        contentAlignment = Alignment.Center,
     ) {
+        // The whole video, never cropped: as wide or as tall as the screen allows at its own shape.
         Box(
-            Modifier.weight(1f, fill = false).padding(vertical = 6.dp).aspectRatio(ratio)
-                .shadow(26.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.5f), spotColor = Color.Black.copy(alpha = 0.6f))
+            Modifier.aspectRatio(ratio)
+                .then(if (rounded) Modifier.shadow(26.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.5f), spotColor = Color.Black.copy(alpha = 0.6f)) else Modifier)
                 .clip(shape).background(Color.Black)
-                .drawWithContent { drawContent(); if (dim > 0.005f) drawRect(Color.Black.copy(alpha = dim)) }
-                .pointerInput(player) { detectTapGestures(onTap = { if (player == null) onTap() else if (player.isPlaying) player.pause() else player.play() }) },
+                .drawWithContent { drawContent(); if (dim > 0.005f) drawRect(Color.Black.copy(alpha = dim)) },
             contentAlignment = Alignment.Center,
         ) {
             if (player != null) androidx.compose.ui.viewinterop.AndroidView(
@@ -552,32 +617,13 @@ private fun VideoPage(ref: MediaRef, current: Boolean, dismissY: Float, onTap: (
                 val still = full.ifEmpty { thumb }
                 if (still.isNotEmpty()) AsyncImage(File(still), "Video", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
-            if (player == null || !playing) Box(Modifier.size(60.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
+            if (player == null || !playing) Box(
+                Modifier.size(64.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)).clickable(enabled = player != null) { player?.play() },
+                contentAlignment = Alignment.Center,
+            ) {
                 if (full.isEmpty()) CircularProgressIndicator(Modifier.size(26.dp), color = Color.White, strokeWidth = 2.dp)
                 else Ico(Icons.play, Color.White, 26.dp, 1f, fill = Color.White)
             }
-        }
-        // Controls under the video, on the dark stage, so they never cover the picture. Only on the one in the middle.
-        if (current) Row(
-            Modifier.fillMaxWidth().padding(top = 10.dp, start = 2.dp, end = 2.dp).height(48.dp).clip(RoundedCornerShape(24.dp))
-                .background(VGlass).padding(horizontal = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            CircleButton(if (playing) Icons.pause else Icons.play, if (playing) "Pause" else "Play", {
-                val p = player ?: return@CircleButton
-                if (p.isPlaying) p.pause() else p.play()
-            }, size = 40.dp, iconSize = 18.dp, tint = VInk)
-            val shown = scrubbing?.let { (it * dur).toLong() } ?: pos
-            T(playClock(shown) + " / " + playClock(dur), size = 12.5.sp, weight = FontWeight.Medium, color = VSoft, modifier = Modifier.padding(horizontal = 6.dp))
-            androidx.compose.material3.Slider(
-                value = scrubbing ?: if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f,
-                onValueChange = { scrubbing = it },
-                onValueChangeFinished = { scrubbing?.let { f -> player?.seekTo((f * dur).toLong()); pos = (f * dur).toLong() }; scrubbing = null },
-                enabled = player != null && dur > 0,
-                colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = VInk, activeTrackColor = VInk, inactiveTrackColor = VInk.copy(alpha = 0.25f)),
-                modifier = Modifier.weight(1f).height(36.dp),
-            )
-            CircleButton(Icons.volume, if (muted) "Sound on" else "Mute", { muted = !muted }, size = 40.dp, iconSize = 18.dp, tint = if (muted) VSoft else VInk)
         }
     }
 }
