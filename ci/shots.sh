@@ -34,8 +34,9 @@ shot() {
 }
 
 # 0.9.6 first: the new viewer and the two glass looks.
-WAIT=8 shot 00v-viewer --es route thread:c1 --es open viewer
-WAIT=8 shot 00w-viewer-video --es route thread:c1 --es open viewer-video
+WAIT=10 shot 00v-viewer --es route thread:c9 --es open viewer
+WAIT=10 shot 00w-viewer-video --es route thread:c9 --es open viewer-video
+WAIT=10 shot 00w2-viewer-strip --es route thread:c9 --es open viewer-strip
 WAIT=6 shot 00x-liquid-settings --es route settings --es glass "'Liquid Glass'"
 WAIT=6 shot 00y-liquid-appearance --es route appearance --es glass "'Liquid Glass'"
 WAIT=6 shot 00z-frost-appearance --es route appearance
