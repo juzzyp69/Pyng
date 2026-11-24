@@ -211,11 +211,13 @@ fun PhotoViewer(
                 val still = repo.media[r.thumbId].orEmpty().ifEmpty { r.previewPath }
                 if (r.isVideo) still else r.localPath.ifEmpty { repo.media[r.id].orEmpty() }.ifEmpty { still }
             }
+            // A tiny copy of the picture stretched over the screen reads as a soft blur, costs next to nothing,
+            // and looks the same on every Android version (no live blur).
             androidx.compose.animation.Crossfade(glow, animationSpec = tween(420), label = "glow") { g ->
                 if (g.isNotEmpty()) AsyncImage(
-                    File(g), null, contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.62f * fade * bgK; scaleX = 1.3f; scaleY = 1.3f }
-                        .blur(70.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Unbounded),
+                    coil.request.ImageRequest.Builder(ctx).data(File(g)).size(24).build(), null, contentScale = ContentScale.Crop,
+                    filterQuality = androidx.compose.ui.graphics.FilterQuality.High,
+                    modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.62f * fade * bgK; scaleX = 1.3f; scaleY = 1.3f },
                 )
             }
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = fade * bgK }.background(Color.Black.copy(alpha = 0.32f)))

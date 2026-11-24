@@ -203,7 +203,7 @@ fun AppearanceScreen(nav: Nav) {
             SectionLabel("Style studio")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 StudioCard("Chat style", listOf(p.bubble, p.opt("statusStyle").let { if (it == "Off") "No status" else it }).joinToString(" · "), Modifier.weight(1f).enter(1)) { studio = "chat" }
-                StudioCard("Home style", listOf(p.pinLayout, p.pinStyle, p.opt("motion") + " motion").joinToString(" · "), Modifier.weight(1f).enter(2)) { studio = "home" }
+                StudioCard("Home style", listOf(p.pinLayout, p.pinStyle, com.jpetrydesign.pyng.ui.kit.Mo.name(p.opt("motion")) + " motion").joinToString(" · "), Modifier.weight(1f).enter(2)) { studio = "home" }
             }
             Spacer(Modifier.height(14.dp))
             Card {
@@ -368,10 +368,10 @@ fun StyleTiles(k: String, pickWall: () -> Unit) {
                 "sendStyle" -> { cols = 2; pvH = 84.dp; heads = listOf("Classic", "Liquid")
                     // Two columns: classic styles on the left, liquid ones on the right.
                     tiles = SendStyles.classic.zip(SendStyles.liquid).flatMap { (a, b) -> listOf(a, b) }.map { n ->
-                        Tile(n, SendStyles.about[n], p.opt("sendStyle").ifBlank { "Jelly" } == n, { repo.prefs.setOpt("sendStyle", n) }) { SendMini(n, t) }
+                        Tile(n, SendStyles.about[n], SendStyles.of(p.opt("sendStyle")) == n, { repo.prefs.setOpt("sendStyle", n) }) { SendMini(n, t) }
                     } }
-                "motion" -> { cols = 2; pvH = 84.dp; tiles = listOf("Rise", "Pour", "Drop", "Simple", "Minimal").map { n ->
-                    Tile(if (n == "Rise") "Rise (standard)" else n, com.jpetrydesign.pyng.ui.kit.Mo.about[n], p.opt("motion") == n, { repo.prefs.setOpt("motion", n) }) {
+                "motion" -> { cols = 3; pvH = 84.dp; tiles = com.jpetrydesign.pyng.ui.kit.Mo.choices.map { n ->
+                    Tile(n, com.jpetrydesign.pyng.ui.kit.Mo.about[n], com.jpetrydesign.pyng.ui.kit.Mo.name(p.opt("motion")) == n, { repo.prefs.setOpt("motion", n) }) {
                         MotionMini(com.jpetrydesign.pyng.ui.kit.Mo.of(n), t)
                     }
                 } }
@@ -398,7 +398,7 @@ fun StyleTiles(k: String, pickWall: () -> Unit) {
                     }
                 }) + Palettes.walls.map { w -> Tile(w, null, p.defWall == w, { repo.prefs.edit { it.copy(defWall = w) } }) { Wallpaper(w, t) } } }
             }
-            if (k == "motion" && com.jpetrydesign.pyng.ui.kit.LocalMo.current == com.jpetrydesign.pyng.ui.kit.Mo.Minimal && p.opt("motion") != "Minimal") {
+            if (k == "motion" && com.jpetrydesign.pyng.ui.kit.LocalMo.current == com.jpetrydesign.pyng.ui.kit.Mo.Minimal && com.jpetrydesign.pyng.ui.kit.Mo.name(p.opt("motion")) != "Reduced") {
                 T("Reduce motion is on (in Accessibility or your phone's settings), so Minimal is used for now.", size = 12.5.sp, color = t.soft, lineHeight = 17.sp, modifier = Modifier.padding(bottom = 10.dp, start = 4.dp, end = 4.dp))
             }
             heads?.let { hs ->

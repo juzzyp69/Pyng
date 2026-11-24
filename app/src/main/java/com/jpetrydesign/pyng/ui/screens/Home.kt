@@ -675,14 +675,18 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                     SolidSearch(t.ink, 24.dp)
                     // A soft glowing dot when today has a moment: a birthday, a plan or a package.
                     val ctx0 = LocalContext.current
-                    val dot = remember(repo.msgs.size, repo.convs.values.maxOfOrNull { it.ts }, p.opt("momentsHide")) { Moments.worthADot(ctx0, repo) }
+                    // Worked out off the main thread (it reads contacts and scans recent texts), so Home never stutters.
+                    val dot by androidx.compose.runtime.produceState(false, repo.msgs.size, repo.convs.values.maxOfOrNull { it.ts }, p.opt("momentsHide")) {
+                        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { runCatching { Moments.worthADot(ctx0, repo) }.getOrDefault(false) }
+                    }
                     if (dot) {
-                        val glow = androidx.compose.animation.core.rememberInfiniteTransition(label = "moDot")
-                        val g by glow.animateFloat(0.55f, 1f, androidx.compose.animation.core.infiniteRepeatable(tween(1400), androidx.compose.animation.core.RepeatMode.Reverse), label = "moDotA")
+                        // A few soft pulses when it appears, then it rests (nothing animating forever on Home).
+                        val g = remember { Animatable(1f) }
                         val pulse = com.jpetrydesign.pyng.ui.kit.LocalMotion.current
+                        LaunchedEffect(Unit) { if (pulse) repeat(3) { g.animateTo(0.55f, tween(700)); g.animateTo(1f, tween(700)) } }
                         Box(
                             Modifier.align(Alignment.TopEnd).padding(top = 11.dp, end = 11.dp).size(11.dp)
-                                .graphicsLayer { alpha = if (pulse) g else 1f }
+                                .graphicsLayer { alpha = g.value }
                                 .shadow(6.dp, CircleShape, ambientColor = t.p, spotColor = t.p).clip(CircleShape).background(t.p)
                                 .border(1.5.dp, t.bg.copy(alpha = 0.8f), CircleShape),
                         )
@@ -1418,12 +1422,12 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
  * Hold a chat to peek: the last few messages, a reply box, and its actions (pin, read, mute,
  * archive, open, edit pins, block, delete) together over the blurred Home screen.
  */
-@Composable
 /** Chats picked on Home to act on together (mark read, archive, delete…). Empty when you're not selecting. */
 object Selecting {
     var ids by mutableStateOf(emptySet<String>())
 }
 
+@Composable
 fun RowMenu(c: Conv?, onDismiss: () -> Unit, onEditPins: (() -> Unit)? = null) {
     val repo = LocalRepo.current
     val t = LocalTok.current

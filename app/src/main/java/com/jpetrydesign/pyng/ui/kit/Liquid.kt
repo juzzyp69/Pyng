@@ -41,13 +41,19 @@ enum class Mo {
     val liquid get() = this == Rise || this == Pour || this == Drop
 
     companion object {
-        fun of(s: String): Mo = entries.firstOrNull { it.name == s } ?: Rise
+        /** Three choices now: Liquid (the old Rise, Pour and Drop all become it), Simple and Reduced. */
+        fun of(s: String): Mo = when (s) {
+            "Simple" -> Simple
+            "Reduced", "Minimal" -> Minimal
+            else -> Rise
+        }
+        val choices = listOf("Liquid", "Simple", "Reduced")
+        /** The saved setting as one of the three names. */
+        fun name(s: String): String = when (of(s)) { Simple -> "Simple"; Minimal -> "Reduced"; else -> "Liquid" }
         val about = mapOf(
-            "Rise" to "Swells out, pinches off, settles",
-            "Pour" to "Flows out and fills the shape",
-            "Drop" to "A drop glides over and spreads",
-            "Simple" to "Fades and slides a little",
-            "Minimal" to "Quick fades, nothing moves",
+            "Liquid" to "Things pour out of what you tap and settle",
+            "Simple" to "Short slides and fades",
+            "Reduced" to "Quick fades, nothing moves",
         )
     }
 }

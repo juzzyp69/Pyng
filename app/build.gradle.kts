@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         applicationId = "com.jpetrydesign.pyng"
-        minSdk = 29
+        minSdk = 31
         targetSdk = 35
         versionCode = buildNumber
         versionName = "0.9.6.3"

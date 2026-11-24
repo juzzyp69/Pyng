@@ -76,38 +76,70 @@ data class Pal(
 private fun pal(name: String, p: String, pd: String, s: String, bg: String? = null, bgd: String? = null, plus: String? = null, plusInk: String? = null) =
     Pal(name, hex(p), hex(pd), hex(s), bg?.let(::hex), bgd?.let(::hex), plus?.let(::hex), plusInk?.let(::hex))
 
+private fun grad(name: String, a: String, b: String) = Pal(
+    name, hex(a), androidx.compose.ui.graphics.lerp(hex(a), Color.White, 0.3f), androidx.compose.ui.graphics.lerp(hex(a), Color.White, 0.55f),
+    grad = hex(a) to hex(b),
+)
+
 object Palettes {
-    val favorites = listOf(
-        pal("Sage", "#4A6B4F", "#9CC2A0", "#9FB9A2"),
-        pal("Ocean", "#1E5FD1", "#7FA9FF", "#8CB8F0"),
-        pal("Rose", "#B23A63", "#F08DAE", "#E6A3BA"),
+    // Solid: six crisp colors on pure white (true black in dark mode), then six softer ones on a warm tint.
+    val plain = listOf(
+        pal("Blue", "#1E5FD1", "#7FA9FF", "#8CB8F0", "#FFFFFF", "#000000"),
+        pal("Green", "#1F8A4C", "#6FD69A", "#9FD8B5", "#FFFFFF", "#000000"),
+        pal("Red", "#D2334C", "#FF8798", "#F2A8B4", "#FFFFFF", "#000000"),
+        pal("Orange", "#D85E14", "#FFA466", "#F7BE95", "#FFFFFF", "#000000"),
+        pal("Purple", "#6B3FD6", "#B39BFF", "#C2B3F2", "#FFFFFF", "#000000"),
+        pal("Teal", "#0B807B", "#5ED6CF", "#8FD0CB", "#FFFFFF", "#000000"),
     )
-    val colors = listOf(
-        pal("Honey", "#8C6210", "#E8C06A", "#E9C987", "#FBF7EE", "#15130E"), pal("Sand", "#7E6443", "#D9BF98", "#D8C3A3", "#F7F2EA", "#14120F"),
-        pal("Terracotta", "#A34A2C", "#EE9A79", "#E2A78E", "#FAF3EC", "#15110F"), pal("Olive", "#5A6628", "#C2CF85", "#BAC48F", "#F7F6EC", "#12130E"),
-        pal("Mocha", "#6B4A3A", "#CFA894", "#C8AFA2", "#F8F3EF", "#14110F"), pal("Denim", "#3A5683", "#9DB5DE", "#A7B7D2", "#F4F3EE", "#0F1116"),
-        pal("Lavender", "#6A55B0", "#B9A8F2", "#C2B6E8", "#FAF8FD", "#100F16"), pal("Forest", "#2F5D45", "#8FC7A8", "#A3C2B1", "#F5F6F0", "#0E1210"),
-        pal("Burgundy", "#7A2638", "#E38A9D", "#D4A2AC", "#FAF5F2", "#150F10"), pal("Tangerine", "#B04F12", "#FFA562", "#F7B98A", "#FFF8F1", "#16110D"),
-        pal("Indigo", "#4F46E5", "#8B85FF", "#A5A0F5"), pal("Cobalt", "#2563EB", "#7EA6FF", "#93B4F5"), pal("Midnight", "#1E2A5A", "#9AA8E0", "#6F7FB8"),
-        pal("Teal", "#0F766E", "#5EC4B6", "#7CC8BE"), pal("Plum", "#7E3A96", "#D08BE0", "#C49BD3"), pal("Ember", "#B4472A", "#F2946F", "#E8A88F"), pal("Graphite", "#2F3A4F", "#A9B4C8", "#8E98AB"),
+    val tinted = listOf(
+        pal("Denim", "#3A5683", "#9DB5DE", "#A7B7D2", "#F4F3EE", "#0F1116"),
+        pal("Sage", "#4A6B4F", "#9CC2A0", "#9FB9A2", "#F5F6F0", "#0F1210"),
+        pal("Rose", "#A84A64", "#E8A0B4", "#E2B1BF", "#FAF4F2", "#150F11"),
+        pal("Clay", "#A34A2C", "#EE9A79", "#E2A78E", "#FAF3EC", "#15110F"),
+        pal("Lavender", "#6A55B0", "#B9A8F2", "#C2B6E8", "#F8F6FC", "#100F16"),
+        pal("Honey", "#8C6210", "#E8C06A", "#E9C987", "#FBF7EE", "#15130E"),
     )
+    // Duotone: four everyday pairs, four retro, four premium (near-black with one electric color).
     val duos = listOf(
-        pal("Navy Marigold", "#1F2E5C", "#9FB0E6", "#9FB0E6", "#FAF7EF", "#0F1016", "#E3A72B", "#1F1A0A"),
-        pal("Cream Soda", "#A0472B", "#EE9A79", "#E2A78E", "#FBF5EC", "#15110F", "#2F6F6A"),
+        pal("Ocean Sky", "#1E5FD1", "#7FA9FF", "#7DD3FC", "#F4F9FD", null, "#38A8E0"),
+        pal("Plum Rose", "#7E3A96", "#D08BE0", "#F9A8C9", "#FCF6F9", null, "#E26A9C"),
+        pal("Teal Sand", "#0F766E", "#5EC4B6", "#F2D49B", "#FBF8F1", null, "#D9A85C", "#24190A"),
+        pal("Navy Peach", "#1E2A5A", "#9AA8E0", "#FDBA8C", "#FDF7F2", null, "#F29A68", "#2A1508"),
+        pal("Navy Gold", "#1F2E5C", "#9FB0E6", "#9FB0E6", "#FAF7EF", "#0F1016", "#E3A72B", "#1F1A0A"),
         pal("70s Diner", "#2E6E6B", "#7FC6C1", "#9CCBC7", "#F8F4EC", "#0F1312", "#D9603A"),
         pal("Grape Soda", "#5B3FB0", "#B3A1F5", "#C4B8EE", "#F8F6FC", "#100F17", "#F2B33D", "#24190A"),
-        pal("Matcha Latte", "#4E6B3A", "#A9C894", "#B5C7A5", "#F7F4EC", "#11130F", "#9C7448"),
         pal("Cherry Cola", "#7A2032", "#E58598", "#D7A3AD", "#FAF4EE", "#150F10", "#D9A441", "#24190A"),
-        pal("Pool Party", "#1E6FD9", "#7FB0FF", "#9CC3F2", "#F3F8FC", "#0D1118", "#F06B5D"),
-        pal("Mint Chocolate", "#4A3428", "#CDB2A2", "#C9B6AA", "#F4F6F1", "#12110F", "#2E9479"),
-        pal("Ink Gold", "#1B1E28", "#C8CCD8", "#B9BDC9", "#F8F6F0", "#0E0F12", "#E2B84D", "#1F1A0A"),
-        pal("Berry Coral", "#A3245C", "#F07AA8", "#EBA7C2", "#FCF5F3", "#160F12", "#E8694A"),
-        pal("Indigo Lilac", "#4F46E5", "#8B85FF", "#C4B5FD", "#F8F7FF", null, "#8B7CF6"), pal("Ocean Sky", "#1E5FD1", "#7FA9FF", "#7DD3FC", "#F4F9FD", null, "#38A8E0"),
-        pal("Azure Mint", "#1D6FE0", "#6FA8FF", "#5EEAD4", "#F3FAF9", null, "#14A38B"), pal("Navy Peach", "#1E2A5A", "#9AA8E0", "#FDBA8C", "#FDF7F2", null, "#F29A68", "#2A1508"),
-        pal("Cobalt Lime", "#2549D6", "#8098FF", "#C6F06B", "#F8FBF1", null, "#B5E550", "#18240A"), pal("Teal Sand", "#0F766E", "#5EC4B6", "#F2D49B", "#FBF8F1", null, "#D9A85C", "#24190A"),
-        pal("Plum Rose", "#7E3A96", "#D08BE0", "#F9A8C9", "#FCF6F9", null, "#E26A9C"), pal("Graphite Blue", "#2F3A4F", "#A9B4C8", "#7FA7E8", "#F5F7FA", null, "#4F84DB"),
+        pal("Volt", "#111613", "#C6FF3D", "#C9D6C4", "#F3F4F1", "#050605", "#C6FF3D", "#10140A"),
+        pal("Cyber", "#0B1424", "#3DF2E0", "#B9C6D6", "#F2F5F8", "#04070D", "#3DF2E0", "#04201D"),
+        pal("Onyx Gold", "#141414", "#E8C26A", "#D3CCBD", "#F6F4EF", "#070707", "#E8C26A", "#241B06"),
+        pal("Ultraviolet", "#150C26", "#B77BFF", "#CFC2E6", "#F6F3FB", "#08050F", "#FF5BD8", "#2A0622"),
     )
-    val all get() = favorites + colors + duos
+    // Gradient: bubbles and buttons blend between two colors.
+    val grads = listOf(
+        grad("Aurora", "#0F766E", "#4F46E5"), grad("Sunset", "#E8694A", "#7E3A96"), grad("Ocean", "#1E5FD1", "#0EA5B7"),
+        grad("Peach", "#F08A6B", "#E9A23B"), grad("Berry", "#A3245C", "#6A4BC4"), grad("Forest", "#1F6B4A", "#6FA05A"),
+        grad("Dusk", "#3A5683", "#B05C8A"), grad("Lagoon", "#0B807B", "#4FA8E8"), grad("Ember", "#C2410C", "#7A2032"),
+        grad("Lilac", "#7C6BF0", "#E27AB0"), grad("Midnight", "#1E2A5A", "#4F46E5"), grad("Neon", "#1DB86A", "#2BB8E8"),
+    )
+    val solids get() = plain + tinted
+    /** Themes from earlier versions, kept so a chat or the app that uses one still looks the same. */
+    private val legacy = listOf(
+        pal("Ocean", "#1E5FD1", "#7FA9FF", "#8CB8F0"), pal("Sand", "#7E6443", "#D9BF98", "#D8C3A3", "#F7F2EA", "#14120F"),
+        pal("Terracotta", "#A34A2C", "#EE9A79", "#E2A78E", "#FAF3EC", "#15110F"), pal("Olive", "#5A6628", "#C2CF85", "#BAC48F", "#F7F6EC", "#12130E"),
+        pal("Mocha", "#6B4A3A", "#CFA894", "#C8AFA2", "#F8F3EF", "#14110F"), pal("Forest", "#2F5D45", "#8FC7A8", "#A3C2B1", "#F5F6F0", "#0E1210"),
+        pal("Burgundy", "#7A2638", "#E38A9D", "#D4A2AC", "#FAF5F2", "#150F10"), pal("Tangerine", "#B04F12", "#FFA562", "#F7B98A", "#FFF8F1", "#16110D"),
+        pal("Indigo", "#4F46E5", "#8B85FF", "#A5A0F5"), pal("Cobalt", "#2563EB", "#7EA6FF", "#93B4F5"), pal("Midnight", "#1E2A5A", "#9AA8E0", "#6F7FB8"),
+        pal("Plum", "#7E3A96", "#D08BE0", "#C49BD3"), pal("Ember", "#B4472A", "#F2946F", "#E8A88F"), pal("Graphite", "#2F3A4F", "#A9B4C8", "#8E98AB"),
+        pal("Cream Soda", "#A0472B", "#EE9A79", "#E2A78E", "#FBF5EC", "#15110F", "#2F6F6A"), pal("Matcha Latte", "#4E6B3A", "#A9C894", "#B5C7A5", "#F7F4EC", "#11130F", "#9C7448"),
+        pal("Pool Party", "#1E6FD9", "#7FB0FF", "#9CC3F2", "#F3F8FC", "#0D1118", "#F06B5D"), pal("Mint Chocolate", "#4A3428", "#CDB2A2", "#C9B6AA", "#F4F6F1", "#12110F", "#2E9479"),
+        pal("Ink Gold", "#1B1E28", "#C8CCD8", "#B9BDC9", "#F8F6F0", "#0E0F12", "#E2B84D", "#1F1A0A"), pal("Berry Coral", "#A3245C", "#F07AA8", "#EBA7C2", "#FCF5F3", "#160F12", "#E8694A"),
+        pal("Indigo Lilac", "#4F46E5", "#8B85FF", "#C4B5FD", "#F8F7FF", null, "#8B7CF6"), pal("Azure Mint", "#1D6FE0", "#6FA8FF", "#5EEAD4", "#F3FAF9", null, "#14A38B"),
+        pal("Cobalt Lime", "#2549D6", "#8098FF", "#C6F06B", "#F8FBF1", null, "#B5E550", "#18240A"), pal("Graphite Blue", "#2F3A4F", "#A9B4C8", "#7FA7E8", "#F5F7FA", null, "#4F84DB"),
+    )
+    // Older code paths still ask for these.
+    val favorites get() = tinted.take(1) + plain.take(2)
+    val colors get() = solids
+    val all get() = solids + duos + grads + legacy.filter { l -> (solids + duos + grads).none { it.name == l.name } }
     val quick = listOf(
         "Blush" to "#F4B6C8", "Mustard" to "#B88A1E", "Chestnut" to "#7A4A2E", "Sage" to "#8FA888", "Lilac" to "#B9A3E3", "Slate" to "#4F5D75",
         "Coral" to "#F08A6B", "Mint" to "#9ED9C3", "Butter" to "#F2DC8C", "Wine" to "#6E2340", "Denim" to "#4A6A9A", "Clay" to "#C27A5A",
@@ -147,7 +179,7 @@ object Palettes {
     fun byKey(key: String, c1: Hsl, c2: Hsl): Pal = when (key) {
         "Custom color" -> custom(c1, c2, false)
         "Custom duotone" -> custom(c1, c2, true)
-        else -> all.firstOrNull { it.name == key } ?: favorites[1]
+        else -> all.firstOrNull { it.name == key } ?: tinted[0]
     }
 }
 

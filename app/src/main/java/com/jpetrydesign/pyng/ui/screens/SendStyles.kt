@@ -39,8 +39,15 @@ import kotlin.math.sqrt
  */
 
 object SendStyles {
-    val classic = listOf("Jelly", "Pop", "Swoosh", "Taffy", "Shimmer")
-    val liquid = listOf("Rise", "Honey", "Droplet", "Splash", "Ink")
+    // Six that each feel different and stay smooth: three classic, three liquid.
+    val classic = listOf("Jelly", "Pop", "Shimmer")
+    val liquid = listOf("Rise", "Droplet", "Splash")
+    /** Older picks map onto the closest one that's still here. */
+    fun of(s: String): String = when (s) {
+        "Swoosh" -> "Jelly"; "Taffy" -> "Pop"; "Honey" -> "Rise"; "Ink" -> "Droplet"
+        in classic, in liquid -> s
+        else -> "Rise"
+    }
     val about = mapOf(
         "Jelly" to "Glides up, one small squish", "Pop" to "Pops into place", "Swoosh" to "Sweeps in from the side",
         "Taffy" to "Stretches, then snaps up", "Shimmer" to "Quiet glide, soft light",

@@ -97,13 +97,18 @@ data class Tok(
 }
 
 fun swatchOf(x: Pal): Brush {
+    x.grad?.let { return Brush.linearGradient(listOf(it.first, it.second)) }
     val second = x.plus ?: x.bg ?: x.s
     return Brush.linearGradient(0f to x.p, 0.5f to x.p, 0.5f to second, 1f to second)
 }
 
 fun tok(P: Pal, dark: Boolean, solid: Boolean = false, highContrast: Boolean = false): Tok {
     val p = if (dark) P.pd else (P.pt ?: P.p)
-    val bg = if (dark) (P.bgd ?: hex("#0D0F14")) else (P.bg ?: Color.White)
+    // Dark mode: one scale tinted with the theme's own hue, so the screen, header and sheets sit a few
+    // small steps apart instead of a lifted header over a near-black list.
+    val bg = if (dark) (P.bgd ?: androidx.compose.ui.graphics.lerp(hex("#0B0D12"), (P.grad?.first ?: P.p), 0.08f)) else (P.bg ?: Color.White)
+    val step1 = Color.White.copy(alpha = 0.055f).compositeOver(bg)
+    val step2 = Color.White.copy(alpha = 0.085f).compositeOver(bg)
     val fill = if (dark) P.pd else P.p
     // Text on your bubbles: picked for contrast, so a deep color in dark mode gets white text, not dark.
     val mid = P.grad?.let { androidx.compose.ui.graphics.lerp(it.first, it.second, 0.5f) } ?: fill
@@ -124,8 +129,8 @@ fun tok(P: Pal, dark: Boolean, solid: Boolean = false, highContrast: Boolean = f
         neutralInk = if (dark) inkD.copy(alpha = 0.82f) else inkL.copy(alpha = 0.72f),
         tone = p.a(if (dark) 0x2E else 0x1F).compositeOver(bg),
         glass = if (solid) (if (dark) hex("#22252D") else if (P.bg != null) Color.White else hex("#EEF1F7")) else (if (dark) Color.White.copy(alpha = 0.08f) else p.a(0x14)),
-        glassStrong = if (solid) (if (dark) hex("#1C1F26") else Color.White) else (if (dark) hex("#1E2028").copy(alpha = 0.72f) else Color.White.copy(alpha = 0.7f)),
-        sheet = if (solid) (if (dark) hex("#181A21") else Color.White) else (if (dark) hex("#181A21").copy(alpha = 0.97f) else Color.White.copy(alpha = 0.98f)),
+        glassStrong = if (solid) (if (dark) step2 else Color.White) else (if (dark) step2.copy(alpha = 0.72f) else Color.White.copy(alpha = 0.7f)),
+        sheet = if (solid) (if (dark) step1 else Color.White) else (if (dark) step1.copy(alpha = 0.97f) else Color.White.copy(alpha = 0.98f)),
         field = if (dark) Color.White.copy(alpha = if (highContrast) 0.16f else 0.09f) else p.a(if (highContrast) 0x26 else 0x14),
         card = if (dark) Color.White.copy(alpha = 0.05f) else p.a(0x0D),
         cardEdge = if (dark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.7f),
@@ -144,7 +149,7 @@ fun tok(P: Pal, dark: Boolean, solid: Boolean = false, highContrast: Boolean = f
         edgeLine = if (dark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.8f),
         shadow = if (dark) Color.Black.copy(alpha = 0.45f) else hex("#141E3C").copy(alpha = 0.22f),
         shadowP = if (dark) Color.Black.copy(alpha = 0.45f) else plus.a(0x88),
-        hdrBg = if (solid) (if (dark) hex("#181A21") else Color.White) else (if (dark) hex("#16181F").copy(alpha = 0.6f) else Color.White.copy(alpha = 0.6f)),
+        hdrBg = if (solid) (if (dark) step1 else Color.White) else (if (dark) step1.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.6f)),
         accent2 = P.plus ?: P.s,
         outTop = P.grad?.first ?: androidx.compose.ui.graphics.lerp(fill, Color.White, if (dark) 0.10f else 0.08f),
         outBottom = P.grad?.second ?: androidx.compose.ui.graphics.lerp(fill, Color.Black, if (dark) 0.10f else 0.18f),
@@ -206,7 +211,7 @@ class FractionalRadial(private val color: Color, private val fx: Float, private 
     override fun hashCode() = color.hashCode() * 31 + fx.hashCode() * 17 + fy.hashCode() * 7 + fr.hashCode()
 }
 
-val LocalTok = staticCompositionLocalOf { tok(Palettes.favorites[1], false) }
+val LocalTok = staticCompositionLocalOf { tok(Palettes.tinted[0], false) }
 
 
 private fun contrast(a: Color, b: Color): Float {

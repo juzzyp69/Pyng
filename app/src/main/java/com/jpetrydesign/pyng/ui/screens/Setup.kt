@@ -390,7 +390,7 @@ private fun StyleStep(onDone: () -> Unit) {
                 androidx.compose.animation.Crossfade(tabs[tab], label = "stylePreview") { name ->
                     when (name) {
                         "Pinned" -> HomeStylePreview(compact = false)
-                        "Send" -> SendPreview(p.opt("sendStyle").ifBlank { "Jelly" })
+                        "Send" -> SendPreview(SendStyles.of(p.opt("sendStyle")))
                         "Reactions" -> ReactPreview()
                         else -> ChatStylePreview(compact = false)
                     }

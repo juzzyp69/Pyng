@@ -230,14 +230,9 @@ fun SendMeltLayer(fx: SendFx, t: Tok, fontSize: Float, bold: Boolean, corner: Fl
         fx.finish()
     }
 
-    val blurOk = android.os.Build.VERSION.SDK_INT >= 31
-    Canvas(
-        Modifier.fillMaxSize().graphicsLayer {
-            if (frame < 0) return@graphicsLayer
-            val b = flight.blur
-            renderEffect = if (blurOk && b > 0.5f) androidx.compose.ui.graphics.BlurEffect(b, b) else null
-        },
-    ) {
+    // No blur on the moving layer: blurring the whole screen every frame is what made sends hitch on
+    // slower phones. The shapes' own soft edges carry the look.
+    Canvas(Modifier.fillMaxSize()) {
         if (frame < 0) return@Canvas // reading frame redraws every frame
         flight.draw(this, look)
     }

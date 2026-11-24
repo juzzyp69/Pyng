@@ -170,6 +170,8 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     val list = rememberLazyListState()
     val density = LocalDensity.current
     val motion = LocalMotion.current
+    // Reduced motion: messages just appear, no flight.
+    val reducedMo = com.jpetrydesign.pyng.ui.kit.LocalMo.current == com.jpetrydesign.pyng.ui.kit.Mo.Minimal
 
     var draft by remember(convId) { mutableStateOf(p.drafts[convId].orEmpty()) }
     // Leaving the chat stops your typing indicator on their side.
@@ -414,12 +416,12 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
         // The send glide: note where the box and send button are before the text leaves them.
         val root = rootCoords[0]
         // Big emoji have no bubble to glide into, so they just pop in on their own.
-        val melt = if (motion && attachments.isEmpty() && replyTo == null && text.isNotBlank() && jumboCount(text) == 0 && root != null && sendFx.run == null) runCatching {
+        val melt = if (motion && !reducedMo && attachments.isEmpty() && replyTo == null && text.isNotBlank() && jumboCount(text) == 0 && root != null && sendFx.run == null) runCatching {
             Triple(root.localBoundingBoxOf(sendFx.field!!), root.localBoundingBoxOf(sendFx.text!!), root.localBoundingBoxOf(sendFx.button!!))
         }.getOrNull() else null
         repo.send(convId, text, replyTo?.id.orEmpty(), attachments.toList(), undoable = true)
         if (melt != null) repo.msgs[convId]?.lastOrNull { it.status == "LOCAL" && it.text == text.trim() }?.tmpId?.let { tmp ->
-            sendFx.start(MeltRun(tmp, text.trim(), melt.first, melt.second, melt.third, p.opt("sendStyle").ifBlank { "Jelly" }))
+            sendFx.start(MeltRun(tmp, text.trim(), melt.first, melt.second, melt.third, SendStyles.of(p.opt("sendStyle"))))
         }
         if (p.on("effects")) fxKind(text)?.let { fx = it }
         draft = ""; replyTo = null; attachments.clear(); info = null

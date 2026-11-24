@@ -34,6 +34,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.shape.RoundedCornerShape
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -306,13 +309,46 @@ private fun androidx.compose.animation.AnimatedVisibilityScope.NavScreen(r: Rout
 @Composable
 private fun Pane(nav: Nav, modifier: Modifier, wide: Boolean) {
     val mo = com.jpetrydesign.pyng.ui.kit.LocalMo.current
-    BackHandler(enabled = nav.stack.size > 1) { nav.back() }
+    // Swipe back follows your thumb: the screen shrinks toward the edge with the last one showing behind
+    // it, and lets go either way. (Back buttons and taps just go back.)
+    var backP by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var backFromRight by remember { mutableStateOf(false) }
+    var leavingP by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var leavingRight by remember { mutableStateOf(false) }
+    val backScope = rememberCoroutineScope()
+    androidx.activity.compose.PredictiveBackHandler(enabled = nav.stack.size > 1) { events ->
+        try {
+            events.collect { e -> backP = e.progress; backFromRight = e.swipeEdge == androidx.activity.BackEventCompat.EDGE_RIGHT }
+            // Let go past the point of no return: the screen carries on from where your thumb left it.
+            leavingP = backP; leavingRight = backFromRight; backP = 0f
+            nav.back()
+        } catch (c: kotlinx.coroutines.CancellationException) {
+            val from = backP
+            backScope.launch { androidx.compose.animation.core.animate(from, 0f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 500f)) { v, _ -> backP = v } }
+        }
+    }
+    LaunchedEffect(nav.top) { if (nav.forward) leavingP = 0f }
+    val under = if (backP > 0.001f) nav.stack.getOrNull(nav.stack.size - 2) else null
+    // The screen you'd go back to, shown under the one you're swiping away.
+    if (under != null) Box(modifier) { Screen(under, nav, wide) }
     // Going to another screen puts the keyboard away. A screen that wants it (like New message) asks again.
     val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     LaunchedEffect(nav.top) { focus.clearFocus(); kb?.hide() }
     AnimatedContent<Route?>(nav.top, modifier, transitionSpec = { navSpec(nav, mo, allowMorph = true) }, label = "nav") { r ->
-        if (r != null) NavScreen(r, nav, wide, allowMorph = true)
+        if (r != null) Box(Modifier.fillMaxSize().graphicsLayer {
+            val top = r == nav.top
+            val p = if (top) backP else leavingP
+            if (p > 0.001f) {
+                val right = if (top) backFromRight else leavingRight
+                val sc = 1f - 0.1f * p
+                scaleX = sc; scaleY = sc
+                translationX = (if (right) -1f else 1f) * p * 22.dp.toPx()
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (right) 0f else 1f, 0.5f)
+                shape = RoundedCornerShape(32.dp * kotlin.math.min(1f, p * 4f))
+                clip = true
+            }
+        }) { NavScreen(r, nav, wide, allowMorph = true) }
     }
 }
 
