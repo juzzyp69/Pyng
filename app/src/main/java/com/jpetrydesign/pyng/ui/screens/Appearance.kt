@@ -133,11 +133,9 @@ fun AppearanceScreen(nav: Nav) {
     val pal = Palettes.byKey(shownLook.key, shownLook.c1, shownLook.c2)
     Box(Modifier.fillMaxSize()) {
         Page("Appearance", { nav.back() }) {
-            // App theme: a live sample of your chats in the current color, a quick row of favorites, and Change for the full set.
+            // App theme: a live sample of your chats in the current color, and Change for the full set.
+            // Colors only change in the full picker, so nothing changes by an accidental tap here.
             val shape = RoundedCornerShape(28.dp)
-            val quick = listOf("Sage", "Ocean", "Forest", "Burgundy", "Cobalt", "Terracotta", "Plum", "Rose", "Mocha")
-                .let { if (pal.name in it) it else listOf(pal.name) + it.dropLast(1) }
-                .mapNotNull { n -> if (n == pal.name) pal else Palettes.all.firstOrNull { it.name == n } }
             SectionLabel("App theme")
             Column(Modifier.enter(0).fillMaxWidth().clip(shape).pane(shape).padding(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Column(
@@ -154,21 +152,14 @@ fun AppearanceScreen(nav: Nav) {
                         T("I'll bring dessert", size = 14.sp, color = t.outInk)
                     }
                 }
-                Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.padding(start = 4.dp, end = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(48.dp).clip(CircleShape).background(swatchOf(pal)).border(3.dp, Color.White.copy(alpha = if (t.dark) 0.08f else 0.6f), CircleShape))
+                    Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        T(pal.name, size = 20.sp, weight = FontWeight.Bold)
-                        T("Bubbles, buttons and highlights", size = 13.sp, color = t.soft)
+                        T(pal.name, size = 20.sp, weight = FontWeight.Bold, maxLines = 1)
+                        T(Palettes.kindOf(pal.name) + " · bubbles, buttons and highlights", size = 13.sp, color = t.soft, maxLines = 1)
                     }
                     PillButton("Change", { nav.openStrip() }, height = 44.dp)
-                }
-                Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp).padding(bottom = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    quick.forEach { x ->
-                        val on = x.name == pal.name
-                        Box(
-                            Modifier.size(32.dp).then(if (on) Modifier.border(2.dp, t.p, CircleShape) else Modifier).padding(if (on) 4.dp else 3.dp)
-                                .clip(CircleShape).background(swatchOf(x)).clickable { repo.prefs.editLook(t.dark) { it.copy(key = x.name) } },
-                        )
-                    }
                 }
             }
             SectionLabel("Mode")
@@ -199,6 +190,23 @@ fun AppearanceScreen(nav: Nav) {
             }
             SectionLabel("Glass")
             Seg(listOf("Frost", "Liquid Glass", "Solid"), p.opt("glass"), { g -> repo.prefs.setOpt("glass", g) })
+            // How strong and how blurry the glass is, across the whole app.
+            if (p.opt("glass") != "Solid") Column(Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp)).pane(RoundedCornerShape(24.dp)).padding(horizontal = 16.dp, vertical = 10.dp)) {
+                @Composable fun slider(label: String, key: String, def: Int, max: Int, unit: String) {
+                    var v by remember(key) { mutableStateOf((p.opt(key).toIntOrNull() ?: def).toFloat()) }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        T(label, size = 15.sp, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        T(v.roundToInt().toString() + unit, size = 13.5.sp, color = t.soft)
+                    }
+                    androidx.compose.material3.Slider(
+                        value = v, onValueChange = { v = it }, valueRange = 0f..max.toFloat(),
+                        onValueChangeFinished = { repo.prefs.setOpt(key, v.roundToInt().toString()) },
+                        colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = t.p, inactiveTrackColor = t.p.copy(alpha = 0.18f)),
+                    )
+                }
+                slider("Glass strength", "glassStrength", 60, 100, "%")
+                slider("Blur", "glassBlur", 20, 40, " dp")
+            }
             // Style studio: open Chat style or Home style to see every choice with a live preview.
             SectionLabel("Style studio")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -574,7 +582,7 @@ fun ColorStrip(onDone: () -> Unit) {
         onDispose { com.jpetrydesign.pyng.ui.LookPreview.dark = null }
     }
     val lk = p.lookFor(ed)
-    var tab by remember { mutableStateOf(if (lk.key.startsWith("Custom")) "Custom" else if (Palettes.duos.any { it.name == lk.key }) "Duotones" else "Colors") }
+    var tab by remember { mutableStateOf(if (lk.key.startsWith("Custom")) "Custom" else Palettes.kindOf(lk.key).let { if (it == "Theme") "Solid" else it }) }
     var target by remember { mutableStateOf("c1") }
     val lib = remember { ThemeLibrary() }
     BackHandler(onBack = onDone)
@@ -610,11 +618,15 @@ fun ColorStrip(onDone: () -> Unit) {
                     }) else null,
                     side = 20.dp,
                 )
-                Seg(listOf("Colors", "Duotones", "Custom"), tab, { tab = it }, Modifier.padding(horizontal = 20.dp))
+                Seg(listOf("Solid", "Duotone", "Gradient", "Custom"), tab, { tab = it }, Modifier.padding(horizontal = 20.dp))
                 if (tab != "Custom") {
-                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        (if (tab == "Duotones") Palettes.duos else Palettes.favorites + Palettes.colors).forEach { x ->
-                            Swatch(x.name, swatchOf(x), lk.key == x.name) { repo.prefs.editLook(ed) { it.copy(key = x.name) } }
+                    // Solid: a row of plain colors, then the same six softly tinted. Duotone: everyday, retro, premium.
+                    val (list, cols) = when (tab) { "Duotone" -> Palettes.duos to 4; "Gradient" -> Palettes.grads to 6; else -> Palettes.solids to 6 }
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        list.chunked(cols).forEach { row ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                row.forEach { x -> Swatch(x.name, swatchOf(x), lk.key == x.name, size = 40.dp) { repo.prefs.editLook(ed) { it.copy(key = x.name) } } }
+                            }
                         }
                     }
                 } else {

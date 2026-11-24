@@ -347,7 +347,7 @@ private fun ColorsStep(onDone: () -> Unit) {
         }
         Spacer(Modifier.height(18.dp))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            (Palettes.favorites + Palettes.colors).forEach { x ->
+            Palettes.solids.forEach { x ->
                 val on = p.themeKey == x.name
                 Column(Modifier.width(66.dp).clickable { repo.prefs.edit { it.copy(themeKey = x.name) } }, horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
@@ -418,7 +418,7 @@ private fun StyleStep(onDone: () -> Unit) {
                 when (tabs[i]) {
                     "Colors" -> {
                         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            (Palettes.favorites + Palettes.colors).forEach { x ->
+                            Palettes.solids.forEach { x ->
                                 val on = p.themeKey == x.name
                                 Column(Modifier.width(66.dp).clickable { repo.prefs.edit { it.copy(themeKey = x.name) } }, horizontalAlignment = Alignment.CenterHorizontally) {
                                     Box(Modifier.size(54.dp).then(if (on) Modifier.border(2.dp, t.ink, CircleShape).padding(4.dp) else Modifier).clip(CircleShape).background(swatchOf(x)))

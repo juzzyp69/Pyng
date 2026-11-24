@@ -130,6 +130,11 @@ val LocalHaze = compositionLocalOf<HazeState?> { null }
 val LocalMotion = compositionLocalOf { true }
 /** True when the glass style is Liquid Glass: clearer surfaces with a lit edge. */
 val LocalGlass = compositionLocalOf { false }
+/** Your glass settings as multipliers: (how milky/strong, how blurry). 1 and 1 is the standard look. */
+val LocalGlassTune = compositionLocalOf { 1f to 1f }
+
+/** Glass strength 0–100 (60 standard) and blur 0–40 (20 standard), as multipliers. */
+fun glassTune(strength: Int, blur: Int): Pair<Float, Float> = (0.4f + strength.coerceIn(0, 100) / 100f) to (blur.coerceIn(0, 40) / 20f)
 
 val Repo.p get() = prefs.state
 val Prefs.s get() = state
@@ -181,15 +186,16 @@ fun Ico(d: String, tint: Color = LocalTok.current.ink, size: Dp = 20.dp, stroke:
 fun Modifier.frost(shape: Shape, tint: Color, blur: Dp = 26.dp): Modifier = composed {
     val t = LocalTok.current
     val hz = LocalHaze.current
+    val (gs, gb) = LocalGlassTune.current
     if (hz != null && !t.solid && LocalGlass.current) {
         // Liquid Glass: less tint and a lighter blur so more shows through, a lit rim along the top,
         // and a soft sheen across the upper half, like light on a curved surface.
         this.clip(shape)
-            .hazeEffect(state = hz, style = HazeStyle(backgroundColor = t.bg, tint = HazeTint(tint.copy(alpha = tint.alpha * 0.4f)), blurRadius = blur * 0.5f, noiseFactor = 0f))
+            .hazeEffect(state = hz, style = HazeStyle(backgroundColor = t.bg, tint = HazeTint(tint.copy(alpha = (tint.alpha * 0.4f * gs).coerceAtMost(0.9f))), blurRadius = blur * 0.5f * gb, noiseFactor = 0f))
             .liquidShine(shape)
     } else if (hz != null && !t.solid) {
         // Frost: a heavier, milkier blur, matte with no shine.
-        this.clip(shape).hazeEffect(state = hz, style = HazeStyle(backgroundColor = t.bg, tint = HazeTint(tint.copy(alpha = (tint.alpha * 1.25f).coerceAtMost(0.92f))), blurRadius = blur * 1.3f, noiseFactor = 0f))
+        this.clip(shape).hazeEffect(state = hz, style = HazeStyle(backgroundColor = t.bg, tint = HazeTint(tint.copy(alpha = (tint.alpha * 1.25f * gs).coerceAtMost(0.95f))), blurRadius = blur * 1.3f * gb, noiseFactor = 0f))
     } else if (!t.solid && LocalGlass.current) {
         this.clip(shape).background(tint.copy(alpha = tint.alpha * 0.7f)).liquidShine(shape)
     } else {
@@ -231,10 +237,11 @@ fun Modifier.liquidShine(shape: Shape): Modifier = composed {
 fun Modifier.pane(shape: Shape): Modifier = composed {
     val t = LocalTok.current
     val liquid = LocalGlass.current && !t.solid
+    val gs = LocalGlassTune.current.first
     when {
         t.solid -> this.background(if (t.dark) t.card.compositeOver(t.bg) else Color.White)
-        liquid -> this.background(Color.White.copy(alpha = if (t.dark) 0.05f else 0.34f)).liquidShine(shape)
-        else -> this.background(Color.White.copy(alpha = if (t.dark) 0.07f else 0.72f))
+        liquid -> this.background(Color.White.copy(alpha = ((if (t.dark) 0.05f else 0.34f) * gs).coerceAtMost(0.95f))).liquidShine(shape)
+        else -> this.background(Color.White.copy(alpha = ((if (t.dark) 0.07f else 0.72f) * gs).coerceAtMost(0.95f)))
             .border(1.dp, Color.White.copy(alpha = if (t.dark) 0.06f else 0.85f), shape)
     }
 }

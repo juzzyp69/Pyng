@@ -149,16 +149,14 @@ fun SettingsScreen(nav: Nav) {
             }
         }
         Spacer(Modifier.height(12.dp))
+        // Six groups. Each opens one page; less-used switches sit lower down on it.
         val secs = listOf(
-            Sec("appearance", "Appearance", Icons.palette, "${pal.name} · ${p.mode} · ${p.bubble} bubbles"),
-            Sec("chats", "Chats", Icons.message, "Replies, receipts, media, GIFs, gestures"),
-            Sec("categories", "Categories", Icons.box, if (p.on("cats")) "On · " + (listOfNotNull("Priority".takeIf { p.on("catPriority") }, "Primary", "Favorites".takeIf { p.on("catFavs") }) + p.categories.map { it.name }).joinToString(", ") else "Off · sort your chats like Mail"),
+            Sec("chats", "Chats", Icons.message, "Replies, receipts, media, gestures, categories"),
             Sec("notifications", "Notifications", Icons.bell, if (p.on("notif")) "On · quick reply " + (if (p.on("quick")) "on" else "off") else "Off"),
-            Sec("chatfeat", "Chat features", Icons.wifi, if (conn == "ready" || conn == "idle") "Connected through Google Messages" else "Connecting…"),
-            Sec("privacy", "Privacy & safety", Icons.shield, (if (p.on("spam")) "Spam protection on" else "Spam protection off") + if (p.on("bioLock")) " · app lock on" else ""),
-            Sec("access", "Accessibility", Icons.access, "Text size, bold text, contrast, motion"),
-            Sec("storage", "Storage", Icons.storage, "Cached photos and files"),
-            Sec("about", "Help & about", Icons.about, "Version ${BuildConfig.VERSION_NAME}"),
+            Sec("appearance", "Appearance", Icons.palette, "${pal.name} · ${p.mode} · ${com.jpetrydesign.pyng.ui.kit.Mo.name(p.opt("motion"))} motion"),
+            Sec("privacy", "Privacy & security", Icons.shield, (if (conn == "ready" || conn == "idle") "Linked to Google Messages" else if (conn == "relink") "Link Google Messages again" else "Connecting…") + if (p.on("bioLock")) " · app lock on" else ""),
+            Sec("storage", "Storage & backup", Icons.storage, "Photos and files, trash, backup"),
+            Sec("about", "Help & about", Icons.about, "Version ${BuildConfig.VERSION_NAME} · accessibility"),
         )
         Card {
             secs.forEachIndexed { i, s ->
@@ -318,9 +316,11 @@ fun SectionScreen(nav: Nav, key: String) {
     val p = repo.prefs.state
     val conn by repo.hub.connection.collectAsState()
     val app = ctx.applicationContext as PyngApp
-    val title = mapOf("chats" to "Chats", "notifications" to "Notifications", "chatfeat" to "Chat features", "privacy" to "Privacy & safety", "access" to "Accessibility", "storage" to "Storage", "about" to "Help & about", "versions" to "Version history", "blockedWords" to "Blocked words", "categories" to "Categories")[key] ?: "Settings"
+    val title = mapOf("chats" to "Chats", "notifications" to "Notifications", "chatfeat" to "Chat features", "privacy" to "Privacy & security", "access" to "Accessibility", "storage" to "Storage & backup", "about" to "Help & about", "versions" to "Version history", "blockedWords" to "Blocked words", "categories" to "Categories")[key] ?: "Settings"
+    // Six groups on the main page; some show two of the old pages one after the other.
+    val parts = when (key) { "chats" -> listOf("chats", "categories"); "privacy" -> listOf("chatfeat", "privacy"); "about" -> listOf("about", "access"); else -> listOf(key) }
     Page(title, { nav.back() }) {
-        when (key) {
+        for (part in parts) when (part) {
             "versions" -> VersionHistory()
             "chats" -> {
                 Group("Conversation") {

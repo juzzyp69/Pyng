@@ -33,6 +33,17 @@ shot() {
   echo "shot $name"
 }
 
+# 0.9.7 first: settings groups, theme card and picker, glass sliders, select, dark home, photo stack.
+WAIT=6 shot 00a-settings-groups --es route settings
+WAIT=6 shot 00a-appearance --es route appearance
+WAIT=6 shot 00a-appearance-dark --es route appearance --es mode Dark
+WAIT=6 shot 00a-strip --es open strip
+WAIT=6 shot 00a-select --es open select
+WAIT=6 shot 00a-home-dark --es mode Dark
+WAIT=6 shot 00a-home-volt --es mode Dark --es theme Volt
+WAIT=6 shot 00a-home-aurora --es theme Aurora
+WAIT=8 shot 00a-thread-stack --es route thread:c9
+WAIT=6 shot 00a-rowmenu --es open rowmenu
 # 0.9.6 first: the new viewer and the two glass looks.
 WAIT=10 shot 00v-viewer --es route thread:c9 --es open viewer
 WAIT=10 shot 00w-viewer-video --es route thread:c9 --es open viewer-video

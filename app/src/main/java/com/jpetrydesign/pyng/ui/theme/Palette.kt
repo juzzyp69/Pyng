@@ -122,6 +122,13 @@ object Palettes {
         grad("Lilac", "#7C6BF0", "#E27AB0"), grad("Midnight", "#1E2A5A", "#4F46E5"), grad("Neon", "#1DB86A", "#2BB8E8"),
     )
     val solids get() = plain + tinted
+    /** "Solid", "Duotone", "Gradient", or "Custom" for your own colors. */
+    fun kindOf(name: String): String = when {
+        name.startsWith("Custom") -> "Custom"
+        grads.any { it.name == name } -> "Gradient"
+        duos.any { it.name == name } -> "Duotone"
+        else -> "Solid"
+    }
     /** Themes from earlier versions, kept so a chat or the app that uses one still looks the same. */
     private val legacy = listOf(
         pal("Ocean", "#1E5FD1", "#7FA9FF", "#8CB8F0"), pal("Sand", "#7E6443", "#D9BF98", "#D8C3A3", "#F7F2EA", "#14120F"),

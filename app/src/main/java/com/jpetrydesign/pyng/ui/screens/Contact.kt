@@ -465,7 +465,7 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
                         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Swatch("App theme", swatchOf(Palettes.byKey(p.themeKey, p.c1, p.c2)), look.key.isEmpty()) { set { it.copy(key = "") } }
                             Swatch("Any color", androidx.compose.ui.graphics.Brush.sweepGradient(listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)), look.key == "chat-custom") { set { it.copy(key = "chat-custom") } }
-                            (Palettes.favorites + Palettes.colors + Palettes.duos).forEach { x -> Swatch(x.name, swatchOf(x), look.key == x.name) { set { it.copy(key = x.name) } } }
+                            (Palettes.solids + Palettes.duos + Palettes.grads).forEach { x -> Swatch(x.name, swatchOf(x), look.key == x.name) { set { it.copy(key = x.name) } } }
                         }
                         Spacer(Modifier.height(16.dp))
                         MyThemes(lib, savedOn, usePicked, if (look.key == "chat-custom" || look.custom.isNotEmpty()) ({ lib.saving = currentAsTheme() }) else null)

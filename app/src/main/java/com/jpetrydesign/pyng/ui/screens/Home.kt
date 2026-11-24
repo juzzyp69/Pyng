@@ -165,6 +165,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
             "editpins" -> editPins = true
             "strip" -> nav.strip = true
             "perms" -> askPerms = true
+            "select" -> Selecting.ids = setOf("c1", "c3", "c6").filter { it in repo.convs }.toSet()
         }
         if (repo.demoOpen !in LATER_OPENS) repo.demoOpen = null
     }

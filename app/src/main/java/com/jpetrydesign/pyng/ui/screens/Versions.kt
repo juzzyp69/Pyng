@@ -36,6 +36,32 @@ data class Release(val version: String, val date: String, val added: List<String
  */
 val RELEASES = listOf(
     Release(
+        "0.9.7", "Nov 24, 2026",
+        highlights = listOf(
+            Highlight("Swipe back like liquid", "Swipe from the edge and the chat shrinks with your thumb, with your list right behind it. Let go early and it springs back.", "motion"),
+            Highlight("36 new themes", "Solid, Duotone and Gradient, twelve of each: crisp or softly tinted colors, retro pairs, premium neon on black, and smooth gradients.", "looks"),
+            Highlight("Glass your way", "Pick Frost or Liquid Glass, then set how strong and how blurry it is. It changes across the whole app.", "glass"),
+        ),
+        added = listOf(
+            "Photo stacks\nSwipe a stack to flick through it right in the chat. Tap and the photos fly out into the viewer, then fly back and restack when you close",
+            "Pick several chats\nHold a chat, tap Select chats, then mark read, archive, mute or delete them together",
+            "A greeting on Home\nYour unread count (or You're all caught up) shows when you open Pyng, then tucks away",
+            "Six groups in Settings\nChats, Notifications, Appearance, Privacy & security, Storage & backup, and Help & about",
+            "Three motion styles\nLiquid, Simple and Reduced",
+            "Send styles, trimmed\nJelly, Pop, Shimmer, Rise, Droplet and Splash, all smoother",
+            "Typing stops when you do\nSending, clearing the box or leaving the chat clears your typing indicator on their phone right away",
+            "A safer link\nThe saved link to Google Messages is sealed with a key kept in your phone's secure hardware",
+        ),
+        fixed = listOf(
+            "Chats catch up the moment Pyng reconnects, instead of waiting for a full refresh",
+            "If your phone is unlinked from Google Messages, Pyng tells you and takes you straight to linking again",
+            "Theme colors only change in the theme picker, never by a stray tap",
+            "Dark mode's header, lists and sheets now sit a few small steps apart, tinted with your theme",
+            "No more blur on moving layers, so sends and menus stay smooth on older phones",
+            "The search button's dot no longer animates forever or slows Home down",
+        ),
+    ),
+    Release(
         "0.9.6.3", "Nov 22, 2026",
         added = emptyList(),
         fixed = listOf(

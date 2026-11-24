@@ -224,7 +224,7 @@ fun PyngRoot(repo: Repo, nav: Nav) {
         val textScale = com.jpetrydesign.pyng.ui.kit.textScaleOf(repo.prefs.state.textSize)
         val scaled = androidx.compose.ui.unit.Density(baseDensity.density, baseDensity.fontScale * textScale)
         val peek = remember { PeekState() }
-        CompositionLocalProvider(com.jpetrydesign.pyng.ui.kit.LocalGlass provides (repo.prefs.state.opt("glass") == "Liquid Glass"), LocalTok provides t, LocalRepo provides repo, LocalMotion provides motion, com.jpetrydesign.pyng.ui.kit.LocalMo provides mo, androidx.compose.ui.platform.LocalDensity provides scaled, LocalNav provides nav, LocalPeek provides peek) {
+        CompositionLocalProvider(com.jpetrydesign.pyng.ui.kit.LocalGlass provides (repo.prefs.state.opt("glass") == "Liquid Glass"), com.jpetrydesign.pyng.ui.kit.LocalGlassTune provides com.jpetrydesign.pyng.ui.kit.glassTune(repo.prefs.state.opt("glassStrength").toIntOrNull() ?: 60, repo.prefs.state.opt("glassBlur").toIntOrNull() ?: 20), LocalTok provides t, LocalRepo provides repo, LocalMotion provides motion, com.jpetrydesign.pyng.ui.kit.LocalMo provides mo, androidx.compose.ui.platform.LocalDensity provides scaled, LocalNav provides nav, LocalPeek provides peek) {
             // Everything on screen feeds the in-app banner's frosted glass, but only while a banner
             // is up (and a moment after, while it slides away), so normal scrolling costs nothing extra.
             val appHaze = remember { dev.chrisbanes.haze.HazeState() }
