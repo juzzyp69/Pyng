@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -406,7 +407,8 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
     ) {
         // With pins at the top, the chats sit on a sheet that slides up over them and snaps open or shut.
         val sheetMode = pins.isNotEmpty() && layout != "List" && layout != "Dock"
-        val sheetBg = if (t.dark) androidx.compose.ui.graphics.lerp(t.bg, Color.Black, 0.3f) else Color.White
+        // Dark mode: the list sits one small step above the screen, not a drop to near-black.
+        val sheetBg = if (t.dark) Color.White.copy(alpha = 0.035f).compositeOver(t.bg) else Color.White
         val sheetShape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)
         var pinsH by remember { androidx.compose.runtime.mutableIntStateOf(0) }
         var revealTick by remember { androidx.compose.runtime.mutableIntStateOf(0) }
@@ -533,8 +535,9 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                                 .background(t.p.copy(alpha = 0.10f * k))
                                 .clickable { Selecting.ids = if (on) Selecting.ids - c.id else Selecting.ids + c.id },
                         ) {
+                            // On the photo's corner, clear of the time and unread count.
                             Box(
-                                Modifier.align(Alignment.CenterEnd).padding(end = 14.dp).size(26.dp)
+                                Modifier.align(Alignment.CenterStart).padding(start = 50.dp).offset(y = 17.dp).size(24.dp)
                                     .graphicsLayer { val sc = 0.85f + 0.15f * k; scaleX = sc; scaleY = sc }
                                     .clip(CircleShape).background(if (on) t.fill else t.bg.copy(alpha = 0.9f))
                                     .border(2.dp, if (on) t.fill else t.soft.copy(alpha = 0.6f), CircleShape),

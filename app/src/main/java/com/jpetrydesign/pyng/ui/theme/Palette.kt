@@ -116,7 +116,7 @@ object Palettes {
     )
     // Gradient: bubbles and buttons blend between two colors.
     val grads = listOf(
-        grad("Aurora", "#0F766E", "#4F46E5"), grad("Sunset", "#E8694A", "#7E3A96"), grad("Ocean", "#1E5FD1", "#0EA5B7"),
+        grad("Aurora", "#0F766E", "#4F46E5"), grad("Sunset", "#E8694A", "#7E3A96"), grad("Tide", "#1E5FD1", "#0EA5B7"),
         grad("Peach", "#F08A6B", "#E9A23B"), grad("Berry", "#A3245C", "#6A4BC4"), grad("Forest", "#1F6B4A", "#6FA05A"),
         grad("Dusk", "#3A5683", "#B05C8A"), grad("Lagoon", "#0B807B", "#4FA8E8"), grad("Ember", "#C2410C", "#7A2032"),
         grad("Lilac", "#7C6BF0", "#E27AB0"), grad("Midnight", "#1E2A5A", "#4F46E5"), grad("Neon", "#1DB86A", "#2BB8E8"),
