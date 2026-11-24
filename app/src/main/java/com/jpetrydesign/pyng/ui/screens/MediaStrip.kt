@@ -53,6 +53,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -148,33 +149,45 @@ fun mediaBundles(msgs: List<Msg>): Bundles {
     return Bundles(byAnchor, hidden, of, newest)
 }
 
-/** Photos sent together, in the style picked under Appearance › Chat style › Photos: Peek, Stack, Rail or Deck. */
+/** Photos sent together: a fanned stack you flick through in place, and tap to open. */
 @Composable
 fun MediaStrip(items: List<Pair<Msg, MediaRef>>, me: Boolean, x: RowCtx, a: RowActs) {
-    val t = x.t
-    val n = items.size
-    val vids = items.count { it.second.isVideo }
-    val label = when { vids == 0 -> "$n photos"; vids == n -> "$n videos"; else -> "$n photos and videos" }
-    val style = LocalRepo.current.prefs.state.opt("photoGroups").ifEmpty { "Peek" }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val tileW = minOf(maxWidth * 0.46f, 240.dp)
-        val tileH = tileW * 1.2f
-        val mw = maxWidth
+        val tileW = minOf(maxWidth * 0.5f, 250.dp)
+        val tileH = tileW * 1.25f
         Column(Modifier.fillMaxWidth(), horizontalAlignment = if (me) Alignment.End else Alignment.Start) {
-            Row(Modifier.padding(start = 6.dp, end = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Ico(Icons.stack, t.soft, 14.dp, 2f)
-                Spacer(Modifier.width(6.dp))
-                T(label, size = 12.5.sp, weight = FontWeight.Medium, color = t.soft)
-            }
-            when (style) {
-                "Stack" -> StackStyle(items, me, tileW, tileH, mw, x, a)
-                "Rail" -> RailStyle(items, me, tileW, tileH, x, a)
-                "Deck" -> DeckStyle(items, me, tileW, tileH, x, a)
-                else -> PeekStyle(items, me, tileW, tileH, mw, x, a, nudge = x.isNew || x.enterDelay >= 0)
-            }
+            StackStyle(items, me, tileW, tileH, x, a)
         }
     }
 }
+
+/**
+ * Where a photo stack sits on screen, so the viewer can fly its photos out of it and back into it.
+ * [base] is the top card's spot (in root coordinates, before any tilt); each card further down the
+ * stack sits [fan] further across, [drop] lower, turned [tilt] degrees more and a little smaller.
+ */
+class StackSpot(
+    val group: String,
+    val base: androidx.compose.ui.geometry.Rect,
+    val sign: Float,
+    val fan: Float,
+    val drop: Float,
+    val order: List<String>,
+    val radius: Float,
+) {
+    companion object { const val TILT = 3.2f; const val SHRINK = 0.05f }
+}
+
+object PhotoFlight {
+    /** The stack you just tapped, handed to the viewer. */
+    var spot: StackSpot? = null
+    /** The stack whose photos are out in the viewer right now (hidden in the chat meanwhile). */
+    var out by mutableStateOf<String?>(null)
+    /** Coming back: the stack to restack, and the photo that should land on top. */
+    var landTop by mutableStateOf<Pair<String, String>?>(null)
+}
+
+fun photoKey(m: Msg, ref: MediaRef) = m.key + "|" + ref.id
 
 /** A glass tag over a photo, like "1/3". */
 @Composable
@@ -200,200 +213,93 @@ private fun SegBar(n: Int, on: Int, width: Dp, t: Tok, me: Boolean) {
     }
 }
 
-/** Peek: a row that snaps one photo at a time, the next one showing at the edge, with "1/3" and a progress bar. */
+/**
+ * Stack: a small fan of the photos with a count. Swipe it and the top photo slides off and tucks in at
+ * the back, so you flick through them right in the chat. Tap to open them all in the viewer.
+ */
 @Composable
-private fun PeekStyle(items: List<Pair<Msg, MediaRef>>, me: Boolean, w: Dp, h: Dp, maxW: Dp, x: RowCtx, a: RowActs, nudge: Boolean) {
-    val n = items.size
-    val state = rememberLazyListState()
-    val fling = rememberSnapFlingBehavior(state, SnapPosition.Start)
-    val tilePx = with(LocalDensity.current) { w.toPx() }
-    val on by remember { derivedStateOf { state.firstVisibleItemIndex + if (state.firstVisibleItemScrollOffset > tilePx / 2f) 1 else 0 } }
-    // When the photos arrive, the row nudges over a little to show it scrolls.
-    val shift = remember { androidx.compose.animation.core.Animatable(0f) }
-    val nudgePx = with(LocalDensity.current) { 34.dp.toPx() }
-    val motion = com.jpetrydesign.pyng.ui.kit.LocalMotion.current
-    LaunchedEffect(Unit) {
-        if (!nudge || !motion) return@LaunchedEffect
-        kotlinx.coroutines.delay(900)
-        shift.animateTo(if (me) nudgePx else -nudgePx, tween(240))
-        shift.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 300f))
-    }
-    Box {
-        LazyRow(
-            state = state, flingBehavior = fling, reverseLayout = me,
-            modifier = Modifier.fillMaxWidth().graphicsLayer { translationX = shift.value },
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = if (me) PaddingValues(start = (maxW - w).coerceAtLeast(0.dp)) else PaddingValues(end = (maxW - w).coerceAtLeast(0.dp)),
-        ) {
-            itemsIndexed(items, key = { i, it -> it.first.key + "|" + it.second.id + "|" + i }) { _, item ->
-                Box(Modifier.size(w, h).tileGestures(item.first, item.second, a)) { TileContent(item.first, item.second, x, a) }
-            }
-        }
-        GlassTag("${on + 1}/$n", Modifier.align(if (me) Alignment.TopEnd else Alignment.TopStart).padding(top = 8.dp).offset(x = if (me) (-8).dp else w - 50.dp))
-    }
-    SegBar(n, on, w, x.t, me)
-}
-
-/** Stack: a small fanned stack with a count. Swipe it and the photos spread into a row; Stack folds them back. */
-@Composable
-private fun StackStyle(items: List<Pair<Msg, MediaRef>>, me: Boolean, w: Dp, h: Dp, maxW: Dp, x: RowCtx, a: RowActs) {
+private fun StackStyle(items: List<Pair<Msg, MediaRef>>, me: Boolean, w: Dp, h: Dp, x: RowCtx, a: RowActs) {
     val n = items.size
     val t = x.t
-    var open by remember { mutableStateOf(false) }
-    val spread = remember { androidx.compose.animation.core.Animatable(0f) }
-    LaunchedEffect(open) { spread.animateTo(if (open) 1f else 0f, spring(dampingRatio = 0.72f, stiffness = 260f)) }
-    val gapPx = with(LocalDensity.current) { 8.dp.toPx() }
-    val wPx = with(LocalDensity.current) { w.toPx() }
-    val tiltPx = with(LocalDensity.current) { 12.dp.toPx() }
-    val sign = if (me) -1f else 1f
-    val scroll = androidx.compose.foundation.rememberScrollState()
-    Box(
-        Modifier.fillMaxWidth().height(h + 12.dp)
-            .pointerInput(open) {
-                if (open) return@pointerInput
-                detectHorizontalDragGestures { ch, d -> if (kotlin.math.abs(d) > 2f) { ch.consume(); open = true } }
-            }
-            .then(if (open) Modifier.horizontalScroll(scroll, reverseScrolling = me) else Modifier),
-    ) {
-        Box(Modifier.width(w * n + 8.dp * (n - 1) + 110.dp).height(h + 12.dp).align(if (me) Alignment.TopEnd else Alignment.TopStart)) {
-            items.forEachIndexed { i, item ->
-                val k = (spread.value * 1.15f - i * 0.05f).coerceIn(0f, 1f)
-                val stackX = sign * i * tiltPx
-                val rowX = sign * i * (wPx + gapPx)
-                Box(
-                    Modifier.align(if (me) Alignment.TopEnd else Alignment.TopStart).padding(top = 6.dp).zIndex((n - i).toFloat())
-                        .graphicsLayer {
-                            translationX = stackX + (rowX - stackX) * k
-                            val tilt = sign * i * 4f * (1f - k)
-                            rotationZ = tilt
-                            val sc = 1f - i * 0.05f * (1f - k); scaleX = sc; scaleY = sc
-                            alpha = if (i > 2 && k < 0.05f) 0f else 1f
-                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0.9f)
-                        }
-                        .size(w, h)
-                        .shadow(if (k < 1f) 6.dp else 0.dp, RoundedCornerShape(20.dp), clip = false, ambientColor = t.shadow, spotColor = t.shadow)
-                        .tileGestures(item.first, item.second, a) { if (!open) a.onOpenItem?.invoke(items[0].first, items[0].second) else null },
-                ) {
-                    TileContent(item.first, item.second, x, a)
-                    if (i == 0) androidx.compose.animation.AnimatedVisibility(!open, Modifier.align(if (me) Alignment.TopStart else Alignment.TopEnd).padding(8.dp), enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
-                        GlassTag("$n", icon = Icons.stack)
-                    }
-                }
-            }
-            if (open) Row(
-                Modifier.align(if (me) Alignment.CenterEnd else Alignment.CenterStart).offset(x = if (me) -(w * n + 8.dp * n + 4.dp) else w * n + 8.dp * n + 4.dp)
-                    .graphicsLayer { alpha = ((spread.value - 0.6f) / 0.4f).coerceIn(0f, 1f) }
-                    .height(36.dp).clip(RoundedCornerShape(18.dp)).background(t.tone).clickable { open = false }.padding(horizontal = 13.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) { Ico(Icons.stack, t.p, 14.dp, 2f); Spacer(Modifier.width(6.dp)); T("Stack", size = 13.sp, weight = FontWeight.SemiBold, color = t.p) }
-        }
-    }
-    androidx.compose.animation.AnimatedVisibility(!open) {
-        T(if (me) "← Swipe to see all" else "Swipe to see all →", size = 11.5.sp, color = t.soft, modifier = Modifier.padding(start = 6.dp, end = 6.dp, top = 6.dp))
-    }
-}
-
-/** Rail: one photo with the next ones beside it as thumbnails. Swipe the photo or tap a thumbnail. */
-@Composable
-private fun RailStyle(items: List<Pair<Msg, MediaRef>>, me: Boolean, w: Dp, h: Dp, x: RowCtx, a: RowActs) {
-    val n = items.size
-    var cur by remember { mutableIntStateOf(0) }
-    val side = (h - 6.dp) / 2
-    val swipe = with(LocalDensity.current) { 36.dp.toPx() }
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Top) {
-        val main: @Composable () -> Unit = {
-            var acc by remember { mutableStateOf(0f) }
-            Box(
-                Modifier.size(w, h).pointerInput(n) {
-                    detectHorizontalDragGestures(onDragEnd = { acc = 0f }) { ch, d ->
-                        acc += d
-                        if (kotlin.math.abs(acc) > swipe) { ch.consume(); cur = (cur + (if (acc < 0) 1 else n - 1)) % n; acc = 0f }
-                    }
-                },
-            ) {
-                androidx.compose.animation.AnimatedContent(
-                    cur, label = "rail",
-                    transitionSpec = {
-                        val dir = if (targetState > initialState) 1 else -1
-                        (androidx.compose.animation.slideInHorizontally(spring(dampingRatio = 0.8f, stiffness = 380f)) { it * dir } + androidx.compose.animation.fadeIn()) togetherWith
-                            (androidx.compose.animation.slideOutHorizontally(tween(220)) { -it * dir / 3 } + androidx.compose.animation.fadeOut(tween(200)))
-                    },
-                ) { i ->
-                    val (m, ref) = items[i]
-                    Box(Modifier.size(w, h).tileGestures(m, ref, a)) { TileContent(m, ref, x, a) }
-                }
-                GlassTag("${cur + 1}/$n", Modifier.align(if (me) Alignment.TopStart else Alignment.TopEnd).padding(8.dp))
-            }
-        }
-        val rail: @Composable () -> Unit = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                val next = (1 until n).map { (cur + it) % n }.take(2)
-                next.forEachIndexed { q, j ->
-                    val (m, ref) = items[j]
-                    androidx.compose.runtime.key(j) {
-                        val pop = remember { androidx.compose.animation.core.Animatable(0.6f) }
-                        LaunchedEffect(Unit) { pop.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 420f)) }
-                        Box(
-                            Modifier.size(side).graphicsLayer { scaleX = pop.value; scaleY = pop.value }.clip(RoundedCornerShape(14.dp)).clickable { cur = j },
-                        ) {
-                            TileContent(m, ref, x, a, small = true)
-                            if (q == 1 && n > 3) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
-                                T("+${n - 3}", size = 15.sp, weight = FontWeight.SemiBold, color = Color.White)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        if (me) { rail(); main() } else { main(); rail() }
-    }
-}
-
-/** Deck: a small deck with "1 of 3" on the photo. Swipe and the top one tucks to the back. */
-@Composable
-private fun DeckStyle(items: List<Pair<Msg, MediaRef>>, me: Boolean, w: Dp, h: Dp, x: RowCtx, a: RowActs) {
-    val n = items.size
     val scope = rememberCoroutineScope()
-    var top by remember { mutableIntStateOf(0) }
+    val group = items[0].first.key
+    val keys = remember(items) { items.map { photoKey(it.first, it.second) } }
+    var order by remember(keys) { mutableStateOf(keys.indices.toList()) }
     val dx = remember { androidx.compose.animation.core.Animatable(0f) }
-    val wPx = with(LocalDensity.current) { w.toPx() }
-    val peek = with(LocalDensity.current) { 11.dp.toPx() }
+    val density = LocalDensity.current
+    val wPx = with(density) { w.toPx() }
+    val fanPx = with(density) { 13.dp.toPx() }
+    val dropPx = with(density) { 3.dp.toPx() }
     val sign = if (me) -1f else 1f
+    val here = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+    // Back from the viewer: the photo you were on lands on top.
+    val land = PhotoFlight.landTop
+    LaunchedEffect(land) {
+        if (land != null && land.first == group) {
+            val top = keys.indexOf(land.second)
+            if (top >= 0) { order = (0 until n).map { (top + it) % n }; dx.snapTo(0f) }
+            PhotoFlight.landTop = null
+        }
+    }
+    val away = PhotoFlight.out == group
     Box(
-        Modifier.width(w + 26.dp).height(h + 4.dp).pointerInput(n) {
-            detectHorizontalDragGestures(
-                onDragEnd = {
-                    scope.launch {
-                        if (kotlin.math.abs(dx.value) > wPx * 0.3f) {
-                            dx.animateTo(kotlin.math.sign(dx.value) * wPx * 1.1f, tween(200))
-                            top = (top + 1) % n; dx.snapTo(0f)
-                        } else dx.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 420f))
-                    }
-                },
-            ) { ch, d -> ch.consume(); scope.launch { dx.snapTo(dx.value + d) } }
-        },
+        Modifier.size(w + 13.dp * 2 + 8.dp, h + 14.dp)
+            .graphicsLayer { alpha = if (away) 0f else 1f }
+            .onGloballyPositioned { here[0] = it }
+            .pointerInput(n) {
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        scope.launch {
+                            if (kotlin.math.abs(dx.value) > wPx * 0.28f && n > 1) {
+                                // Off it goes, then it tucks in at the back.
+                                dx.animateTo(kotlin.math.sign(dx.value) * wPx * 1.15f, tween(170, easing = androidx.compose.animation.core.FastOutLinearInEasing))
+                                order = order.drop(1) + order.first()
+                                dx.snapTo(0f)
+                            } else dx.animateTo(0f, spring(dampingRatio = 0.62f, stiffness = 420f))
+                        }
+                    },
+                    onDragCancel = { scope.launch { dx.animateTo(0f, spring(dampingRatio = 0.62f, stiffness = 420f)) } },
+                ) { ch, d -> ch.consume(); scope.launch { dx.snapTo(dx.value + d) } }
+            },
     ) {
-        (0 until n).filter { (it - top + n) % n <= 2 }.sortedByDescending { (it - top + n) % n }.forEach { i -> androidx.compose.runtime.key(i) {
-            val d = (i - top + n) % n
-            val (m, ref) = items[i]
-            val depth by androidx.compose.animation.core.animateFloatAsState(d.toFloat(), spring(dampingRatio = 0.62f, stiffness = 320f), label = "deck")
-            Box(
-                Modifier.align(if (me) Alignment.TopEnd else Alignment.TopStart).size(w, h)
-                    .graphicsLayer {
-                        if (d == 0) { translationX = dx.value; rotationZ = dx.value / wPx * 8f }
-                        else translationX = sign * depth * peek
-                        val sc = 1f - depth * 0.06f; scaleX = sc; scaleY = sc
-                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0.85f)
-                    }
-                    .shadow(6.dp, RoundedCornerShape(20.dp), clip = false, ambientColor = x.t.shadow, spotColor = x.t.shadow)
-                    .tileGestures(m, ref, a),
-            ) {
-                TileContent(m, ref, x, a)
-                if (d == 0) Row(
-                    Modifier.align(Alignment.BottomCenter).padding(8.dp).fillMaxWidth().height(28.dp).clip(RoundedCornerShape(14.dp)).background(Color.Black.copy(alpha = 0.4f)).padding(horizontal = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
+        order.forEachIndexed { depth, i -> if (depth <= 3) {
+            androidx.compose.runtime.key(keys[i]) {
+                val (m, ref) = items[i]
+                val d by androidx.compose.animation.core.animateFloatAsState(depth.toFloat(), spring(dampingRatio = 0.66f, stiffness = 360f), label = "stack")
+                val seen by androidx.compose.animation.core.animateFloatAsState(if (depth > 2) 0f else 1f, tween(200), label = "stackSeen")
+                Box(
+                    Modifier.align(if (me) Alignment.TopEnd else Alignment.TopStart).padding(top = 4.dp, start = if (me) 0.dp else 4.dp, end = if (me) 4.dp else 0.dp)
+                        .zIndex((n - depth).toFloat()).size(w, h)
+                        .graphicsLayer {
+                            val top = depth == 0
+                            translationX = sign * d * fanPx + if (top) dx.value else 0f
+                            translationY = d * dropPx
+                            rotationZ = sign * d * StackSpot.TILT + if (top) dx.value / wPx * 9f else 0f
+                            val sc = 1f - d * StackSpot.SHRINK; scaleX = sc; scaleY = sc
+                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0.9f)
+                            alpha = seen
+                        }
+                        .shadow(if (depth == 0) 8.dp else 4.dp, RoundedCornerShape(22.dp), clip = false, ambientColor = t.shadow, spotColor = t.shadow)
+                        .tileGestures(m, ref, a, radius = 22.dp) {
+                            // Tapping the stack opens the photo on top, and the rest fly out with it.
+                            val c = here[0]
+                            if (c != null && c.isAttached) {
+                                val box = c.boundsInRoot()
+                                val pad = with(density) { 4.dp.toPx() }
+                                val left = if (me) box.right - pad - wPx else box.left + pad
+                                val topY = box.top + with(density) { 4.dp.toPx() }
+                                PhotoFlight.spot = StackSpot(
+                                    group, androidx.compose.ui.geometry.Rect(left, topY, left + wPx, topY + with(density) { h.toPx() }),
+                                    sign, fanPx, dropPx, order.map { keys[it] }, with(density) { 22.dp.toPx() },
+                                )
+                            }
+                            val (tm, tr) = items[order.first()]
+                            a.onOpenItem?.invoke(tm, tr) ?: a.onOpenMedia(tr)
+                            Unit
+                        },
                 ) {
-                    T("‹", size = 14.sp, color = Color.White); T("${top + 1} of $n", size = 12.sp, weight = FontWeight.SemiBold, color = Color.White); T("›", size = 14.sp, color = Color.White)
+                    TileContent(m, ref, x, a)
+                    if (depth == 0 && n > 1) GlassTag("$n", Modifier.align(if (me) Alignment.TopStart else Alignment.TopEnd).padding(9.dp), icon = Icons.stack)
                 }
             }
         } }
@@ -402,8 +308,8 @@ private fun DeckStyle(items: List<Pair<Msg, MediaRef>>, me: Boolean, w: Dp, h: D
 
 /** Tap to open, hold for the menu, double-tap to heart: for one photo in a group. */
 @OptIn(ExperimentalFoundationApi::class)
-private fun Modifier.tileGestures(m: Msg, ref: MediaRef, a: RowActs, tap: (() -> Unit?)? = null): Modifier = this
-    .clip(RoundedCornerShape(20.dp))
+private fun Modifier.tileGestures(m: Msg, ref: MediaRef, a: RowActs, radius: Dp = 20.dp, tap: (() -> Unit?)? = null): Modifier = this
+    .clip(RoundedCornerShape(radius))
     .combinedClickable(
         onClick = { if (tap?.invoke() == null) a.onOpenItem?.invoke(m, ref) ?: a.onOpenMedia(ref) },
         onLongClick = { a.onLongItem?.invoke(m) ?: a.onLong() },

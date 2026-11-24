@@ -92,6 +92,13 @@ import com.jpetrydesign.pyng.ui.kit.press
 import com.jpetrydesign.pyng.ui.theme.LocalTok
 import kotlinx.coroutines.launch
 import java.io.File
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.layout
+import kotlin.math.roundToInt
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.foundation.layout.offset
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -125,8 +132,12 @@ fun PhotoViewer(
     var last by remember { mutableStateOf(open) }
     var lastItems by remember { mutableStateOf(items) }
     if (open != null) { last = open; if (items.isNotEmpty()) lastItems = items }
-    BackHandler(enabled = open != null) { onClose() }
-    AnimatedVisibility(open != null, enter = fadeIn(tween(220)), exit = fadeOut(tween(180))) {
+    // Opened from a photo stack: its photos fly out of the stack into the viewer, and back again on close.
+    val mo0 = com.jpetrydesign.pyng.ui.kit.LocalMo.current
+    val flying = open != null && PhotoFlight.spot != null && mo0.liquid
+    var closer by remember { mutableStateOf<(() -> Unit)?>(null) }
+    BackHandler(enabled = open != null) { closer?.invoke() ?: onClose() }
+    AnimatedVisibility(open != null, enter = if (flying) fadeIn(tween(1)) else fadeIn(tween(220)), exit = fadeOut(tween(180))) {
         val key = last ?: return@AnimatedVisibility
         val list = lastItems
         if (list.isEmpty()) return@AnimatedVisibility
@@ -144,11 +155,38 @@ fun PhotoViewer(
         val fade = (1f - abs(dismiss.value) / (closeAt * 3f)).coerceIn(0f, 1f)
         val cur = list.getOrNull(pager.currentPage) ?: list.first()
         val (m, ref) = cur
-        val showChrome = chrome && abs(dismiss.value) < closeAt * 0.4f
+        val showChrome0 = chrome && abs(dismiss.value) < closeAt * 0.4f
         val path = ref.localPath.ifEmpty { repo.media[ref.id].orEmpty() }
-        // The set rises in with a little spring when it opens.
-        val rise = remember { Animatable(0f) }
+        val mo = com.jpetrydesign.pyng.ui.kit.LocalMo.current
+        // The stack this set flew out of, if it did (only while Liquid motion is on).
+        val spot = remember(key) { PhotoFlight.spot?.takeIf { mo.liquid }.also { PhotoFlight.spot = null } }
+        // 0: the photos sit in the stack. 1: they're laid out in the viewer.
+        val fly = remember(key) { Animatable(if (spot != null) 0f else 1f) }
+        var phase by remember(key) { mutableStateOf(if (spot != null) "out" else "view") }
+        LaunchedEffect(key) {
+            if (spot == null) return@LaunchedEffect
+            PhotoFlight.out = spot.group
+            fly.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 280f))
+            phase = "view"
+        }
+        fun close() {
+            val curKey = photoKey(m, ref)
+            if (spot != null && phase == "view" && curKey in spot.order) {
+                phase = "back"
+                scope.launch {
+                    fly.animateTo(0f, spring(dampingRatio = 0.92f, stiffness = 380f))
+                    PhotoFlight.landTop = spot.group to curKey
+                    PhotoFlight.out = null
+                    onClose()
+                }
+            } else if (phase != "back") { PhotoFlight.out = null; onClose() }
+        }
+        SideEffect { closer = { close() } }
+        // The set rises in with a little spring when it opens (unless it flew out of a stack).
+        val rise = remember { Animatable(if (spot != null) 1f else 0f) }
         LaunchedEffect(Unit) { rise.animateTo(1f, spring(dampingRatio = 0.7f, stiffness = 300f)) }
+        val bgK = if (spot != null) fly.value.coerceIn(0f, 1f) else 1f
+        val showChrome = showChrome0 && phase == "view"
         // Each time a photo lands in the middle it gives a small squish.
         val squish = remember { Animatable(1f) }
         var settledOnce by remember { mutableStateOf(false) }
@@ -159,13 +197,14 @@ fun PhotoViewer(
         }
         // Video controls for whichever video is in the middle, so the floating player can drive it.
         val vc = remember { VideoCtl() }
-        val mo = com.jpetrydesign.pyng.ui.kit.LocalMo.current
         // While a video plays, the controls step aside after a few seconds; any tap brings them back.
         LaunchedEffect(chrome, vc.playing) { if (chrome && vc.playing) { kotlinx.coroutines.delay(3000); chrome = false } }
         var menu by remember { mutableStateOf(false) }
         LaunchedEffect(pager.currentPage) { menu = false }
-        Box(Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxSize().graphicsLayer { alpha = fade }.background(VBg))
+        var origin by remember { mutableStateOf(Offset.Zero) }
+        var viewSize by remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
+        Box(Modifier.fillMaxSize().onGloballyPositioned { c -> origin = c.boundsInRoot().topLeft; viewSize = c.size.let { androidx.compose.ui.geometry.Size(it.width.toFloat(), it.height.toFloat()) } }) {
+            Box(Modifier.fillMaxSize().graphicsLayer { alpha = fade * bgK }.background(VBg))
             // The same picture, heavily frosted, fills whatever the photo or video doesn't, instead of black bars.
             // (For a video, its still frame.)
             val glow = ref.let { r ->
@@ -175,11 +214,11 @@ fun PhotoViewer(
             androidx.compose.animation.Crossfade(glow, animationSpec = tween(420), label = "glow") { g ->
                 if (g.isNotEmpty()) AsyncImage(
                     File(g), null, contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.62f * fade; scaleX = 1.3f; scaleY = 1.3f }
+                    modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.62f * fade * bgK; scaleX = 1.3f; scaleY = 1.3f }
                         .blur(70.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Unbounded),
                 )
             }
-            Box(Modifier.fillMaxSize().graphicsLayer { alpha = fade }.background(Color.Black.copy(alpha = 0.32f)))
+            Box(Modifier.fillMaxSize().graphicsLayer { alpha = fade * bgK }.background(Color.Black.copy(alpha = 0.32f)))
             // The set, full screen. Neighbors sit to each side, smaller, dimmer and turned away.
             Box(Modifier.fillMaxSize().onSizeChanged { }) {
                 var wPx by remember { mutableFloatStateOf(0f) }
@@ -191,7 +230,8 @@ fun PhotoViewer(
                     HorizontalPager(
                         pager, Modifier.fillMaxSize().graphicsLayer {
                             val k = rise.value
-                            alpha = k.coerceIn(0f, 1f)
+                            // While the photos are in flight, the flying copies stand in for the pager.
+                            alpha = if (phase == "view") k.coerceIn(0f, 1f) else 0f
                             translationY = (1f - k) * 30.dp.toPx()
                             val sc = 0.9f + 0.1f * k; scaleX = sc; scaleY = sc
                         },
@@ -204,7 +244,7 @@ fun PhotoViewer(
                         val isCur = page == pager.currentPage
                         val drag: (Float) -> Unit = { dy -> scope.launch { dismiss.snapTo(dismiss.value + dy) } }
                         val dragEnd: () -> Unit = {
-                            if (abs(dismiss.value) > closeAt) onClose()
+                            if (abs(dismiss.value) > closeAt) close()
                             else scope.launch { dismiss.animateTo(0f, spring(dampingRatio = 0.75f, stiffness = 500f)) }
                         }
                         Box(
@@ -244,6 +284,73 @@ fun PhotoViewer(
                     }
                 }
             }
+            // The photos in flight, between the stack in the chat and their places in the viewer.
+            if (spot != null && phase != "view" && viewSize.width > 0f) {
+                val dens = LocalDensity.current.density
+                val W = viewSize.width; val H = viewSize.height
+                val inset = if (single) 0f else W * 0.07f
+                val pageW = W - 2 * inset
+                val cur0 = pager.currentPage
+                val curKey = photoKey(list[cur0].first, list[cur0].second)
+                val order = spot.order
+                val nn = order.size
+                val curPos = order.indexOf(curKey).coerceAtLeast(0)
+                // Drawn back to front: the photo you're on last, so it's on top.
+                val drawOrder = order.indices.sortedByDescending { if (order[it] == curKey) -1 else (it - curPos + nn) % nn }
+                for (pos in drawOrder) {
+                    val k0 = order[pos]
+                    val li = list.indexOfFirst { photoKey(it.first, it.second) == k0 }
+                    if (li < 0) continue
+                    val pr = list[li].second
+                    // In the stack: on the way out, where it sat; on the way back, where it lands (the photo you're on, on top).
+                    val depth = if (phase == "back") (pos - curPos + nn) % nn else pos
+                    if (depth > 3) continue
+                    val sc0 = 1f - depth * StackSpot.SHRINK
+                    val b = spot.base
+                    val sw = b.width * sc0; val sh = b.height * sc0
+                    val ox = b.left + b.width * 0.5f; val oy = b.top + b.height * 0.9f
+                    val sL = ox - sw * 0.5f + spot.sign * depth * spot.fan - origin.x
+                    val sT = oy - sh * 0.9f + depth * spot.drop - origin.y
+                    val sRot = spot.sign * depth * StackSpot.TILT
+                    // In the viewer: the photo fitted to its page; neighbours to the side, smaller.
+                    val off = li - cur0
+                    val aspect = if (pr.w > 0 && pr.h > 0) pr.w.toFloat() / pr.h else b.width / b.height
+                    var ew = pageW; var eh = pageW / aspect
+                    if (eh > H) { eh = H; ew = H * aspect }
+                    val esc = if (off == 0) 1f else 0.82f
+                    ew *= esc; eh *= esc
+                    val ecx = W / 2f + (if (off == 0) 0f else kotlin.math.sign(off.toFloat()) * W * 0.56f)
+                    val eL = ecx - ew / 2f; val eT = H / 2f - eh / 2f
+                    val gone = abs(off) > 1
+                    val delay = (if (phase == "back") 0.05f else 0.07f) * depth
+                    Box(
+                        Modifier
+                            .offset {
+                                val k = ((fly.value - delay) / (1f - delay)).let { if (fly.value >= 1f) fly.value else it.coerceAtLeast(0f) }
+                                val dy = if (off == 0) dismiss.value * k else 0f
+                                IntOffset((sL + (eL - sL) * k).roundToInt(), (sT + (eT - sT) * k + dy).roundToInt())
+                            }
+                            .layout { m0, _ ->
+                                val k = ((fly.value - delay) / (1f - delay)).let { if (fly.value >= 1f) fly.value else it.coerceAtLeast(0f) }
+                                val wv = (sw + (ew - sw) * k).roundToInt().coerceAtLeast(1)
+                                val hv = (sh + (eh - sh) * k).roundToInt().coerceAtLeast(1)
+                                val pl = m0.measure(androidx.compose.ui.unit.Constraints.fixed(wv, hv))
+                                layout(wv, hv) { pl.place(0, 0) }
+                            }
+                            .graphicsLayer {
+                                val k = ((fly.value - delay) / (1f - delay)).let { if (fly.value >= 1f) fly.value else it.coerceAtLeast(0f) }
+                                rotationZ = sRot * (1f - k.coerceIn(0f, 1f))
+                                alpha = if (gone) (1f - k).coerceIn(0f, 1f) else 1f
+                                shape = RoundedCornerShape((22f + (if (single) -22f else 2f) * k.coerceIn(0f, 1f)) * dens)
+                                clip = true
+                            },
+                    ) {
+                        val pic = pr.localPath.ifEmpty { repo.media[pr.id].orEmpty() }.ifEmpty { repo.media[pr.thumbId].orEmpty().ifEmpty { pr.previewPath } }
+                        if (pic.isNotEmpty()) AsyncImage(File(pic), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        else Box(Modifier.fillMaxSize().background(Color(0xFF2A2D36)))
+                    }
+                }
+            }
             // Controls float over the picture and drain away when you tap; tap again and they bud back.
             val liquid = mo.liquid
             fun appear(from: Float) = if (mo == com.jpetrydesign.pyng.ui.kit.Mo.Minimal) fadeIn(tween(120))
@@ -256,7 +363,7 @@ fun PhotoViewer(
                 enter = appear(0f), exit = vanish(0f),
             ) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(44.dp).clip(CircleShape).background(VPill).press(0.88f, onClose).semantics { contentDescription = "Close" }, contentAlignment = Alignment.Center) { Ico(Icons.close, VInk, 18.dp) }
+                    Box(Modifier.size(44.dp).clip(CircleShape).background(VPill).press(0.88f) { close() }.semantics { contentDescription = "Close" }, contentAlignment = Alignment.Center) { Ico(Icons.close, VInk, 18.dp) }
                     Spacer(Modifier.width(8.dp))
                     Column(Modifier.weight(1f, fill = false).clip(RoundedCornerShape(22.dp)).background(VPill).padding(horizontal = 14.dp, vertical = 6.dp)) {
                         T(if (m.fromMe) "You" else m.sender.ifBlank { conv?.title ?: "" }, size = 14.sp, weight = FontWeight.SemiBold, color = VInk, maxLines = 1)

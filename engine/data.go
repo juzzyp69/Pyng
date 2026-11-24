@@ -285,10 +285,19 @@ func (m *Messenger) MarkRead(conversationID string, messageID string) (err error
 
 // SetTyping tells the other side you are typing.
 func (m *Messenger) SetTyping(conversationID string) (err error) {
-	defer m.guard("SetTyping", &err)
+	return m.SetTypingState(conversationID, true)
+}
+
+// SetTypingState tells the other side you started (true) or stopped (false) typing. Only RCS chats
+// show typing, so SMS and MMS chats are skipped.
+func (m *Messenger) SetTypingState(conversationID string, typing bool) (err error) {
+	defer m.guard("SetTypingState", &err)
 	conv, err := m.conv(conversationID)
 	if err != nil {
 		return err
+	}
+	if conv.GetType() != gmproto.ConversationType_RCS {
+		return nil
 	}
 	cli, err := m.ready()
 	if err != nil {
@@ -296,9 +305,37 @@ func (m *Messenger) SetTyping(conversationID string) (err error) {
 	}
 	ctx, cancel := ctx20()
 	defer cancel()
-	err = cli.SetTyping(ctx, conversationID, conv.GetSimCard().GetSIMData().GetSIMPayload())
-	m.log.Info().Str("conversation_id", conversationID).Bool("group", conv.GetIsGroupChat()).AnErr("error", err).Msg("Typing update sent")
+	err = cli.SetTyping(ctx, conversationID, typing, conv.GetSimCard().GetSIMData().GetSIMPayload())
+	m.log.Debug().Str("conversation_id", conversationID).Bool("typing", typing).AnErr("error", err).Msg("Typing update sent")
 	return err
+}
+
+// checkPhone asks Google (at most every 6 hours) whether the linked phone is still on the account.
+// If it's gone, the link can't recover by itself and the app asks you to link again.
+func (m *Messenger) checkPhone() {
+	defer m.guard("checkPhone", nil)
+	now := time.Now().UnixMilli()
+	last := m.phoneChecked.Load()
+	if now-last < int64(6*time.Hour/time.Millisecond) || !m.phoneChecked.CompareAndSwap(last, now) {
+		return
+	}
+	m.mu.Lock()
+	cli := m.client
+	m.mu.Unlock()
+	if cli == nil {
+		return
+	}
+	ctx, cancel := ctx60()
+	defer cancel()
+	ok, err := cli.PairedPhoneRegistered(ctx)
+	if err != nil {
+		m.log.Warn().Err(err).Msg("Couldn't check whether the linked phone is still on the account")
+		return
+	}
+	if !ok {
+		m.log.Warn().Msg("Linked phone is no longer on the Google account")
+		m.emit("connection", map[string]any{"state": "relink", "error": "your phone is no longer linked to this Google account"})
+	}
 }
 
 // DeleteMessage deletes a message in Google Messages too.
@@ -833,6 +870,7 @@ func (m *Messenger) handleEvent(evt any) {
 		}
 	case *events.PhoneNotResponding:
 		m.emit("connection", map[string]any{"state": "phone_not_responding"})
+		go m.checkPhone()
 	case *events.PhoneRespondingAgain:
 		m.emit("connection", map[string]any{"state": "ready"})
 	case *events.ListenTemporaryError:
@@ -840,13 +878,19 @@ func (m *Messenger) handleEvent(evt any) {
 	case *events.ListenRecovered:
 		m.emit("connection", map[string]any{"state": "ready"})
 	case *events.ListenFatalError:
-		m.emit("connection", map[string]any{"state": "error", "error": errText(e.Error)})
+		if errors.Is(e.Error, libgm.ErrPairingPermissionDenied) {
+			// Google keeps turning requests down: the link is dead and needs doing again.
+			m.emit("connection", map[string]any{"state": "relink", "error": errText(e.Error)})
+		} else {
+			m.emit("connection", map[string]any{"state": "error", "error": errText(e.Error)})
+		}
 	case *events.GaiaLoggedOut, *gmproto.RevokePairData:
 		m.mu.Lock()
 		m.auth = nil
 		m.client = nil
 		m.mu.Unlock()
 		_ = os.Remove(m.sessionPath())
+		_ = os.Remove(m.sealedPath())
 		m.emit("unpaired", map[string]any{"reason": "signed out on the phone"})
 	case *gmproto.UserAlertEvent:
 		switch e.GetAlertType() {

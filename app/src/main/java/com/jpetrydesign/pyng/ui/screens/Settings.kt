@@ -434,7 +434,7 @@ fun SectionScreen(nav: Nav, key: String) {
                         Box(Modifier.size(10.dp).clip(CircleShape).background(if (ok) Color(0xFF2EB872) else if (conn == "error") t.danger else Color(0xFFE3A72B)))
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            T(when (conn) { "ready", "idle" -> "Connected"; "phone_not_responding" -> "Your phone isn't responding"; "error" -> "Connection problem"; else -> "Connecting…" }, size = 15.5.sp, weight = FontWeight.SemiBold)
+                            T(when (conn) { "ready", "idle" -> "Connected"; "phone_not_responding" -> "Your phone isn't responding"; "relink" -> "Link Google Messages again"; "error" -> "Connection problem"; else -> "Connecting…" }, size = 15.5.sp, weight = FontWeight.SemiBold)
                             T("Linked through Google Messages on your phone", size = 12.5.sp, color = t.soft)
                         }
                     }

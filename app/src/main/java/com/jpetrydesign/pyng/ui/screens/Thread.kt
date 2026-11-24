@@ -172,6 +172,8 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
     val motion = LocalMotion.current
 
     var draft by remember(convId) { mutableStateOf(p.drafts[convId].orEmpty()) }
+    // Leaving the chat stops your typing indicator on their side.
+    androidx.compose.runtime.DisposableEffect(convId) { onDispose { repo.typingStop(convId) } }
     var replyTo by remember(convId) { mutableStateOf<Msg?>(null) }
     val attachments = remember(convId) { mutableStateListOf<Pending>() }
     // Something shared from another app lands in the message box, ready to send.
@@ -696,7 +698,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                     RaiseToListen()
                     UndoSendPill(t, repo.held.values.any { it == convId }) { repo.undoSend(convId)?.let { back -> if (back.isNotBlank()) draft = back } }
                     Composer(
-                        t = t, conv = conv, draft = draft, onDraft = { draft = it; if (it.isNotEmpty()) repo.typingPing(convId) },
+                        t = t, conv = conv, draft = draft, onDraft = { draft = it; if (it.isNotEmpty()) repo.typingPing(convId) else repo.typingStop(convId) },
                         replyTo = replyTo, onCancelReply = { replyTo = null }, attachments = attachments, schedule = schedule,
                         onSchedule = { schedule = it }, onSend = { send(it) }, smart = p.on("smart") && msgs.lastOrNull()?.fromMe == false && draft.isEmpty() && !selecting && conv != null && !automated(conv, msgs.lastOrNull()?.text.orEmpty()),
                         lastIncoming = msgs.lastOrNull { !it.fromMe }?.text.orEmpty(),

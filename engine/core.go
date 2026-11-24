@@ -6,6 +6,10 @@ package core
 
 import (
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -49,13 +53,28 @@ type Messenger struct {
 	fg         atomic.Bool  // the app is on screen
 	lastActive atomic.Int64 // when the phone last said this session is the active one (unix ms)
 	nudging    atomic.Bool
+
+	// The key the saved session is sealed with (kept by the phone's secure hardware on the app's side).
+	key []byte
+	// When we last asked Google whether the linked phone is still on the account (unix ms).
+	phoneChecked atomic.Int64
 }
 
 // NewMessenger creates the engine. dataDir is a private app folder where the
 // session and a rolling debug log are kept.
 func NewMessenger(dataDir string, listener Listener) *Messenger {
+	return NewSecureMessenger(dataDir, "", listener)
+}
+
+// NewSecureMessenger is NewMessenger with a key (base64, 32 bytes) that the saved session is sealed
+// with, so a copy of the app's files alone can't be used to read your texts. An older, unsealed
+// session is read once and sealed. With no key it works as before.
+func NewSecureMessenger(dataDir string, keyB64 string, listener Listener) *Messenger {
 	_ = os.MkdirAll(dataDir, 0o700)
 	m := &Messenger{dir: dataDir, listener: listener, convs: map[string]*gmproto.Conversation{}}
+	if k, err := base64.StdEncoding.DecodeString(keyB64); err == nil && len(k) == 32 {
+		m.key = k
+	}
 	inlineDir = m.cacheDir("media")
 	logPath := filepath.Join(dataDir, "engine.log")
 	if st, err := os.Stat(logPath); err == nil && st.Size() > 2<<20 {
@@ -63,7 +82,7 @@ func NewMessenger(dataDir string, listener Listener) *Messenger {
 	}
 	if f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600); err == nil {
 		m.logFile = f
-		m.log = zerolog.New(f).With().Timestamp().Logger().Level(zerolog.DebugLevel)
+		m.log = zerolog.New(f).With().Timestamp().Logger().Level(zerolog.InfoLevel)
 	} else {
 		m.log = zerolog.Nop()
 	}
@@ -79,7 +98,13 @@ func NewMessenger(dataDir string, listener Listener) *Messenger {
 		_ = f.Close()
 	}
 	m.auth = m.loadSession()
-	m.log.Info().Bool("paired", m.auth != nil).Msg("Engine started")
+	m.log.Info().Bool("paired", m.auth != nil).Bool("sealed", m.key != nil).Msg("Engine started")
+	if m.auth != nil && m.key != nil {
+		if _, err := os.Stat(m.sessionPath()); err == nil {
+			// Seal an older plain session now.
+			m.saveSession()
+		}
+	}
 	return m
 }
 
@@ -110,11 +135,55 @@ func (m *Messenger) guard(name string, err *error) {
 // ---------- session storage ----------
 
 func (m *Messenger) sessionPath() string { return filepath.Join(m.dir, "session.json") }
+func (m *Messenger) sealedPath() string  { return filepath.Join(m.dir, "session.sealed") }
+
+func (m *Messenger) seal(plain []byte) ([]byte, error) {
+	block, err := aes.NewCipher(m.key)
+	if err != nil {
+		return nil, err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err = rand.Read(nonce); err != nil {
+		return nil, err
+	}
+	return gcm.Seal(nonce, nonce, plain, []byte("pyng-session")), nil
+}
+
+func (m *Messenger) open(sealed []byte) ([]byte, error) {
+	block, err := aes.NewCipher(m.key)
+	if err != nil {
+		return nil, err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	if len(sealed) < gcm.NonceSize() {
+		return nil, errors.New("sealed session is too short")
+	}
+	return gcm.Open(nil, sealed[:gcm.NonceSize()], sealed[gcm.NonceSize():], []byte("pyng-session"))
+}
 
 func (m *Messenger) loadSession() *libgm.AuthData {
-	data, err := os.ReadFile(m.sessionPath())
-	if err != nil {
-		return nil
+	var data []byte
+	var err error
+	if m.key != nil {
+		if sealed, rerr := os.ReadFile(m.sealedPath()); rerr == nil {
+			if data, err = m.open(sealed); err != nil {
+				m.log.Err(err).Msg("Saved session couldn't be unsealed")
+				data = nil
+			}
+		}
+	}
+	if data == nil {
+		// An older plain session (or no key on this phone).
+		if data, err = os.ReadFile(m.sessionPath()); err != nil {
+			return nil
+		}
 	}
 	ad := libgm.NewAuthData()
 	if err = json.Unmarshal(data, ad); err != nil {
@@ -136,12 +205,26 @@ func (m *Messenger) saveSession() {
 		m.log.Err(err).Msg("Failed to encode session")
 		return
 	}
-	tmp := m.sessionPath() + ".tmp"
+	path := m.sessionPath()
+	if m.key != nil {
+		sealed, serr := m.seal(data)
+		if serr != nil {
+			m.log.Err(serr).Msg("Failed to seal session; keeping it plain")
+		} else {
+			data, path = sealed, m.sealedPath()
+		}
+	}
+	tmp := path + ".tmp"
 	if err = os.WriteFile(tmp, data, 0o600); err == nil {
-		err = os.Rename(tmp, m.sessionPath())
+		err = os.Rename(tmp, path)
 	}
 	if err != nil {
 		m.log.Err(err).Msg("Failed to save session")
+		return
+	}
+	if path == m.sealedPath() {
+		// Sealed safely: the plain copy goes.
+		_ = os.Remove(m.sessionPath())
 	}
 }
 
@@ -387,6 +470,7 @@ func (m *Messenger) Unpair() error {
 		cli.Disconnect()
 	}
 	_ = os.Remove(m.sessionPath())
+	_ = os.Remove(m.sealedPath())
 	m.emit("unpaired", map[string]any{})
 	return err
 }

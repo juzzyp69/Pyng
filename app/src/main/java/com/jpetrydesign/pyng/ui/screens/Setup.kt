@@ -106,7 +106,11 @@ fun SetupScreen(startStep: Int, onDone: () -> Unit, onLog: () -> Unit) {
     LaunchedEffect(Unit) {
         repo.hub.events.collect { e ->
             when (e.kind) {
-                "paired" -> { link = "done"; error = null }
+                "paired" -> {
+                    link = "done"; error = null
+                    // Pyng keeps its own copy of the link; the sign-in page's cookies aren't needed any more.
+                    runCatching { CookieManager.getInstance().removeAllCookies(null); CookieManager.getInstance().flush() }
+                }
                 "pair_error" -> { link = "idle"; error = e.data.optString("error").replaceFirstChar { it.uppercase() } }
                 "pair_retry" -> waitMsg = "Your phone is slow to answer. Trying again (${e.data.optInt("attempt") + 1} of 4)…"
             }

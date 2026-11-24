@@ -224,7 +224,8 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
                 cacheFile.delete(); avatarFile.delete()
             }
             "connection" -> if (e.data.optString("state") == "ready") {
-                if (convs.isEmpty()) refresh()
+                // Back online: the newest chats catch up right away (anything missed while Pyng slept).
+                if (convs.isEmpty()) refresh() else catchUp()
                 // Back online: anything that failed gets another go.
                 mediaFailed.clear(); connEpoch.intValue++
             }
@@ -327,6 +328,27 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
         convs.values.sortedByDescending { it.ts }.take(3).forEach { c -> if (msgs.containsKey(c.id)) loadMessages(c.id) }
     }
 
+    /** When the full chat list was last fetched. */
+    var lastFullRefresh = 0L
+        private set
+    private var lastCatchUp = 0L
+
+    /** A quick pass over the 40 newest chats: new texts, read states and names, plus any open chat that moved on. */
+    fun catchUp() {
+        val now = System.currentTimeMillis()
+        if (loading || demo || now - lastCatchUp < 10_000) return
+        lastCatchUp = now
+        scope.launch {
+            hub.io { it.listConversations("inbox", 40) }.onSuccess { j ->
+                Conv.list(j).forEach { c ->
+                    val old = convs[c.id]
+                    putConv(c)
+                    if (old != null && c.ts > old.ts && msgs[c.id] != null) loadMessages(c.id)
+                }
+            }
+        }
+    }
+
     fun refresh() {
         if (loading || demo) return
         loading = true
@@ -349,6 +371,7 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
                     all.distinctBy { it.id }.forEach { putConv(it) }
                     ensureAvatars(convs.values.flatMap { c -> c.others.map { it.id } }.distinct())
                     loadError = null
+                    lastFullRefresh = System.currentTimeMillis()
                     seedPins()
                     purgeTrash()
                     sweepCodes()
@@ -667,6 +690,7 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     }
 
     fun send(convId: String, text: String, replyTo: String = "", attachments: List<Pending> = emptyList(), undoable: Boolean = false) {
+        typingStop(convId)
         val body = text.trim()
         if (body.isEmpty() && attachments.isEmpty()) return
         // Photos and videos first, in the order you picked them, then the text underneath them.
@@ -884,12 +908,26 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
     }
 
     private var lastTyping = 0L
+    private var typingIn: String? = null
+    private var typingIdle: kotlinx.coroutines.Job? = null
+
+    /** You're typing: tells the other side (at most every 4 seconds), and stops on its own after a quiet 6 seconds. */
     fun typingPing(convId: String) {
         if (!prefs.state.on("typing")) return
+        typingIdle?.cancel()
+        typingIdle = scope.launch { delay(6000); typingStop(convId) }
         val now = System.currentTimeMillis()
-        if (now - lastTyping < 4000) return
-        lastTyping = now
-        scope.launch { hub.io { it.setTyping(convId) } }
+        if (typingIn == convId && now - lastTyping < 4000) return
+        lastTyping = now; typingIn = convId
+        scope.launch { hub.io { it.setTypingState(convId, true) } }
+    }
+
+    /** You stopped (sent, cleared the box, or left the chat): their "typing" goes away right away. */
+    fun typingStop(convId: String) {
+        if (typingIn != convId) return
+        typingIn = null; lastTyping = 0L
+        typingIdle?.cancel()
+        scope.launch { hub.io { it.setTypingState(convId, false) } }
     }
 
     // ---------- conversation actions ----------

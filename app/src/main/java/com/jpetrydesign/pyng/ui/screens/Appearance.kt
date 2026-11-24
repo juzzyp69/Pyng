@@ -202,7 +202,7 @@ fun AppearanceScreen(nav: Nav) {
             // Style studio: open Chat style or Home style to see every choice with a live preview.
             SectionLabel("Style studio")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StudioCard("Chat style", listOf(p.bubble, p.opt("photoGroups"), p.opt("statusStyle").let { if (it == "Off") "No status" else it }).joinToString(" · "), Modifier.weight(1f).enter(1)) { studio = "chat" }
+                StudioCard("Chat style", listOf(p.bubble, p.opt("statusStyle").let { if (it == "Off") "No status" else it }).joinToString(" · "), Modifier.weight(1f).enter(1)) { studio = "chat" }
                 StudioCard("Home style", listOf(p.pinLayout, p.pinStyle, p.opt("motion") + " motion").joinToString(" · "), Modifier.weight(1f).enter(2)) { studio = "home" }
             }
             Spacer(Modifier.height(14.dp))
@@ -792,7 +792,7 @@ private fun StyleStudio(kind: String?, onClose: () -> Unit) {
     ) {
         val k = last ?: return@AnimatedVisibility
         val chat = k == "chat"
-        val tabs = if (chat) listOf("bubble" to "Bubbles", "sendStyle" to "Send", "reactStyle" to "Reactions", "gradient" to "Gradient", "statusStyle" to "Status", "photoGroups" to "Photos", "textSize" to "Text", "font" to "Font", "defWall" to "Wallpaper")
+        val tabs = if (chat) listOf("bubble" to "Bubbles", "sendStyle" to "Send", "reactStyle" to "Reactions", "gradient" to "Gradient", "statusStyle" to "Status", "textSize" to "Text", "font" to "Font", "defWall" to "Wallpaper")
             else listOf("pinLayout" to "Layout", "pinShape" to "Shape", "pinStyle" to "New messages", "pinNames" to "Names", "pinBack" to "Backdrop", "density" to "Density", "showPhotos" to "Faces", "motion" to "Motion")
         var tab by remember(k) { mutableStateOf(StudioTab.pending?.takeIf { want -> tabs.any { it.first == want } }.also { StudioTab.pending = null } ?: tabs.first().first) }
         Column(Modifier.fillMaxSize().background(t.bg).statusBarsPadding().navigationBarsPadding()) {
@@ -858,7 +858,7 @@ fun ChatStylePreview(compact: Boolean) {
             Box(Modifier.clip(com.jpetrydesign.pyng.ui.screens.bubbleShape(false, false, false, big * (if (compact) 0.7f else 1f), small)).background(t.inBg).padding(horizontal = if (compact) 9.dp else 13.dp, vertical = if (compact) 5.dp else 8.dp)) {
                 T("Back from the trip!!", size = fs.sp, color = t.inInk, maxLines = 1)
             }
-            if (!compact && roomy) { PhotoGroupMini(p.opt("photoGroups"), t, 1.15f); Spacer(Modifier.height(2.dp)) }
+            if (!compact && roomy) { PhotoGroupMini("Stack", t, 1.15f); Spacer(Modifier.height(2.dp)) }
             Spacer(Modifier.weight(1f))
             listOf("Ok these are so good", "How was the drive?").forEachIndexed { i, txt ->
                 Box(Modifier.align(Alignment.End).clip(com.jpetrydesign.pyng.ui.screens.bubbleShape(true, i == 1, i == 0, big * (if (compact) 0.7f else 1f), small)).background(outFill(i))

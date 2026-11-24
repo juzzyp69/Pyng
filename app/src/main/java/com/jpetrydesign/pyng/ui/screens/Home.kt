@@ -151,7 +151,11 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
     androidx.activity.compose.BackHandler(enabled = editPins) { editPins = false }
     val now = System.currentTimeMillis()
 
-    LaunchedEffect(Unit) { if (repo.convs.isEmpty() || !repo.hub.engine.isConnected) repo.refresh() }
+    // The full list is fetched at most every 10 minutes; in between, reconnecting catches up the newest chats.
+    LaunchedEffect(Unit) {
+        if (repo.convs.isEmpty() || System.currentTimeMillis() - repo.lastFullRefresh > 10 * 60_000L) repo.refresh()
+        else if (!repo.hub.engine.isConnected) repo.hub.io { e -> if (e.isPaired) e.start() }
+    }
     val ctx = LocalContext.current
     var askPerms by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -518,7 +522,26 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                         lifted = ghostId == c.id,
                         onLift = if (layout == "List") null else ({ at, center, size -> liftAt(c.id, at, center, size, true) }), home = dh,
                         onSwipe = { side -> swipeAct(repo, c, if (side > 0) p.opt("swipeR") else p.opt("swipe")) },
-                    ) }
+                    )
+                    // Selecting: a tap picks or unpicks the chat instead of opening it.
+                    if (Selecting.ids.isNotEmpty()) {
+                        val on = c.id in Selecting.ids
+                        val k by animateFloatAsState(if (on) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 520f), label = "pick")
+                        Box(
+                            Modifier.matchParentSize().padding(horizontal = 8.dp).clip(RoundedCornerShape(22.dp))
+                                .background(t.p.copy(alpha = 0.10f * k))
+                                .clickable { Selecting.ids = if (on) Selecting.ids - c.id else Selecting.ids + c.id },
+                        ) {
+                            Box(
+                                Modifier.align(Alignment.CenterEnd).padding(end = 14.dp).size(26.dp)
+                                    .graphicsLayer { val sc = 0.85f + 0.15f * k; scaleX = sc; scaleY = sc }
+                                    .clip(CircleShape).background(if (on) t.fill else t.bg.copy(alpha = 0.9f))
+                                    .border(2.dp, if (on) t.fill else t.soft.copy(alpha = 0.6f), CircleShape),
+                                contentAlignment = Alignment.Center,
+                            ) { if (on) Ico(Icons.check, t.onFill, 15.dp, 2.6f) }
+                        }
+                    }
+                    }
                 }
                 // Older chats load as you reach the bottom of the list.
                 if (repo.moreConvs == true && !editPins) item("older") {
@@ -546,22 +569,41 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                 Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 16.dp, top = 4.dp, bottom = if (catsOn && !editPins) 10.dp else 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         T("Messages", size = 28.sp, weight = FontWeight.Bold, letterSpacing = (-0.9).sp, lineHeight = 32.sp)
+                        // "12 unread messages" or "You're all caught up" greets you, then tucks away after a few
+                        // seconds and the chats slide up into the space. Anything you need to act on stays.
+                        val status by repo.hub.connection.collectAsState()
+                        var greet by remember { mutableStateOf(true) }
+                        LaunchedEffect(Unit) { kotlinx.coroutines.delay(6500); greet = false }
+                        val urgent = (repo.loading && all.isEmpty()) || status == "relink" || status == "phone_not_responding" || status == "reconnecting" || status == "connecting" || cat != "primary"
+                        val unreadMsgs = remember(newCount, repo.msgs.size) {
+                            active.filter { unreadOf(it) && it.id !in p.muted }.sumOf { c ->
+                                repo.msgs[c.id]?.filter { it.visible && !it.isSys }?.takeLastWhile { !it.fromMe }?.size?.coerceAtLeast(1) ?: 1
+                            }
+                        }
+                        androidx.compose.animation.AnimatedVisibility(
+                            greet || urgent,
+                            enter = androidx.compose.animation.expandVertically(spring(dampingRatio = 0.86f, stiffness = 380f), expandFrom = Alignment.Top) + fadeIn(tween(220)),
+                            exit = androidx.compose.animation.shrinkVertically(spring(dampingRatio = 0.92f, stiffness = 260f), shrinkTowards = Alignment.Top) + fadeOut(tween(200)),
+                        ) {
+                        Column {
                         Spacer(Modifier.height(3.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = if (status == "relink") Modifier.clickable { nav.go(Route.Setup()) } else Modifier) {
                             Box(Modifier.size(7.dp).clip(CircleShape).background(t.dot))
                             Spacer(Modifier.width(8.dp))
-                            val status by repo.hub.connection.collectAsState()
                             T(
                                 when {
                                     repo.loading && all.isEmpty() -> "Loading your chats…"
+                                    status == "relink" -> "Tap to link Google Messages again"
                                     status == "phone_not_responding" -> "Your phone isn't responding"
                                     status == "reconnecting" || status == "connecting" -> "Connecting…"
                                     cat != "primary" -> catList.firstOrNull { it.first == cat }?.second.orEmpty() + " · " + catUnread(cat).let { if (it > 0) "$it unread" else "all read" }
-                                    newCount > 0 -> "$newCount New Conversation" + if (newCount > 1) "s" else ""
-                                    else -> "You’re All Caught Up"
+                                    unreadMsgs > 0 -> "$unreadMsgs unread message" + if (unreadMsgs > 1) "s" else ""
+                                    else -> "You’re all caught up"
                                 },
                                 size = 13.sp, weight = FontWeight.Medium, color = t.soft,
                             )
+                        }
+                        }
                         }
                     }
                     val photo = p.profilePhoto.ifEmpty { null }
@@ -606,8 +648,18 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(52.dp).graphicsLayer { alpha = fabAlpha }
                     .background(Brush.verticalGradient(0f to fadeTo.copy(alpha = 0f), 1f to fadeTo.copy(alpha = 0.5f))),
             )
+            // Selecting chats: a frosted bar with what you can do to all of them.
+            val picking = Selecting.ids.isNotEmpty()
+            androidx.activity.compose.BackHandler(enabled = picking) { Selecting.ids = emptySet() }
+            val pickK by animateFloatAsState(if (picking) 1f else 0f, spring(dampingRatio = 0.8f, stiffness = 420f), label = "pickBar")
+            if (pickK > 0.01f) SelectBar(
+                Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(horizontal = 14.dp, vertical = 22.dp)
+                    .graphicsLayer { alpha = pickK.coerceIn(0f, 1f); translationY = (1f - pickK) * 120.dp.toPx() },
+                rows,
+            )
             Row(
-                Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 20.dp, bottom = 28.dp).graphicsLayer { alpha = fabAlpha },
+                Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 20.dp, bottom = 28.dp)
+                    .graphicsLayer { alpha = fabAlpha * (1f - pickK).coerceIn(0f, 1f); translationY = pickK * 40.dp.toPx() },
                 horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically,
             ) {
                 // Frosted glass: light blur, mostly see-through, with a bright rim instead of a heavy shadow.
@@ -1367,6 +1419,11 @@ private fun PinnedArea(layout: String, all: List<Pin>, ctl: PinCtl, style: Strin
  * archive, open, edit pins, block, delete) together over the blurred Home screen.
  */
 @Composable
+/** Chats picked on Home to act on together (mark read, archive, delete…). Empty when you're not selecting. */
+object Selecting {
+    var ids by mutableStateOf(emptySet<String>())
+}
+
 fun RowMenu(c: Conv?, onDismiss: () -> Unit, onEditPins: (() -> Unit)? = null) {
     val repo = LocalRepo.current
     val t = LocalTok.current
@@ -1631,6 +1688,16 @@ private fun PeekBody(cur: Conv, repo: com.jpetrydesign.pyng.data.Repo, t: com.jp
                     repo.confirm("Delete this conversation?", "It goes to Trash for 30 days, then it's deleted from Google Messages too.") { repo.deleteConversation(cur.id) }
                 }
             }
+        }
+        // Pick several chats at once: this one starts out picked.
+        Row(
+            Modifier.jelly(bottom, 40.dp, originY = 0f).height(44.dp).clip(RoundedCornerShape(22.dp)).background(card)
+                .clickable { onDismiss(); Selecting.ids = setOf(cur.id) }.padding(horizontal = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Ico(Icons.check, t.p, 16.dp, 2.4f)
+            Spacer(Modifier.width(8.dp))
+            T("Select chats", size = 14.sp, weight = FontWeight.SemiBold, color = t.ink)
         }
     }
 }
@@ -2035,3 +2102,66 @@ private fun PadSheet(visible: Boolean, onDismiss: () -> Unit, maxHeightFraction:
 }
 
 private val LATER_OPENS = setOf("profile", "unknown", "snooze", "newcat")
+
+
+/** What you can do to the chats you picked: read, unread, archive, mute or delete, plus select all. */
+@Composable
+private fun SelectBar(modifier: Modifier, rows: List<Conv>) {
+    val repo = LocalRepo.current
+    val t = LocalTok.current
+    val ids = Selecting.ids
+    val picked = rows.filter { it.id in ids }
+    fun done() { Selecting.ids = emptySet() }
+    Column(
+        modifier.widthIn(max = 520.dp).fillMaxWidth()
+            .shadow(20.dp, RoundedCornerShape(30.dp), clip = false, ambientColor = t.shadow.copy(alpha = 0.2f), spotColor = t.shadow.copy(alpha = 0.26f))
+            .glassRim(RoundedCornerShape(30.dp)).frost(RoundedCornerShape(30.dp), t.sheet.copy(alpha = if (t.solid) 1f else 0.78f), 22.dp)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(36.dp).clip(CircleShape).clickable { done() }, contentAlignment = Alignment.Center) { Ico(Icons.close, t.ink, 15.dp, 2.4f) }
+            Spacer(Modifier.width(6.dp))
+            T("${ids.size} selected", size = 15.5.sp, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            val all = rows.isNotEmpty() && rows.all { it.id in ids }
+            T(if (all) "Select none" else "Select all", size = 14.sp, weight = FontWeight.SemiBold, color = t.p,
+                modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable { Selecting.ids = if (all) emptySet() else rows.mapTo(HashSet()) { it.id } }.padding(horizontal = 12.dp, vertical = 8.dp))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            @Composable fun act(label: String, icon: String, danger: Boolean = false, go: () -> Unit) {
+                Column(
+                    Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).clickable(enabled = ids.isNotEmpty(), onClick = go).padding(vertical = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    Box(Modifier.size(40.dp).clip(CircleShape).background(if (danger) t.danger.copy(alpha = if (t.dark) 0.18f else 0.1f) else t.tone), contentAlignment = Alignment.Center) {
+                        Ico(icon, if (danger) t.danger else t.p, 18.dp)
+                    }
+                    T(label, size = 11.5.sp, weight = FontWeight.Medium, color = if (danger) t.danger else t.ink, maxLines = 1)
+                }
+            }
+            val anyUnread = picked.any { it.unread || it.id in repo.prefs.state.markedUnread }
+            act(if (anyUnread) "Read" else "Unread", if (anyUnread) Icons.read else Icons.unread) {
+                picked.forEach { c ->
+                    val u = c.unread || c.id in repo.prefs.state.markedUnread
+                    if (u == anyUnread) repo.toggleUnread(c.id)
+                }
+                repo.toast(if (anyUnread) "Marked ${picked.size} as read" else "Marked ${picked.size} as unread"); done()
+            }
+            act("Archive", Icons.archive) {
+                val list = picked.map { it.id }
+                list.forEach { repo.setArchived(it, true) }
+                repo.toast("Archived ${list.size}") { list.forEach { repo.setArchived(it, false) } }; done()
+            }
+            act("Mute", Icons.bellOff) {
+                picked.forEach { repo.setMuted(it.id, true) }
+                repo.toast("Muted ${picked.size}"); done()
+            }
+            act("Delete", Icons.trash, danger = true) {
+                val list = picked.map { it.id }
+                repo.confirm("Delete ${list.size} conversation" + (if (list.size > 1) "s?" else "?"), "They go to Trash for 30 days, then they're deleted from Google Messages too.") {
+                    list.forEach { repo.deleteConversation(it) }; done()
+                }
+            }
+        }
+    }
+}
