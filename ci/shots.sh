@@ -20,13 +20,15 @@ sleep 15
 
 shot() {
   local name="$1"; shift
-  adb shell am force-stop $PKG
-  adb logcat -b crash -c
-  adb shell am start -W -n $PKG/.IconClassic --ez demo true "$@" > /dev/null
+  timeout 20 adb shell am force-stop $PKG
+  timeout 10 adb logcat -b crash -c
+  timeout 40 adb shell am start -W -n $PKG/.IconClassic --ez demo true "$@" > /dev/null || echo "start timed out: $name" >> ci-logs/crashes.txt
   sleep "${WAIT:-4}"
-  adb exec-out screencap -p > "$OUT/$name.png"
+  timeout 30 adb exec-out screencap -p > "$OUT/$name.png" || echo "screencap timed out: $name" >> ci-logs/crashes.txt
+  # Note an app that stopped answering (it would otherwise hang the rest of the run).
+  if adb shell dumpsys activity processes 2>/dev/null | grep -q "notResponding=true"; then echo "ANR after: $name" >> ci-logs/crashes.txt; fi
   local crash
-  crash=$(adb logcat -b crash -d)
+  crash=$(timeout 15 adb logcat -b crash -d)
   if [ -n "$crash" ]; then
     { echo "===== $name ====="; echo "$crash"; } >> ci-logs/crashes.txt
   fi
