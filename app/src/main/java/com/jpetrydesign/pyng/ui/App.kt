@@ -316,7 +316,8 @@ private fun Pane(nav: Nav, modifier: Modifier, wide: Boolean) {
     var leavingP by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     var leavingRight by remember { mutableStateOf(false) }
     val backScope = rememberCoroutineScope()
-    androidx.activity.compose.PredictiveBackHandler(enabled = nav.stack.size > 1) { events ->
+    if ("pback" in com.jpetrydesign.pyng.ui.kit.DebugFlags.off) BackHandler(enabled = nav.stack.size > 1) { nav.back() }
+    else androidx.activity.compose.PredictiveBackHandler(enabled = nav.stack.size > 1) { events ->
         try {
             events.collect { e -> backP = e.progress; backFromRight = e.swipeEdge == androidx.activity.BackEventCompat.EDGE_RIGHT }
             // Let go past the point of no return: the screen carries on from where your thumb left it.

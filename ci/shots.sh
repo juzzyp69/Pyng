@@ -45,7 +45,9 @@ shot() {
 ( adb logcat -v time > ci-logs/logcat.txt 2>&1 & )
 # Liquid Glass first, on a fresh phone.
 # Liquid Glass first on a fresh phone (it once stalled the emulator).
-WAIT=6 shot 00-liquid-first --es route settings --es glass "'Liquid Glass'"
+WAIT=6 shot 00-liquid-noback --es route settings --es glass "'Liquid Glass'" --es dbg pback
+WAIT=6 shot 00-liquid-noback2 --es route appearance --es glass "'Liquid Glass'" --es dbg pback
+WAIT=6 shot 00-liquid-full --es route settings --es glass "'Liquid Glass'"
 # 0.9.7 first: settings groups, theme card and picker, glass sliders, select, dark home, photo stack.
 WAIT=6 shot 00a-settings-groups --es route settings
 WAIT=6 shot 00a-appearance --es route appearance
