@@ -587,7 +587,9 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                                 val oldestKey = msgs.firstOrNull { it.id.isNotEmpty() }?.id
                                 LaunchedEffect(oldestKey) { repo.loadMessages(convId, older = true) }
                                 Box(Modifier.fillMaxWidth().padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
-                                    androidx.compose.material3.CircularProgressIndicator(color = t.soft, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                                    if (repo.olderFailed[convId] == true) T("Load earlier messages", size = 13.5.sp, weight = FontWeight.SemiBold, color = t.p,
+                                        modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable { repo.loadMessages(convId, older = true) }.padding(horizontal = 14.dp, vertical = 8.dp))
+                                    else androidx.compose.material3.CircularProgressIndicator(color = t.soft, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
                                 }
                             }
                             if (!loaded) Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {

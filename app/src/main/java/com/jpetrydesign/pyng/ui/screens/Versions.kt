@@ -53,6 +53,7 @@ val RELEASES = listOf(
             "A safer link\nThe saved link to Google Messages is sealed with a key kept in your phone's secure hardware",
         ),
         fixed = listOf(
+            "Older messages load again when you scroll up a chat",
             "Chats catch up the moment Pyng reconnects, instead of waiting for a full refresh",
             "If your phone is unlinked from Google Messages, Pyng tells you and takes you straight to linking again",
             "Theme colors only change in the theme picker, never by a stray tap",

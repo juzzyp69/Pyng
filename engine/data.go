@@ -121,7 +121,10 @@ func (m *Messenger) FetchMessages(conversationID string, count int, beforeID str
 	}
 	var cursor *gmproto.Cursor
 	if beforeID != "" {
-		cursor = &gmproto.Cursor{LastItemID: beforeID, LastItemTimestamp: beforeTs * 1000}
+		// The paging cursor takes the oldest message's time in milliseconds (not microseconds), the same
+		// way Google Messages for web pages back. With microseconds the phone sent the newest page again,
+		// so older messages never loaded.
+		cursor = &gmproto.Cursor{LastItemID: beforeID, LastItemTimestamp: beforeTs}
 	}
 	ctx, cancel := ctx20()
 	defer cancel()

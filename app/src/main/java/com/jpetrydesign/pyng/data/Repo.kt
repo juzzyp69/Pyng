@@ -419,7 +419,11 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
 
     private val loadingOlder = java.util.Collections.synchronizedSet(HashSet<String>())
 
+    /** Chats whose last try at older messages failed (tap to try again). */
+    val olderFailed = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+
     fun loadMessages(convId: String, older: Boolean = false) {
+        if (older) olderFailed.remove(convId)
         if (demo) { if (!msgs.containsKey(convId)) msgs[convId] = emptyList(); return }
         if (older && !loadingOlder.add(convId)) return
         scope.launch {
@@ -432,11 +436,15 @@ class Repo(private val app: Context, val hub: Hub, val prefs: Prefs, private val
             }
             r.onSuccess { json ->
                 val got = Msg.list(json).map { aliased(it) }.let { dropOldCodes(it) }
-                hasMore[convId] = got.size >= 40
+                // Older page with nothing we don't already have: we're at the start, stop asking.
+                val fresh = if (older) got.count { g -> g.id.isNotEmpty() && cur.none { it.id == g.id } } else got.size
+                hasMore[convId] = got.size >= 40 && fresh > 0
                 val pendingLocal = cur.filter { it.id.isEmpty() && got.none { g -> g.tmpId == it.tmpId } }
                 msgs[convId] = tidy(if (older) got + cur else got + cur.filter { c -> got.none { it.id == c.id } && c.id.isNotEmpty() && c.ts > (got.lastOrNull()?.ts ?: 0) } + pendingLocal)
             }.onFailure {
                 if (!older && cur.isEmpty()) msgs[convId] = emptyList()
+                // Older page failed: the spinner turns into "Load earlier" so it never spins forever.
+                if (older) olderFailed[convId] = true
                 toast("Couldn't load messages: ${it.message}")
             }
           } finally { if (older) loadingOlder.remove(convId) }
