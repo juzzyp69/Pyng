@@ -43,11 +43,6 @@ shot() {
 
 # Everything the phone logs during the run, to see what happened if it stops answering.
 ( adb logcat -v time > ci-logs/logcat.txt 2>&1 & )
-# Liquid Glass first, on a fresh phone.
-# Liquid Glass first on a fresh phone (it once stalled the emulator).
-WAIT=6 shot 00-liquid-noback --es route settings --es glass "'Liquid Glass'" --es dbg pback
-WAIT=6 shot 00-liquid-noback2 --es route appearance --es glass "'Liquid Glass'" --es dbg pback
-WAIT=6 shot 00-liquid-full --es route settings --es glass "'Liquid Glass'"
 # 0.9.7 first: settings groups, theme card and picker, glass sliders, select, dark home, photo stack.
 WAIT=6 shot 00a-settings-groups --es route settings
 WAIT=6 shot 00a-appearance --es route appearance
@@ -60,10 +55,7 @@ WAIT=6 shot 00a-home-aurora --es theme Aurora
 WAIT=8 shot 00a-thread-stack --es route thread:c9
 WAIT=6 shot 00a-rowmenu --es open rowmenu
 # 0.9.6 first: the new viewer and the two glass looks.
-WAIT=6 shot 00x-liquid-settings --es route settings --es glass "'Liquid Glass'"
-WAIT=6 shot 00y-liquid-appearance --es route appearance --es glass "'Liquid Glass'"
 WAIT=6 shot 00z-frost-appearance --es route appearance
-WAIT=6 shot 00za-liquid-home --es glass "'Liquid Glass'"
 # New in 0.9.5.1: What's new cards, the Motion tab, and liquid motion caught mid-flight.
 WAIT=7 shot 00-whatsnew --ez whatsnew true
 WAIT=6 shot 00b-motion-tab --es route appearance --es open studio:home:motion
@@ -128,7 +120,6 @@ shot 06-home-strip --es open strip
 shot 07-home-perms --es open perms
 shot 08-home-duo --es theme "'Grape Soda'"
 WAIT=6 shot 09d-home-unknown --es open unknown
-shot 09g-home-liquid --es glass "'Liquid Glass'"
 shot 10-thread --es route thread:c1 --es theme Ocean
 shot 11-thread-dark --es route thread:c1 --es mode Dark
 shot 12-thread-group --es route thread:c3 --es mode Light
@@ -270,3 +261,9 @@ ls "$OUT" | wc -l
 WAIT=10 shot 00v-viewer --es route thread:c9 --es open viewer
 WAIT=10 shot 00w-viewer-video --es route thread:c9 --es open viewer-video
 WAIT=10 shot 00w2-viewer-strip --es route thread:c9 --es open viewer-strip
+
+# Liquid Glass last: its heavy live blur has stalled the emulator's software graphics a few times.
+WAIT=6 shot 00x-liquid-settings --es route settings --es glass "'Liquid Glass'"
+WAIT=6 shot 00y-liquid-appearance --es route appearance --es glass "'Liquid Glass'"
+WAIT=6 shot 00za-liquid-home --es glass "'Liquid Glass'"
+shot 09g-home-liquid --es glass "'Liquid Glass'"
