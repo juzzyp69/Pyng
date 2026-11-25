@@ -336,19 +336,18 @@ private fun Pane(nav: Nav, modifier: Modifier, wide: Boolean) {
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     LaunchedEffect(nav.top) { focus.clearFocus(); kb?.hide() }
     AnimatedContent<Route?>(nav.top, modifier, transitionSpec = { navSpec(nav, mo, allowMorph = true) }, label = "nav") { r ->
-        if (r != null) Box(if ("wrap" in com.jpetrydesign.pyng.ui.kit.DebugFlags.off) Modifier.fillMaxSize() else Modifier.fillMaxSize().graphicsLayer {
-            val top = r == nav.top
-            val p = if (top) backP else leavingP
-            if (p > 0.001f) {
-                val right = if (top) backFromRight else leavingRight
+        if (r != null) {
+            // Only while you're swiping back does the screen get its own layer to shrink in. An extra layer
+            // around Liquid Glass the rest of the time made some graphics drivers (the emulator's) stall.
+            val p = if (r == nav.top) backP else leavingP
+            val right = if (r == nav.top) backFromRight else leavingRight
+            Box(if (p > 0.001f) Modifier.fillMaxSize().graphicsLayer {
                 val sc = 1f - 0.1f * p
                 scaleX = sc; scaleY = sc
                 translationX = (if (right) -1f else 1f) * p * 22.dp.toPx()
                 transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (right) 0f else 1f, 0.5f)
-                shape = RoundedCornerShape(32.dp * kotlin.math.min(1f, p * 4f))
-                clip = true
-            }
-        }) { NavScreen(r, nav, wide, allowMorph = true) }
+            } else Modifier.fillMaxSize()) { NavScreen(r, nav, wide, allowMorph = true) }
+        }
     }
 }
 
