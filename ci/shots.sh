@@ -41,6 +41,11 @@ shot() {
   echo "shot $name"
 }
 
+# Everything the phone logs during the run, to see what happened if it stops answering.
+( adb logcat -v time > ci-logs/logcat.txt 2>&1 & )
+# Liquid Glass first, on a fresh phone.
+WAIT=6 shot 00-liquid-first --es route settings --es glass "'Liquid Glass'"
+WAIT=6 shot 00-frost-second --es route settings
 # 0.9.7 first: settings groups, theme card and picker, glass sliders, select, dark home, photo stack.
 WAIT=6 shot 00a-settings-groups --es route settings
 WAIT=6 shot 00a-appearance --es route appearance

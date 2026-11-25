@@ -147,6 +147,7 @@ jobs:
             echo "screens: ${{ steps.screens.outcome }}"
             echo "job: ${{ job.status }}"
           } > ci-logs/status.txt
+          [ -f ci-logs/logcat.txt ] && tail -c 600000 ci-logs/logcat.txt > ci-logs/logcat.tmp && mv ci-logs/logcat.tmp ci-logs/logcat.txt
           for f in ci-logs/*.log; do [ -f "$f" ] && tail -c 400000 "$f" > "$f.tmp" && mv "$f.tmp" "$f"; done
           cp -r ci-logs /tmp/ci-logs
           git config user.name "pyng-ci"
