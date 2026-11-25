@@ -24,7 +24,13 @@ shot() {
   timeout 10 adb logcat -b crash -c
   timeout 40 adb shell am start -W -n $PKG/.IconClassic --ez demo true "$@" > /dev/null || echo "start timed out: $name" >> ci-logs/crashes.txt
   sleep "${WAIT:-4}"
-  timeout 30 adb exec-out screencap -p > "$OUT/$name.png" || echo "screencap timed out: $name" >> ci-logs/crashes.txt
+  if ! timeout 30 adb exec-out screencap -p > "$OUT/$name.png"; then
+    echo "screencap timed out: $name" >> ci-logs/crashes.txt
+    # The first time the phone stops answering, keep what it was doing for a look later.
+    if [ ! -s ci-logs/hang.txt ]; then
+      { echo "== $name"; timeout 20 adb logcat -d -t 400; timeout 10 adb shell top -b -n 1 -m 15; } > ci-logs/hang.txt 2>&1
+    fi
+  fi
   # Note an app that stopped answering (it would otherwise hang the rest of the run).
   if adb shell dumpsys activity processes 2>/dev/null | grep -q "notResponding=true"; then echo "ANR after: $name" >> ci-logs/crashes.txt; fi
   local crash
@@ -47,9 +53,6 @@ WAIT=6 shot 00a-home-aurora --es theme Aurora
 WAIT=8 shot 00a-thread-stack --es route thread:c9
 WAIT=6 shot 00a-rowmenu --es open rowmenu
 # 0.9.6 first: the new viewer and the two glass looks.
-WAIT=10 shot 00v-viewer --es route thread:c9 --es open viewer
-WAIT=10 shot 00w-viewer-video --es route thread:c9 --es open viewer-video
-WAIT=10 shot 00w2-viewer-strip --es route thread:c9 --es open viewer-strip
 WAIT=6 shot 00x-liquid-settings --es route settings --es glass "'Liquid Glass'"
 WAIT=6 shot 00y-liquid-appearance --es route appearance --es glass "'Liquid Glass'"
 WAIT=6 shot 00z-frost-appearance --es route appearance
@@ -255,3 +258,8 @@ adb logcat -d -s AndroidRuntime:E > ci-logs/runtime-errors.txt 2>&1
 adb logcat -d | grep -E "Choreographer|pyng|Pyng" | tail -400 > ci-logs/logcat-app.txt 2>&1
 (command -v mogrify >/dev/null && mogrify -resize 50% "$OUT"/*.png) || true
 ls "$OUT" | wc -l
+
+# The viewer last (it plays a video), to see whether anything after it suffers.
+WAIT=10 shot 00v-viewer --es route thread:c9 --es open viewer
+WAIT=10 shot 00w-viewer-video --es route thread:c9 --es open viewer-video
+WAIT=10 shot 00w2-viewer-strip --es route thread:c9 --es open viewer-strip
