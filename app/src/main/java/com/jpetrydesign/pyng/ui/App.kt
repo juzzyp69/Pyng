@@ -336,7 +336,7 @@ private fun Pane(nav: Nav, modifier: Modifier, wide: Boolean) {
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     LaunchedEffect(nav.top) { focus.clearFocus(); kb?.hide() }
     AnimatedContent<Route?>(nav.top, modifier, transitionSpec = { navSpec(nav, mo, allowMorph = true) }, label = "nav") { r ->
-        if (r != null) Box(Modifier.fillMaxSize().graphicsLayer {
+        if (r != null) Box(if ("wrap" in com.jpetrydesign.pyng.ui.kit.DebugFlags.off) Modifier.fillMaxSize() else Modifier.fillMaxSize().graphicsLayer {
             val top = r == nav.top
             val p = if (top) backP else leavingP
             if (p > 0.001f) {

@@ -44,8 +44,12 @@ shot() {
 # Everything the phone logs during the run, to see what happened if it stops answering.
 ( adb logcat -v time > ci-logs/logcat.txt 2>&1 & )
 # Liquid Glass first, on a fresh phone.
-WAIT=6 shot 00-liquid-first --es route settings --es glass "'Liquid Glass'"
-WAIT=6 shot 00-frost-second --es route settings
+# Liquid Glass with parts switched off, one more part on each time: the first that stalls is the cause.
+WAIT=6 shot 00-dbg1-none --es route settings --es glass "'Liquid Glass'" --es dbg shine,haze,wrap
+WAIT=6 shot 00-dbg2-shine --es route settings --es glass "'Liquid Glass'" --es dbg haze,wrap
+WAIT=6 shot 00-dbg3-haze --es route settings --es glass "'Liquid Glass'" --es dbg shine,wrap
+WAIT=6 shot 00-dbg4-both --es route settings --es glass "'Liquid Glass'" --es dbg wrap
+WAIT=6 shot 00-dbg5-all --es route settings --es glass "'Liquid Glass'"
 # 0.9.7 first: settings groups, theme card and picker, glass sliders, select, dark home, photo stack.
 WAIT=6 shot 00a-settings-groups --es route settings
 WAIT=6 shot 00a-appearance --es route appearance

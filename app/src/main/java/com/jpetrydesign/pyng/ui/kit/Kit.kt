@@ -133,6 +133,9 @@ val LocalGlass = compositionLocalOf { false }
 /** Your glass settings as multipliers: (how milky/strong, how blurry). 1 and 1 is the standard look. */
 val LocalGlassTune = compositionLocalOf { 1f to 1f }
 
+/** Test-only switches (sample data runs only) for narrowing down a rendering problem. */
+object DebugFlags { var off: Set<String> = emptySet() }
+
 /** Glass strength 0–100 (60 standard) and blur 0–40 (20 standard), as multipliers. */
 fun glassTune(strength: Int, blur: Int): Pair<Float, Float> = (0.4f + strength.coerceIn(0, 100) / 100f) to (blur.coerceIn(0, 40) / 20f)
 
@@ -187,7 +190,7 @@ fun Modifier.frost(shape: Shape, tint: Color, blur: Dp = 26.dp): Modifier = comp
     val t = LocalTok.current
     val hz = LocalHaze.current
     val (gs, gb) = LocalGlassTune.current
-    if (hz != null && !t.solid && LocalGlass.current) {
+    if (hz != null && !t.solid && LocalGlass.current && "haze" !in DebugFlags.off) {
         // Liquid Glass: less tint and a lighter blur so more shows through, a lit rim along the top,
         // and a soft sheen across the upper half, like light on a curved surface.
         this.clip(shape)
@@ -208,7 +211,7 @@ fun Modifier.frost(shape: Shape, tint: Color, blur: Dp = 26.dp): Modifier = comp
  * the upper part, and a soft glint that slides along as the surface moves on screen, so scrolling makes
  * the glass catch the light differently.
  */
-fun Modifier.liquidShine(shape: Shape): Modifier = composed {
+fun Modifier.liquidShine(shape: Shape): Modifier = if ("shine" in DebugFlags.off) this else composed {
     val t = LocalTok.current
     val y = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     val screenH = with(androidx.compose.ui.platform.LocalDensity.current) { androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp.toPx() }.coerceAtLeast(1f)
