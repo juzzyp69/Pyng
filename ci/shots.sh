@@ -43,6 +43,17 @@ shot() {
 
 # Everything the phone logs during the run, to see what happened if it stops answering.
 ( adb logcat -v time > ci-logs/logcat.txt 2>&1 & )
+# 0.9.7.5 first: the color page, Appearance with Style open, the viewer dock and the editor.
+WAIT=6 shot 00a0-color --es open strip
+WAIT=6 shot 00a0-color-dark --es open strip --es mode Dark
+WAIT=6 shot 00a0-color-merlot --es open strip --es theme d:Merlot
+WAIT=6 shot 00a0-color-aurora --es open strip --es theme g:Aurora --es mode Dark
+WAIT=6 shot 00a0-appearance-style --es route appearance --es open style
+WAIT=6 shot 00a0-thread-merlot --es route thread:c1 --es theme d:Merlot
+WAIT=6 shot 00a0-thread-citrus-dark --es route thread:c1 --es theme d:Citrus --es mode Dark
+WAIT=6 shot 00a0-thread-blue --es route thread:c1 --es theme Blue
+WAIT=6 shot 00a0-thread-denim --es route thread:c1 --es theme Denim
+WAIT=10 shot 00a0-review --es route thread:c9 --es open review
 # 0.9.7 first: settings groups, theme card and picker, glass sliders, select, dark home, photo stack.
 WAIT=6 shot 00a-settings-groups --es route settings
 WAIT=6 shot 00a-appearance --es route appearance
@@ -50,8 +61,8 @@ WAIT=6 shot 00a-appearance-dark --es route appearance --es mode Dark
 WAIT=6 shot 00a-strip --es open strip
 WAIT=6 shot 00a-select --es open select
 WAIT=6 shot 00a-home-dark --es mode Dark
-WAIT=6 shot 00a-home-volt --es mode Dark --es theme Volt
-WAIT=6 shot 00a-home-aurora --es theme Aurora
+WAIT=6 shot 00a-home-volt --es mode Dark --es theme d:Volt
+WAIT=6 shot 00a-home-aurora --es theme g:Aurora
 WAIT=8 shot 00a-thread-stack --es route thread:c9
 WAIT=6 shot 00a-rowmenu --es open rowmenu
 # 0.9.6 first: the new viewer and the two glass looks.
@@ -118,7 +129,7 @@ shot 04-home-rings --es layout Grid --es pinstyle Rings
 WAIT=10 shot 05-home-rowmenu --es open rowmenu --es pinstyle Badges
 shot 06-home-strip --es open strip
 shot 07-home-perms --es open perms
-shot 08-home-duo --es theme "'Grape Soda'"
+shot 08-home-duo --es theme d:Grape
 WAIT=6 shot 09d-home-unknown --es open unknown
 shot 10-thread --es route thread:c1 --es theme Ocean
 shot 11-thread-dark --es route thread:c1 --es mode Dark

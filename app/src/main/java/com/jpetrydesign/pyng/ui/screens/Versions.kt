@@ -36,6 +36,27 @@ data class Release(val version: String, val date: String, val added: List<String
  */
 val RELEASES = listOf(
     Release(
+        "0.9.7.5", "Nov 25, 2026",
+        highlights = listOf(
+            Highlight("New colors, made in pairs", "Sixty new duotones and gradients in color order, plus crisp and tinted solids. Received bubbles take a soft shade of your theme.", "palettes"),
+            Highlight("App appearance, rebuilt", "See your colors on two small phones as you pick. Use one color or add a second, blend them, and tint the background or keep it plain.", "looks"),
+            Highlight("A cleaner photo viewer", "Who sent it sits in one pill up top. Thumbnails, Save, Share and Reply sit in one frosted dock below.", "photos"),
+        ),
+        added = listOf(
+            "Pick any color\nDrag on the canvas and hue bar, with the hex code following your finger. Tap the dot to type a hex code",
+            "Light, Dark or System\nEach with a tiny look at itself, right on the color page",
+            "Edit before you send\nCrop, turn and add effects in the same frosted dock. The check keeps your changes so you can keep typing",
+            "Appearance shows a live preview\nThe arrow under it opens Style: Frost, Liquid Glass or Solid, with strength and blur",
+            "Simpler Settings\nJust the names, with a value where it helps",
+            "A lock next to the name\nEncrypted chats show a small lock instead of a line of text",
+        ),
+        fixed = listOf(
+            "Received bubbles show clearly on white and tinted backgrounds",
+            "The photo viewer's background is properly blurred",
+            "Status bar icons match the screen: dark on light pages, light on dark ones and in the viewer",
+        ),
+    ),
+    Release(
         "0.9.7", "Nov 24, 2026",
         highlights = listOf(
             Highlight("Swipe back like liquid", "Swipe from the edge and the chat shrinks with your thumb, with your list right behind it. Let go early and it springs back.", "motion"),

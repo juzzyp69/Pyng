@@ -126,7 +126,7 @@ data class SavedTheme(
 
 data class AppPrefs(
     val setupDone: Boolean = false,
-    val themeKey: String = "Ocean",
+    val themeKey: String = "Blue",
     val mode: String = "Match system",
     val c1: Hsl = Hsl(340f, 0.62f, 0.62f),
     val c2: Hsl = Hsl(42f, 0.72f, 0.42f),

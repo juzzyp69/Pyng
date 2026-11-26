@@ -252,6 +252,11 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
             "viewer" -> list.firstOrNull { m -> m.media.any { it.isImage } }?.let { m -> delay(700); viewing = m.key to m.media.first { it.isImage }.id }
             "viewer-video" -> list.firstOrNull { m -> m.media.any { it.isVideo } }?.let { m -> delay(700); viewing = m.key to m.media.first { it.isVideo }.id }
             "viewer-strip" -> list.lastOrNull { m -> m.text.isBlank() && m.media.any { it.isImage } }?.let { m -> delay(700); viewing = m.key to m.media.first().id }
+            "review" -> if (attachments.isEmpty() && reviewAt == null) list.filter { m -> m.media.any { it.isImage } }.flatMap { m -> m.media.filter { it.isImage } }
+                .mapNotNull { r -> r.localPath.ifEmpty { repo.media[r.id].orEmpty() }.takeIf { it.isNotEmpty() } }.take(3).takeIf { it.isNotEmpty() }?.let { paths ->
+                    paths.forEachIndexed { i, pth -> attachments.add(Pending(pth, "image/jpeg", "photo$i.jpg")) }
+                    delay(700); reviewAt = 0
+                }
         }
     }
 
@@ -873,11 +878,13 @@ private fun ThreadHeader(t: Tok, c: Conv?, typing: Boolean, wide: Boolean, onBac
                 Box(com.jpetrydesign.pyng.ui.avatarSlotOf(Modifier).edge(CircleShape, elevation = 6.dp)) { WhoAvatar(w, 46.dp, 15.sp) }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f, fill = false)) {
+                    val enc = encryptionOf(c, LocalRepo.current.msgs[c.id].orEmpty())
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         T(c.title, size = 19.sp, weight = FontWeight.Bold, letterSpacing = (-0.5).sp, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                        // A small lock says the chat is end-to-end encrypted.
+                        if (enc == Enc.E2EE) { Spacer(Modifier.width(5.dp)); Ico(Icons.lock, t.soft, 13.dp, 2.1f) }
                         Ico("M9.5 6.5l5.5 5.5-5.5 5.5", t.soft, 16.dp, 2.4f)
                     }
-                    val enc = encryptionOf(c, LocalRepo.current.msgs[c.id].orEmpty())
                     val sub = when {
                         typing -> LocalRepo.current.typingPeople(c).let { who ->
                             when {
@@ -888,12 +895,10 @@ private fun ThreadHeader(t: Tok, c: Conv?, typing: Boolean, wide: Boolean, onBac
                             }
                         }
                         c.group -> c.others.joinToString { it.short } + " and you"
-                        enc == Enc.E2EE -> "Encrypted"
                         enc == Enc.SMS && !c.business -> "Text message"
                         else -> null
                     }
                     if (sub != null) Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (!typing && enc == Enc.E2EE) { Ico(Icons.lock, t.soft, 11.dp, 2f); Spacer(Modifier.width(3.dp)) }
                         T(sub, size = 12.sp, color = if (typing) t.p else t.soft, maxLines = 1)
                     }
                 }

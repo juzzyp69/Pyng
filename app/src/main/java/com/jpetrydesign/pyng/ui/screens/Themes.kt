@@ -168,7 +168,7 @@ fun ThemeLibrarySheets(lib: ThemeLibrary) {
     val p = repo.prefs.state
     val saving = lib.saving
     NameSheet(
-        visible = saving != null, title = "Save theme", note = "It shows up under My themes in every chat's theme and in App color.",
+        visible = saving != null, title = "Save theme", note = "It shows up under My themes in every chat's theme.",
         initial = saving?.name.orEmpty(), action = "Save",
         onDismiss = { lib.saving = null },
     ) { name ->

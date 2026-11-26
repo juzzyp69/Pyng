@@ -17,6 +17,9 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.border
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.draw.blur
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.hazeEffect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.contentDescription
@@ -87,6 +90,7 @@ import com.jpetrydesign.pyng.ui.kit.Ico
 import com.jpetrydesign.pyng.ui.kit.Icons
 import com.jpetrydesign.pyng.ui.kit.LocalRepo
 import com.jpetrydesign.pyng.ui.kit.T
+import com.jpetrydesign.pyng.ui.kit.initialsOf
 import com.jpetrydesign.pyng.ui.kit.frost
 import com.jpetrydesign.pyng.ui.kit.press
 import com.jpetrydesign.pyng.ui.theme.LocalTok
@@ -199,10 +203,9 @@ fun PhotoViewer(
         val vc = remember { VideoCtl() }
         // While a video plays, the controls step aside after a few seconds; any tap brings them back.
         LaunchedEffect(chrome, vc.playing) { if (chrome && vc.playing) { kotlinx.coroutines.delay(3000); chrome = false } }
-        var menu by remember { mutableStateOf(false) }
-        LaunchedEffect(pager.currentPage) { menu = false }
         var origin by remember { mutableStateOf(Offset.Zero) }
         var viewSize by remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
+        val vHaze = remember { dev.chrisbanes.haze.HazeState() }
         Box(Modifier.fillMaxSize().onGloballyPositioned { c -> origin = c.boundsInRoot().topLeft; viewSize = c.size.let { androidx.compose.ui.geometry.Size(it.width.toFloat(), it.height.toFloat()) } }) {
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = fade * bgK }.background(VBg))
             // The same picture, heavily frosted, fills whatever the photo or video doesn't, instead of black bars.
@@ -211,18 +214,17 @@ fun PhotoViewer(
                 val still = repo.media[r.thumbId].orEmpty().ifEmpty { r.previewPath }
                 if (r.isVideo) still else r.localPath.ifEmpty { repo.media[r.id].orEmpty() }.ifEmpty { still }
             }
-            // A tiny copy of the picture stretched over the screen reads as a soft blur, costs next to nothing,
-            // and looks the same on every Android version (no live blur).
-            androidx.compose.animation.Crossfade(glow, animationSpec = tween(420), label = "glow") { g ->
+                        androidx.compose.animation.Crossfade(glow, animationSpec = tween(420), label = "glow") { g ->
+                // A small copy of its own (so a sharp cached one is never reused), blurred for real.
                 if (g.isNotEmpty()) AsyncImage(
-                    coil.request.ImageRequest.Builder(ctx).data(File(g)).size(24).build(), null, contentScale = ContentScale.Crop,
-                    filterQuality = androidx.compose.ui.graphics.FilterQuality.High,
-                    modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.62f * fade * bgK; scaleX = 1.3f; scaleY = 1.3f },
+                    coil.request.ImageRequest.Builder(ctx).data(File(g)).size(96).memoryCacheKey("glow:$g").build(), null, contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.6f * fade * bgK; scaleX = 1.3f; scaleY = 1.3f }
+                        .blur(44.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Rectangle),
                 )
             }
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = fade * bgK }.background(Color.Black.copy(alpha = 0.32f)))
             // The set, full screen. Neighbors sit to each side, smaller, dimmer and turned away.
-            Box(Modifier.fillMaxSize().onSizeChanged { }) {
+            Box(Modifier.fillMaxSize().hazeSource(vHaze)) {
                 var wPx by remember { mutableFloatStateOf(0f) }
                 Box(Modifier.fillMaxSize().onSizeChanged { wPx = it.width.toFloat() })
                 if (wPx > 0f) {
@@ -359,107 +361,111 @@ fun PhotoViewer(
                 else fadeIn(tween(160)) + scaleIn(if (liquid) spring(dampingRatio = 0.55f, stiffness = 420f) else tween(220), initialScale = if (liquid) 0.55f else 0.92f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, from))
             fun vanish(to: Float) = if (mo == com.jpetrydesign.pyng.ui.kit.Mo.Minimal) fadeOut(tween(90))
                 else fadeOut(tween(150)) + scaleOut(tween(200), targetScale = if (liquid) 0.5f else 0.94f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, to))
-            // Top: close, who sent it and when, and where you are in the set.
+            // Top: one frosted pill with close, who sent it and when.
             androidx.compose.animation.AnimatedVisibility(
-                showChrome, modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 8.dp, start = 12.dp, end = 12.dp),
+                showChrome, modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(top = 8.dp, start = 14.dp, end = 14.dp),
                 enter = appear(0f), exit = vanish(0f),
             ) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(44.dp).clip(CircleShape).background(VPill).press(0.88f) { close() }.semantics { contentDescription = "Close" }, contentAlignment = Alignment.Center) { Ico(Icons.close, VInk, 18.dp) }
-                    Spacer(Modifier.width(8.dp))
-                    Column(Modifier.weight(1f, fill = false).clip(RoundedCornerShape(22.dp)).background(VPill).padding(horizontal = 14.dp, vertical = 6.dp)) {
-                        T(if (m.fromMe) "You" else m.sender.ifBlank { conv?.title ?: "" }, size = 14.sp, weight = FontWeight.SemiBold, color = VInk, maxLines = 1)
-                        T(viewerDate(m.ts), size = 11.5.sp, color = VSoft, maxLines = 1)
+                Row(Modifier.height(44.dp).clip(RoundedCornerShape(22.dp)).vFrost(vHaze, RoundedCornerShape(22.dp)).padding(start = 4.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(36.dp).clip(CircleShape).press(0.88f) { close() }.semantics { contentDescription = "Close" }, contentAlignment = Alignment.Center) { Ico(Icons.close, VInk, 19.dp, 2.2f) }
+                    Spacer(Modifier.width(6.dp))
+                    val p = repo.prefs.state
+                    val t = LocalTok.current
+                    val who = when {
+                        m.fromMe -> Who(p.profilePhoto.ifEmpty { null }, initialsOf(p.profileName.ifBlank { "Me" }), t.tone, t.p)
+                        conv == null -> null
+                        conv.group -> conv.people.firstOrNull { it.id == m.participantId }?.let { personWho(it, repo, t) }
+                        else -> whoOf(conv, repo, t)
                     }
-                    Spacer(Modifier.weight(1f))
-                    if (!single) {
-                        Spacer(Modifier.width(8.dp))
-                        T("${pager.currentPage + 1} of $n", size = 12.sp, weight = FontWeight.Medium, color = VInk,
-                            modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(VPill).padding(horizontal = 11.dp, vertical = 7.dp))
-                    }
+                    if (who != null) { WhoAvatar(who, 24.dp, 9.sp); Spacer(Modifier.width(8.dp)) }
+                    val name = if (m.fromMe) "You" else m.sender.ifBlank { conv?.title ?: "" }
+                    T(listOf(name, viewerTime(m.ts)).filter { it.isNotEmpty() }.joinToString(" · "), size = 14.sp, weight = FontWeight.SemiBold, color = VInk, maxLines = 1)
                 }
             }
-            // Bottom: the set's thumbnails (when there's more than one), then one floating player.
+            // Bottom: one frosted dock with the set's thumbnails, then what you can do with this one.
             androidx.compose.animation.AnimatedVisibility(
-                showChrome, modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 14.dp, start = 14.dp, end = 14.dp),
+                showChrome, modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 14.dp, start = 12.dp, end = 12.dp),
                 enter = appear(1f), exit = vanish(1f),
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (!single) Thumbs(list, pager.currentPage) { i -> scope.launch { pager.animateScrollToPage(i) } }
-                    val mine = m.reactions.firstOrNull { myId.isNotEmpty() && myId in it.by }?.emoji
+                val mine = m.reactions.firstOrNull { myId.isNotEmpty() && myId in it.by }?.emoji
+                Column(
+                    Modifier.widthIn(max = 560.dp).fillMaxWidth().clip(RoundedCornerShape(30.dp)).vFrost(vHaze, RoundedCornerShape(30.dp))
+                        .padding(start = 10.dp, end = 10.dp, top = if (single && !ref.isVideo) 8.dp else 12.dp, bottom = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (!single) {
+                        Thumbs(list, pager.currentPage) { i -> scope.launch { pager.animateScrollToPage(i) } }
+                        Box(Modifier.padding(horizontal = 4.dp).fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.1f)))
+                    }
+                    if (ref.isVideo) Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
+                        // The player: play, time, scrubber and sound.
+                        CircleButton(if (vc.playing) Icons.pause else Icons.play, if (vc.playing) "Pause" else "Play", { vc.toggle() }, size = 42.dp, iconSize = 18.dp, tint = VInk)
+                        val shown = vc.scrub?.let { (it * vc.dur).toLong() } ?: vc.pos
+                        T(playClock(shown) + " / " + playClock(vc.dur), size = 12.sp, weight = FontWeight.Medium, color = VSoft, modifier = Modifier.padding(horizontal = 4.dp), maxLines = 1)
+                        androidx.compose.material3.Slider(
+                            value = vc.scrub ?: if (vc.dur > 0) (vc.pos.toFloat() / vc.dur).coerceIn(0f, 1f) else 0f,
+                            onValueChange = { vc.scrub = it },
+                            onValueChangeFinished = { vc.scrub?.let { f -> vc.seek(f) }; vc.scrub = null },
+                            enabled = vc.player != null && vc.dur > 0,
+                            colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = VInk, activeTrackColor = VInk, inactiveTrackColor = VInk.copy(alpha = 0.25f)),
+                            modifier = Modifier.weight(1f).height(36.dp),
+                        )
+                        CircleButton(Icons.volume, if (vc.muted) "Sound on" else "Mute", { vc.muted = !vc.muted }, size = 40.dp, iconSize = 18.dp, tint = if (vc.muted) VSoft else VInk)
+                    }
                     androidx.compose.animation.AnimatedContent(reacting, label = "acts",
                         transitionSpec = { (fadeIn(tween(160)) + scaleIn(spring(dampingRatio = 0.7f, stiffness = 500f), initialScale = 0.9f)) togetherWith fadeOut(tween(120)) }) { r ->
-                        if (r) Row(
-                            Modifier.height(52.dp).clip(RoundedCornerShape(26.dp)).background(VPill).padding(horizontal = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
+                        if (r) Row(Modifier.fillMaxWidth().height(54.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                             repo.prefs.state.quickReacts.forEach { e ->
                                 Box(
-                                    Modifier.size(42.dp).clip(CircleShape).background(if (e == mine) Color.White.copy(alpha = 0.22f) else Color.Transparent).press(0.85f) { onReact(m, e); reacting = false },
+                                    Modifier.size(44.dp).clip(CircleShape).background(if (e == mine) Color.White.copy(alpha = 0.22f) else Color.Transparent).press(0.85f) { onReact(m, e); reacting = false },
                                     contentAlignment = Alignment.Center,
-                                ) { T(e, size = 21.sp) }
+                                ) { T(e, size = 22.sp) }
                             }
-                            Box(Modifier.size(42.dp).clip(CircleShape).press(0.85f) { reacting = false }, contentAlignment = Alignment.Center) { Ico(Icons.close, VInk, 18.dp) }
-                        } else Row(
-                            Modifier.widthIn(max = 520.dp).height(54.dp).clip(RoundedCornerShape(27.dp)).background(VPill).padding(horizontal = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            if (ref.isVideo) {
-                                // The player: play, time, scrubber and sound.
-                                CircleButton(if (vc.playing) Icons.pause else Icons.play, if (vc.playing) "Pause" else "Play", { vc.toggle() }, size = 42.dp, iconSize = 18.dp, tint = VInk)
-                                val shown = vc.scrub?.let { (it * vc.dur).toLong() } ?: vc.pos
-                                T(playClock(shown) + " / " + playClock(vc.dur), size = 12.sp, weight = FontWeight.Medium, color = VSoft, modifier = Modifier.padding(horizontal = 4.dp), maxLines = 1)
-                                androidx.compose.material3.Slider(
-                                    value = vc.scrub ?: if (vc.dur > 0) (vc.pos.toFloat() / vc.dur).coerceIn(0f, 1f) else 0f,
-                                    onValueChange = { vc.scrub = it },
-                                    onValueChangeFinished = { vc.scrub?.let { f -> vc.seek(f) }; vc.scrub = null },
-                                    enabled = vc.player != null && vc.dur > 0,
-                                    colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = VInk, activeTrackColor = VInk, inactiveTrackColor = VInk.copy(alpha = 0.25f)),
-                                    modifier = Modifier.weight(1f).height(36.dp),
-                                )
-                                CircleButton(Icons.volume, if (vc.muted) "Sound on" else "Mute", { vc.muted = !vc.muted }, size = 40.dp, iconSize = 18.dp, tint = if (vc.muted) VSoft else VInk)
-                            } else {
-                                if (m.id.isNotEmpty()) Row(
-                                    Modifier.height(42.dp).clip(RoundedCornerShape(21.dp)).press(0.92f) { onReply(m) }.padding(horizontal = 14.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Ico(Icons.reply, VInk, 18.dp); Spacer(Modifier.width(7.dp))
-                                    T("Reply", size = 14.5.sp, weight = FontWeight.Medium, color = VInk)
-                                }
-                                if (m.id.isNotEmpty()) Box(Modifier.size(42.dp).clip(CircleShape).press(0.88f) { reacting = true }.semantics { contentDescription = "React" }, contentAlignment = Alignment.Center) {
-                                    if (mine != null) T(mine, size = 19.sp) else Ico(Icons.heart, VInk, 19.dp)
+                            Box(Modifier.size(44.dp).clip(CircleShape).press(0.85f) { reacting = false }.semantics { contentDescription = "Close reactions" }, contentAlignment = Alignment.Center) { Ico(Icons.close, VInk, 18.dp) }
+                        } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround, verticalAlignment = Alignment.CenterVertically) {
+                            DockAction("Save", Icons.download) { if (path.isNotEmpty()) saveToGallery(ctx, path, ref.mime) else repo.toast("Still downloading") }
+                            DockAction("Share", Icons.share) {
+                                if (path.isEmpty()) repo.toast("Still downloading")
+                                else runCatching {
+                                    val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", File(path))
+                                    ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType(ref.mime).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Share"))
                                 }
                             }
-                            // Everything else lives behind the dots.
-                            Box {
-                                CircleButton(Icons.more, "More", { menu = true }, size = 42.dp, tint = VInk, iconSize = 20.dp, stroke = 3.2f)
-                                DropdownMenu(menu, { menu = false }, containerColor = Color(0xF21B1F1D), shape = RoundedCornerShape(20.dp)) {
-                                    if (m.id.isNotEmpty() && ref.isVideo) DropdownMenuItem({ T("Reply", size = 15.sp, color = VInk) }, { menu = false; onReply(m) }, leadingIcon = { Ico(Icons.reply, VInk, 18.dp) })
-                                    if (m.id.isNotEmpty() && ref.isVideo) DropdownMenuItem({ T("React", size = 15.sp, color = VInk) }, { menu = false; reacting = true }, leadingIcon = { Ico(Icons.heart, VInk, 18.dp) })
-                                    DropdownMenuItem({ T("Save", size = 15.sp, color = VInk) }, { menu = false; if (path.isNotEmpty()) saveToGallery(ctx, path, ref.mime) else repo.toast("Still downloading") }, leadingIcon = { Ico(Icons.download, VInk, 18.dp) })
-                                    DropdownMenuItem({ T("Share", size = 15.sp, color = VInk) }, {
-                                        menu = false
-                                        if (path.isEmpty()) repo.toast("Still downloading")
-                                        else runCatching {
-                                            val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", File(path))
-                                            ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType(ref.mime).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Share"))
-                                        }
-                                    }, leadingIcon = { Ico(Icons.share, VInk, 18.dp) })
-                                    DropdownMenuItem({ T("Forward", size = 15.sp, color = VInk) }, { menu = false; onForward(m) }, leadingIcon = { Ico(Icons.forward, VInk, 18.dp) })
-                                    DropdownMenuItem({ T("Open in another app", size = 15.sp, color = VInk) }, {
-                                        menu = false
-                                        if (path.isNotEmpty()) openFile(ctx, path, ref.mime) else repo.toast("Still downloading")
-                                    }, leadingIcon = { Ico(Icons.compose, VInk, 18.dp) })
-                                    if (showInChat != null) DropdownMenuItem({ T("Show in chat", size = 15.sp, color = VInk) }, { menu = false; showInChat(m) }, leadingIcon = { Ico(Icons.message, VInk, 18.dp) })
-                                    if (m.id.isNotEmpty()) DropdownMenuItem({ T("Delete", size = 15.sp, color = Color(0xFFFF8A80)) }, { menu = false; onDelete(m) }, leadingIcon = { Ico(Icons.trash, Color(0xFFFF8A80), 18.dp) })
-                                }
-                            }
+                            if (m.id.isNotEmpty()) DockAction("Reply", Icons.reply) { onReply(m) }
+                            if (m.id.isNotEmpty()) DockAction("React", Icons.heart, emoji = mine) { reacting = true }
+                            if (showInChat != null) DockAction("Go to chat", Icons.message) { showInChat(m) }
                         }
                     }
                 }
             }
         }
     }
+}
+
+/** One action in the viewer's dock: its icon with a short name under it. */
+@Composable
+private fun DockAction(label: String, icon: String, emoji: String? = null, onClick: () -> Unit) {
+    Column(
+        Modifier.widthIn(min = 58.dp).height(54.dp).clip(RoundedCornerShape(18.dp)).press(0.9f, onClick).padding(horizontal = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+    ) {
+        if (emoji != null) T(emoji, size = 19.sp) else Ico(icon, VInk, 22.dp, 2.1f)
+        T(label, size = 11.5.sp, weight = FontWeight.Medium, color = VInk.copy(alpha = 0.85f), maxLines = 1)
+    }
+}
+
+/** The viewer's frosted glass: the photo behind blurred and darkened, with a fine bright edge. */
+internal fun Modifier.vFrost(hz: dev.chrisbanes.haze.HazeState, shape: androidx.compose.ui.graphics.Shape): Modifier =
+    this.hazeEffect(hz, dev.chrisbanes.haze.HazeStyle(backgroundColor = VBg, tint = dev.chrisbanes.haze.HazeTint(Color(0x611E2028)), blurRadius = 28.dp, noiseFactor = 0f))
+        .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.2f), Color.White.copy(alpha = 0.08f))), shape)
+
+private fun viewerTime(ts: Long): String {
+    if (ts <= 0) return ""
+    val now = java.util.Calendar.getInstance(); val c = java.util.Calendar.getInstance().apply { timeInMillis = ts }
+    val sameDay = now.get(java.util.Calendar.YEAR) == c.get(java.util.Calendar.YEAR) && now.get(java.util.Calendar.DAY_OF_YEAR) == c.get(java.util.Calendar.DAY_OF_YEAR)
+    val sameYear = now.get(java.util.Calendar.YEAR) == c.get(java.util.Calendar.YEAR)
+    val pat = if (sameDay) "h:mm a" else if (sameYear) "MMM d, h:mm a" else "MMM d, yyyy"
+    return java.text.SimpleDateFormat(pat, java.util.Locale.getDefault()).format(java.util.Date(ts))
 }
 
 /** The middle video's player, shared with the floating controls. */
@@ -511,20 +517,22 @@ private fun Thumbs(list: List<Pair<Msg, MediaRef>>, current: Int, onPick: (Int) 
     val state = androidx.compose.foundation.lazy.rememberLazyListState()
     LaunchedEffect(current) { state.animateScrollToItem((current - 3).coerceAtLeast(0)) }
     androidx.compose.foundation.lazy.LazyRow(
-        state = state, modifier = Modifier.height(66.dp).fillMaxWidth(),
+        state = state, modifier = Modifier.height(56.dp).fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
-        contentPadding = PaddingValues(horizontal = 16.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp),
     ) {
         items(list.size) { i ->
             val r = list[i].second
             val on = i == current
-            val sz by androidx.compose.animation.core.animateDpAsState(if (on) 48.dp else 38.dp, spring(dampingRatio = 0.6f, stiffness = 500f), label = "thumb")
+            val sc by androidx.compose.animation.core.animateFloatAsState(if (on) 1f else 0.9f, spring(dampingRatio = 0.6f, stiffness = 500f), label = "thumb")
             val pth = repo.media[r.thumbId].orEmpty().ifEmpty { r.previewPath }.ifEmpty { r.localPath.ifEmpty { repo.media[r.id].orEmpty() } }
+            val shape = RoundedCornerShape(13.dp)
             Box(
-                Modifier.size(sz).then(if (on) Modifier.border(2.dp, Color.White, RoundedCornerShape(12.dp)).padding(3.dp) else Modifier)
-                    .clip(RoundedCornerShape(if (on) 9.dp else 10.dp)).background(VGlass)
-                    .graphicsLayer { alpha = if (on) 1f else 0.55f }
+                Modifier.size(46.dp).graphicsLayer { scaleX = sc; scaleY = sc; alpha = if (on) 1f else 0.88f }
+                    .then(if (on) Modifier.shadow(6.dp, shape).border(2.5.dp, VInk, shape) else Modifier)
+                    .clip(shape).background(VGlass)
+                    .then(if (on) Modifier else Modifier.border(1.dp, Color.White.copy(alpha = 0.18f), shape))
                     .clickable { onPick(i) },
                 contentAlignment = Alignment.Center,
             ) {
@@ -537,18 +545,10 @@ private fun Thumbs(list: List<Pair<Msg, MediaRef>>, current: Int, onPick: (Int) 
 
 /** Light status and navigation bar icons while the dark viewer is open. */
 @Composable
-private fun LightSystemBars() {
-    val view = androidx.compose.ui.platform.LocalView.current
+internal fun LightSystemBars() {
     DisposableEffect(Unit) {
-        var c: android.content.Context = view.context
-        while (c is android.content.ContextWrapper && c !is android.app.Activity) c = c.baseContext
-        val win = (c as? android.app.Activity)?.window
-        val ctl = win?.let { androidx.core.view.WindowCompat.getInsetsController(it, view) }
-        val s = ctl?.isAppearanceLightStatusBars
-        val nb = ctl?.isAppearanceLightNavigationBars
-        ctl?.isAppearanceLightStatusBars = false
-        ctl?.isAppearanceLightNavigationBars = false
-        onDispose { if (s != null) ctl?.isAppearanceLightStatusBars = s; if (nb != null) ctl?.isAppearanceLightNavigationBars = nb }
+        com.jpetrydesign.pyng.ui.BarIcons.light = true
+        onDispose { com.jpetrydesign.pyng.ui.BarIcons.light = null }
     }
 }
 

@@ -97,6 +97,9 @@ data class Tok(
 }
 
 fun swatchOf(x: Pal): Brush {
+    // Gradients show the whole run, deep to light; duotones their two colors side by side.
+    if (x.grad != null && x.gradD != null) return Brush.linearGradient(listOf(x.grad.first, x.grad.second, x.gradD.second))
+    if (x.inB != null && x.grad == null) return Brush.linearGradient(0f to x.p, 0.5f to x.p, 0.5f to x.pd, 1f to x.pd)
     x.grad?.let { return Brush.linearGradient(listOf(it.first, it.second)) }
     val second = x.plus ?: x.bg ?: x.s
     return Brush.linearGradient(0f to x.p, 0.5f to x.p, 0.5f to second, 1f to second)
@@ -110,12 +113,15 @@ fun tok(P: Pal, dark: Boolean, solid: Boolean = false, highContrast: Boolean = f
     val step1 = Color.White.copy(alpha = 0.055f).compositeOver(bg)
     val step2 = Color.White.copy(alpha = 0.085f).compositeOver(bg)
     val fill = if (dark) P.pd else P.p
+    // A theme can run its gradient and accent differently in dark mode.
+    val g = if (dark) (P.gradD ?: P.grad) else P.grad
     // Text on your bubbles: picked for contrast, so a deep color in dark mode gets white text, not dark.
-    val mid = P.grad?.let { androidx.compose.ui.graphics.lerp(it.first, it.second, 0.5f) } ?: fill
+    val mid = g?.let { androidx.compose.ui.graphics.lerp(it.first, it.second, 0.5f) } ?: fill
     val onFill = if (dark) inkOn(mid) else (P.onP ?: if (contrast(Color.White, mid) < 2f) hex("#101218") else Color.White)
-    val plus = P.plus ?: fill
+    val plus = (if (dark) P.plusD else null) ?: P.plus ?: fill
+    val plusInkP = (if (dark) P.plusInkD else null) ?: P.plusInk
     val inkD = hex("#F1F2F6"); val inkL = hex("#15171D")
-    val outBrush: Brush = P.grad?.let { Brush.linearGradient(listOf(it.first, it.second)) } ?: Brush.linearGradient(listOf(fill, fill))
+    val outBrush: Brush = g?.let { Brush.linearGradient(listOf(it.first, it.second)) } ?: Brush.linearGradient(listOf(fill, fill))
     return Tok(
         pal = P, dark = dark, solid = solid,
         p = p, s = P.s, bg = bg, fill = fill, onFill = onFill,
@@ -135,15 +141,21 @@ fun tok(P: Pal, dark: Boolean, solid: Boolean = false, highContrast: Boolean = f
         card = if (dark) Color.White.copy(alpha = 0.05f) else p.a(0x0D),
         cardEdge = if (dark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.7f),
         surface = if (dark) Color.White.copy(alpha = 0.05f) else inkL.copy(alpha = 0.035f),
-        // Received bubbles in light mode: nearly white with just a hint of the theme color.
-        inBg = if (dark) Color.White.copy(alpha = 0.10f) else (if (P.bg != null) Color.White.copy(alpha = 0.9f) else androidx.compose.ui.graphics.lerp(androidx.compose.ui.graphics.lerp(Color.White, p, 0.07f), Color.Black, 0.025f)),
-        inInk = if (dark) inkD else inkL,
+        // Received bubbles: the theme's own wash when it has one, soft grey on plain white, a shade of a tinted background.
+        inBg = when {
+            dark -> P.inBd ?: Color.White.copy(alpha = 0.10f)
+            P.inB != null -> P.inB
+            P.bg == Color.White -> hex("#EDEEF0")
+            P.bg != null -> androidx.compose.ui.graphics.lerp(P.bg, Color.Black, 0.065f)
+            else -> androidx.compose.ui.graphics.lerp(androidx.compose.ui.graphics.lerp(Color.White, p, 0.07f), Color.Black, 0.025f)
+        },
+        inInk = if (dark) inkD else (P.inInk ?: inkL),
         // Text on your bubbles is picked against the bubble itself (the middle of its gradient), so it stays readable whatever the theme.
-        outBg = outBrush, outFlat = fill, outInk = bubbleInk(P.grad?.first ?: androidx.compose.ui.graphics.lerp(fill, Color.White, if (dark) 0.10f else 0.08f), P.grad?.second ?: androidx.compose.ui.graphics.lerp(fill, Color.Black, if (dark) 0.10f else 0.18f)),
+        outBg = outBrush, outFlat = fill, outInk = bubbleInk(g?.first ?: androidx.compose.ui.graphics.lerp(fill, Color.White, if (dark) 0.10f else 0.08f), g?.second ?: androidx.compose.ui.graphics.lerp(fill, Color.Black, if (dark) 0.10f else 0.18f)),
         badgeBg = fill.a(0xD9), badgeInk = onFill,
-        plusBg = P.grad?.let { Brush.linearGradient(listOf(it.first, it.second)) } ?: Brush.linearGradient(listOf(plus, plus)),
+        plusBg = g?.let { Brush.linearGradient(listOf(it.first, it.second)) } ?: Brush.linearGradient(listOf(plus, plus)),
         plusFlat = plus,
-        plusInk = P.plusInk ?: (if (P.plus != null) Color.White else onFill),
+        plusInk = plusInkP ?: (if (P.plus != null) Color.White else onFill),
         fab = if (solid) (if (dark) hex("#23262E") else Color.White) else (if (dark) hex("#2E313C").copy(alpha = 0.62f) else Color.White.copy(alpha = 0.74f)),
         fabP = if (solid) plus else plus.a(0xCC),
         edgeLine = if (dark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.8f),
@@ -151,8 +163,8 @@ fun tok(P: Pal, dark: Boolean, solid: Boolean = false, highContrast: Boolean = f
         shadowP = if (dark) Color.Black.copy(alpha = 0.45f) else plus.a(0x88),
         hdrBg = if (solid) (if (dark) step1 else Color.White) else (if (dark) step1.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.6f)),
         accent2 = P.plus ?: P.s,
-        outTop = P.grad?.first ?: androidx.compose.ui.graphics.lerp(fill, Color.White, if (dark) 0.10f else 0.08f),
-        outBottom = P.grad?.second ?: androidx.compose.ui.graphics.lerp(fill, Color.Black, if (dark) 0.10f else 0.18f),
+        outTop = g?.first ?: androidx.compose.ui.graphics.lerp(fill, Color.White, if (dark) 0.10f else 0.08f),
+        outBottom = g?.second ?: androidx.compose.ui.graphics.lerp(fill, Color.Black, if (dark) 0.10f else 0.18f),
         tones = (if (dark) darkTones else lightTones).map { (b, i) -> androidx.compose.ui.graphics.lerp(b, fill, if (dark) 0.10f else 0.12f) to i },
     )
 }

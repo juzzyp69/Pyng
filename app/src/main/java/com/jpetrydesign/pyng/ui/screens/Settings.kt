@@ -91,6 +91,7 @@ import com.jpetrydesign.pyng.ui.kit.Page
 import com.jpetrydesign.pyng.ui.kit.PillButton
 import com.jpetrydesign.pyng.ui.kit.SectionLabel
 import com.jpetrydesign.pyng.ui.kit.T
+import com.jpetrydesign.pyng.ui.theme.swatchOf
 import com.jpetrydesign.pyng.ui.kit.Toggle
 import com.jpetrydesign.pyng.ui.kit.enter
 import com.jpetrydesign.pyng.ui.kit.initialsOf
@@ -119,7 +120,6 @@ fun SettingsScreen(nav: Nav) {
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 T(p.profileName.ifBlank { "Your profile" }, size = 18.sp, weight = FontWeight.SemiBold)
-                T("Your profile · name and photo", size = 13.sp, color = t.soft)
             }
             Ico(Icons.chev, t.faint, 16.dp, 2f)
         }
@@ -150,19 +150,28 @@ fun SettingsScreen(nav: Nav) {
         }
         Spacer(Modifier.height(12.dp))
         // Six groups. Each opens one page; less-used switches sit lower down on it.
+        val relink = conn == "relink"
         val secs = listOf(
-            Sec("chats", "Chats", Icons.message, "Replies, receipts, media, gestures, categories"),
-            Sec("notifications", "Notifications", Icons.bell, if (p.on("notif")) "On · quick reply " + (if (p.on("quick")) "on" else "off") else "Off"),
-            Sec("appearance", "Appearance", Icons.palette, "${pal.name} · ${p.mode} · ${com.jpetrydesign.pyng.ui.kit.Mo.name(p.opt("motion"))} motion"),
-            Sec("privacy", "Privacy & security", Icons.shield, (if (conn == "ready" || conn == "idle") "Linked to Google Messages" else if (conn == "relink") "Link Google Messages again" else "Connecting…") + if (p.on("bioLock")) " · app lock on" else ""),
-            Sec("storage", "Storage & backup", Icons.storage, "Photos and files, trash, backup"),
-            Sec("about", "Help & about", Icons.about, "Version ${BuildConfig.VERSION_NAME} · accessibility"),
+            Sec("chats", "Chats", Icons.message, ""),
+            Sec("notifications", "Notifications", Icons.bell, if (p.on("notif")) "On" else "Off"),
+            Sec("appearance", "Appearance", Icons.palette, ""),
+            Sec("privacy", "Privacy & security", Icons.shield, if (relink) "Link again" else ""),
+            Sec("storage", "Storage & backup", Icons.storage, ""),
+            Sec("about", "Help & about", Icons.about, BuildConfig.VERSION_NAME),
         )
         Card {
             secs.forEachIndexed { i, s ->
                 if (i > 0) Hairline()
                 Box(Modifier.enter(4 + i)) {
-                    ListRow(s.title, s.sub, s.icon, onClick = { if (s.key == "appearance") nav.go(Route.Appearance) else nav.go(Route.Section(s.key)) })
+                    // Just the name, with its current value where there's one worth seeing.
+                    ListRow(s.title, null, s.icon, onClick = { if (s.key == "appearance") nav.go(Route.Appearance) else nav.go(Route.Section(s.key)) }, trailing = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (s.key == "appearance") Box(Modifier.size(22.dp).clip(CircleShape).background(swatchOf(pal)).border(1.dp, Color.Black.copy(alpha = 0.08f), CircleShape))
+                            else if (s.sub.isNotEmpty()) T(s.sub, size = 14.sp, color = if (s.key == "privacy") t.danger else t.soft, maxLines = 1)
+                            Spacer(Modifier.width(10.dp))
+                            Ico(Icons.chev, t.faint, 16.dp, 2f)
+                        }
+                    })
                 }
             }
         }

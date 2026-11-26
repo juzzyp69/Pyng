@@ -1,6 +1,9 @@
 package com.jpetrydesign.pyng.ui.screens
 
 import com.jpetrydesign.pyng.ui.kit.pane
+import com.jpetrydesign.pyng.ui.kit.frost
+import dev.chrisbanes.haze.hazeSource
+import androidx.compose.ui.graphics.compositeOver
 import com.jpetrydesign.pyng.data.splitLooks
 import com.jpetrydesign.pyng.data.editLook
 import com.jpetrydesign.pyng.data.lookFor
@@ -129,105 +132,151 @@ fun AppearanceScreen(nav: Nav) {
     var pick by remember { mutableStateOf(demo?.removePrefix("pick:")?.takeIf { demo.startsWith("pick:") }) }
     var studio by remember { mutableStateOf(demo?.removePrefix("studio:")?.substringBefore(':')?.takeIf { demo.startsWith("studio:") }) }
     remember { demo?.takeIf { it.startsWith("studio:") }?.split(':')?.getOrNull(2)?.let { StudioTab.pending = it } }
+    var styleOpen by remember { mutableStateOf(demo == "style") }
     val shownLook = p.lookFor(t.dark)
     val pal = Palettes.byKey(shownLook.key, shownLook.c1, shownLook.c2)
     Box(Modifier.fillMaxSize()) {
         Page("Appearance", { nav.back() }) {
-            // App theme: a live sample of your chats in the current color, and Change for the full set.
-            // Colors only change in the full picker, so nothing changes by an accidental tap here.
+            // A live look at your colors and glass; the arrow under it opens Style.
             val shape = RoundedCornerShape(28.dp)
-            SectionLabel("App theme")
-            Column(Modifier.enter(0).fillMaxWidth().clip(shape).pane(shape).padding(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Column(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
-                        .background(Brush.linearGradient(listOf(t.tone, if (t.dark) t.surface else t.bg)))
-                        .padding(horizontal = 14.dp, vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+            Column(Modifier.enter(0).fillMaxWidth().clip(shape).pane(shape).padding(start = 10.dp, end = 10.dp, top = 10.dp)) {
+                StylePreview()
+                androidx.compose.animation.AnimatedVisibility(
+                    styleOpen,
+                    enter = androidx.compose.animation.expandVertically(spring(dampingRatio = 0.8f, stiffness = 340f), expandFrom = Alignment.Top) + fadeIn(tween(220, delayMillis = 60)),
+                    exit = androidx.compose.animation.shrinkVertically(spring(dampingRatio = 1f, stiffness = 420f), shrinkTowards = Alignment.Top) + fadeOut(tween(140)),
                 ) {
-                    Box(Modifier.clip(RoundedCornerShape(19.dp)).background(t.inBg).padding(horizontal = 14.dp, vertical = 8.dp)) { T("Dinner at 7?", size = 14.sp, color = t.inInk) }
-                    Box(Modifier.align(Alignment.End).clip(RoundedCornerShape(19.dp)).background(Brush.verticalGradient(listOf(t.outTop, androidx.compose.ui.graphics.lerp(t.outTop, t.outBottom, 0.5f)))).padding(horizontal = 14.dp, vertical = 8.dp)) {
-                        T("Sounds perfect", size = 14.sp, color = t.outInk)
-                    }
-                    Box(Modifier.align(Alignment.End).clip(RoundedCornerShape(19.dp)).background(Brush.verticalGradient(listOf(androidx.compose.ui.graphics.lerp(t.outTop, t.outBottom, 0.5f), t.outBottom))).padding(horizontal = 14.dp, vertical = 8.dp)) {
-                        T("I'll bring dessert", size = 14.sp, color = t.outInk)
-                    }
-                }
-                Row(Modifier.padding(start = 4.dp, end = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(48.dp).clip(CircleShape).background(swatchOf(pal)).border(3.dp, Color.White.copy(alpha = if (t.dark) 0.08f else 0.6f), CircleShape))
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        T(pal.name, size = 20.sp, weight = FontWeight.Bold, maxLines = 1)
-                        T(Palettes.kindOf(pal.name) + " · bubbles, buttons and highlights", size = 13.sp, color = t.soft, maxLines = 1)
-                    }
-                    PillButton("Change", { nav.openStrip() }, height = 44.dp)
-                }
-            }
-            SectionLabel("Mode")
-            Seg(listOf("Light", "Dark", "Match system"), p.mode, { m -> repo.prefs.edit { it.copy(mode = m) } })
-            if (p.mode == "Match system") {
-                Spacer(Modifier.height(10.dp))
-                SplitLooksRow()
-                // Each half, with its color: tap one to change it.
-                if (p.splitLooks) Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    listOf(false, true).forEach { dk ->
-                        val l = p.lookFor(dk)
-                        val lp = Palettes.byKey(l.key, l.c1, l.c2)
-                        Row(
-                            Modifier.weight(1f).clip(RoundedCornerShape(20.dp)).background(if (dk) Color(0xFF17181C) else Color.White)
-                                .border(1.dp, t.edgeLine, RoundedCornerShape(20.dp))
-                                .clickable { StripTarget.dark = dk; nav.openStrip() }.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Box(Modifier.size(30.dp).clip(CircleShape).background(swatchOf(lp)))
-                            Spacer(Modifier.width(10.dp))
-                            Column(Modifier.weight(1f)) {
-                                T(if (dk) "Dark" else "Light", size = 12.sp, weight = FontWeight.SemiBold, color = if (dk) Color.White.copy(alpha = 0.6f) else Color.Black.copy(alpha = 0.5f))
-                                T(lp.name, size = 14.5.sp, weight = FontWeight.SemiBold, color = if (dk) Color.White else Color.Black, maxLines = 1)
+                    Column(Modifier.padding(start = 6.dp, end = 6.dp, top = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        T("Style", size = 15.sp, weight = FontWeight.SemiBold, color = t.soft, modifier = Modifier.padding(start = 4.dp))
+                        Seg(listOf("Frost", "Liquid Glass", "Solid"), p.opt("glass").ifBlank { "Frost" }, { g -> repo.prefs.setOpt("glass", g) })
+                        // How strong and how blurry the glass is, across the whole app.
+                        androidx.compose.animation.AnimatedVisibility(p.opt("glass") != "Solid", enter = androidx.compose.animation.expandVertically() + fadeIn(), exit = androidx.compose.animation.shrinkVertically() + fadeOut()) {
+                            Column(Modifier.padding(horizontal = 4.dp)) {
+                                @Composable fun slider(label: String, key: String, def: Int, max: Int, unit: String) {
+                                    var v by remember(key) { mutableStateOf((p.opt(key).toIntOrNull() ?: def).toFloat()) }
+                                    Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        T(label, size = 15.sp, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                        T(v.roundToInt().toString() + unit, size = 13.5.sp, color = t.soft)
+                                    }
+                                    androidx.compose.material3.Slider(
+                                        value = v, onValueChange = { v = it; repo.prefs.setOpt(key, it.roundToInt().toString()) }, valueRange = 0f..max.toFloat(),
+                                        colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = t.p, inactiveTrackColor = t.p.copy(alpha = 0.18f)),
+                                    )
+                                }
+                                slider("Glass strength", "glassStrength", 60, 100, "%")
+                                slider("Blur", "glassBlur", 20, 40, " dp")
                             }
                         }
                     }
                 }
-            }
-            SectionLabel("Glass")
-            Seg(listOf("Frost", "Liquid Glass", "Solid"), p.opt("glass"), { g -> repo.prefs.setOpt("glass", g) })
-            // How strong and how blurry the glass is, across the whole app.
-            if (p.opt("glass") != "Solid") Column(Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp)).pane(RoundedCornerShape(24.dp)).padding(horizontal = 16.dp, vertical = 10.dp)) {
-                @Composable fun slider(label: String, key: String, def: Int, max: Int, unit: String) {
-                    var v by remember(key) { mutableStateOf((p.opt(key).toIntOrNull() ?: def).toFloat()) }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        T(label, size = 15.sp, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                        T(v.roundToInt().toString() + unit, size = 13.5.sp, color = t.soft)
-                    }
-                    androidx.compose.material3.Slider(
-                        value = v, onValueChange = { v = it }, valueRange = 0f..max.toFloat(),
-                        onValueChangeFinished = { repo.prefs.setOpt(key, v.roundToInt().toString()) },
-                        colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = t.p, inactiveTrackColor = t.p.copy(alpha = 0.18f)),
-                    )
+                val turn by androidx.compose.animation.core.animateFloatAsState(if (styleOpen) 180f else 0f, spring(dampingRatio = 0.62f, stiffness = 320f), label = "arrow")
+                Box(
+                    Modifier.fillMaxWidth().height(44.dp).clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { styleOpen = !styleOpen },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Ico("M6 9l6 6 6-6", t.soft, 24.dp, 2.4f, modifier = Modifier.graphicsLayer { rotationZ = turn })
                 }
-                slider("Glass strength", "glassStrength", 60, 100, "%")
-                slider("Blur", "glassBlur", 20, 40, " dp")
-            }
-            // Style studio: open Chat style or Home style to see every choice with a live preview.
-            SectionLabel("Style studio")
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StudioCard("Chat style", listOf(p.bubble, p.opt("statusStyle").let { if (it == "Off") "No status" else it }).joinToString(" · "), Modifier.weight(1f).enter(1)) { studio = "chat" }
-                StudioCard("Home style", listOf(p.pinLayout, p.pinStyle, com.jpetrydesign.pyng.ui.kit.Mo.name(p.opt("motion")) + " motion").joinToString(" · "), Modifier.weight(1f).enter(2)) { studio = "home" }
             }
             Spacer(Modifier.height(14.dp))
-            Card {
-                Row(Modifier.enter(3).fillMaxWidth().clickable { pick = "appIcon" }.padding(horizontal = 16.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
-                    AppIconPreview(AppIcons.key(p.appIcon, AppIcons.colorFor(p, p.appIcon)), 40.dp)
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f)) {
-                        T("App icon", size = 15.5.sp, weight = FontWeight.SemiBold)
-                        T(p.appIcon + (AppIcons.colorFor(p, p.appIcon)?.let { " · $it" } ?: ""), size = 13.sp, weight = FontWeight.SemiBold, color = t.p)
-                    }
-                    Ico(Icons.chev, t.faint, 16.dp, 2f)
+            Card(Modifier.enter(1)) {
+                LookRow("App appearance", { nav.openStrip() }) {
+                    Box(Modifier.size(40.dp).clip(CircleShape).background(swatchOf(pal)).border(1.dp, Color.Black.copy(alpha = 0.08f), CircleShape))
                 }
+                Hairline(72.dp)
+                LookRow("Chat", { studio = "chat" }) { ChatThumb() }
+                Hairline(72.dp)
+                LookRow("Home", { studio = "home" }) { HomeThumb() }
+                Hairline(72.dp)
+                LookRow("App icon", { pick = "appIcon" }) { AppIconPreview(AppIcons.key(p.appIcon, AppIcons.colorFor(p, p.appIcon)), 40.dp) }
             }
         }
         StylePicker(pick) { pick = null }
         StyleStudio(studio) { studio = null }
+    }
+}
+
+/** One row on Appearance: a small picture of the thing, its name and a chevron. */
+@Composable
+private fun LookRow(label: String, onClick: () -> Unit, lead: @Composable () -> Unit) {
+    val t = LocalTok.current
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { lead() }
+        Spacer(Modifier.width(14.dp))
+        T(label, size = 16.5.sp, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        Ico(Icons.chev, t.faint, 16.dp, 2f)
+    }
+}
+
+@Composable
+private fun ChatThumb() {
+    val t = LocalTok.current
+    Column(Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(t.bg).border(1.dp, t.hair, RoundedCornerShape(13.dp)).padding(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
+        Box(Modifier.size(22.dp, 7.dp).clip(RoundedCornerShape(4.dp)).background(t.inBg.compositeOver(t.bg)))
+        Box(Modifier.align(Alignment.End).size(20.dp, 7.dp).clip(RoundedCornerShape(4.dp)).background(Brush.horizontalGradient(listOf(t.outTop, t.outBottom))))
+        Box(Modifier.align(Alignment.End).size(14.dp, 7.dp).clip(RoundedCornerShape(4.dp)).background(Brush.horizontalGradient(listOf(t.outTop, t.outBottom))))
+    }
+}
+
+@Composable
+private fun HomeThumb() {
+    val t = LocalTok.current
+    val av = t.p.copy(alpha = 0.3f).compositeOver(t.bg)
+    Column(Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(t.bg).border(1.dp, t.hair, RoundedCornerShape(13.dp)).padding(6.dp), verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) { repeat(4) { i -> Box(Modifier.size(5.5.dp).clip(CircleShape).background(if (i == 0) t.plusFlat else av)) } }
+        repeat(2) { i ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                Box(Modifier.size(7.dp).clip(CircleShape).background(av))
+                Box(Modifier.size(if (i == 0) 16.dp else 20.dp, 4.dp).clip(RoundedCornerShape(2.dp)).background(t.ink.copy(alpha = 0.22f)))
+                if (i == 0) Box(Modifier.size(4.dp).clip(CircleShape).background(t.plusFlat))
+            }
+        }
+    }
+}
+
+/** Your colors and glass together: a bit of a chat under a glass header and message box, drawn the way the app draws them. */
+@Composable
+private fun StylePreview() {
+    val t = LocalTok.current
+    val hz = remember { dev.chrisbanes.haze.HazeState() }
+    val shape = RoundedCornerShape(22.dp)
+    val mid = androidx.compose.ui.graphics.lerp(t.outTop, t.outBottom, 0.5f)
+    Box(Modifier.fillMaxWidth().height(250.dp).clip(shape).background(t.bg)) {
+        Column(
+            Modifier.matchParentSize().hazeSource(hz).padding(horizontal = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Spacer(Modifier.height(30.dp))
+            Box(Modifier.clip(RoundedCornerShape(18.dp)).background(t.inBg).padding(horizontal = 13.dp, vertical = 8.dp)) { T("Back from the trip!!", size = 14.sp, color = t.inInk, maxLines = 1) }
+            // A photo for the glass to blur over.
+            Box(Modifier.size(150.dp, 74.dp).clip(RoundedCornerShape(18.dp)).background(Brush.linearGradient(listOf(androidx.compose.ui.graphics.lerp(t.bg, t.plusFlat, 0.55f), androidx.compose.ui.graphics.lerp(t.bg, t.fill, 0.7f)))))
+            Spacer(Modifier.weight(1f))
+            Box(Modifier.align(Alignment.End).clip(RoundedCornerShape(18.dp)).background(Brush.verticalGradient(listOf(t.outTop, mid))).padding(horizontal = 13.dp, vertical = 8.dp)) { T("Ok these are so good", size = 14.sp, color = t.outInk, maxLines = 1) }
+            Box(Modifier.align(Alignment.End).clip(RoundedCornerShape(18.dp)).background(Brush.verticalGradient(listOf(mid, t.outBottom))).padding(horizontal = 13.dp, vertical = 8.dp)) { T("How was the drive?", size = 14.sp, color = t.outInk, maxLines = 1) }
+            Spacer(Modifier.height(64.dp))
+        }
+        androidx.compose.runtime.CompositionLocalProvider(com.jpetrydesign.pyng.ui.kit.LocalHaze provides hz) {
+            Row(
+                Modifier.align(Alignment.TopCenter).padding(8.dp).fillMaxWidth().height(50.dp)
+                    .glassRim(RoundedCornerShape(25.dp)).frost(RoundedCornerShape(25.dp), t.fab.copy(alpha = if (t.solid) 1f else if (t.dark) 0.2f else 0.32f), 10.dp)
+                    .padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Ico(Icons.back, t.ink, 18.dp, 2.2f)
+                Spacer(Modifier.width(8.dp))
+                Box(Modifier.size(30.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { T("M", size = 13.sp, weight = FontWeight.SemiBold, color = t.p) }
+                Spacer(Modifier.width(10.dp))
+                T("Maya", size = 15.sp, weight = FontWeight.SemiBold)
+            }
+            Row(
+                Modifier.align(Alignment.BottomCenter).padding(8.dp).fillMaxWidth().height(48.dp)
+                    .glassRim(RoundedCornerShape(24.dp)).frost(RoundedCornerShape(24.dp), t.fab.copy(alpha = if (t.solid) 1f else if (t.dark) 0.2f else 0.32f), 10.dp)
+                    .padding(start = 16.dp, end = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                T("Message", size = 14.5.sp, color = t.faint, modifier = Modifier.weight(1f))
+                Box(Modifier.size(36.dp).clip(CircleShape).background(t.plusFlat), contentAlignment = Alignment.Center) { Ico("M12 19V6M6 11l6-6 6 6", t.plusInk, 18.dp, 2.4f) }
+            }
+        }
     }
 }
 
@@ -251,29 +300,26 @@ private fun StylePicker(key: String?, onDone: () -> Unit) {
     Sheet(visible = key != null, onDismiss = onDone, maxHeightFraction = 0.82f) {
         val k = last ?: return@Sheet
         val p = repo.prefs.state
-        val (title, hint) = when (k) {
-            "pinLayout" -> "Pinned layout" to "Hold a pinned chat, then drag to rearrange"
-            "pinStyle" -> "Pinned notifications" to "How pinned chats show something new"
-            "pinShape" -> "Photo shape" to "The shape of pinned chat photos"
-            "pinNames" -> "Names" to "How names show under pinned chats"
-            "pinBack" -> "Backdrop" to "What sits behind your pinned chats"
-            "bubble" -> "Bubble shape" to "Tap a style to preview it live"
-            "gradient" -> "Bubble gradient" to "How color flows through the bubbles you send"
-            "sendStyle" -> "Send animation" to "How a message leaves the box when you send it"
-            "reactStyle" -> "Reactions" to "How you see who reacted to a message"
-            "textSize" -> "Text size" to "Messages and your conversation list"
-            "font" -> "Font" to "Used everywhere in Pyng"
-            "showPhotos" -> "Contact photos" to "Tap a style to preview it live"
-            "density" -> "List density" to "Tap a style to preview it live"
-            "motion" -> "Motion" to "How things move around the app"
-            "appIcon" -> "App icon" to "Changes the icon on your home screen"
-            else -> "Default chat wallpaper" to "Chats use this unless they have their own"
+        val title = when (k) {
+            "pinLayout" -> "Pinned layout"
+            "pinStyle" -> "Pinned notifications"
+            "pinShape" -> "Photo shape"
+            "pinNames" -> "Names"
+            "pinBack" -> "Backdrop"
+            "bubble" -> "Bubble shape"
+            "gradient" -> "Bubble gradient"
+            "sendStyle" -> "Send animation"
+            "reactStyle" -> "Reactions"
+            "textSize" -> "Text size"
+            "font" -> "Font"
+            "showPhotos" -> "Contact photos"
+            "density" -> "List density"
+            "motion" -> "Motion"
+            "appIcon" -> "App icon"
+            else -> "Default chat wallpaper"
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                T(title, size = 19.sp, weight = FontWeight.Bold)
-                T(hint, size = 12.5.sp, color = t.soft)
-            }
+            T(title, size = 19.sp, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
             PillButton("Done", onDone, height = 42.dp)
         }
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 8.dp)) {
@@ -564,107 +610,6 @@ private fun AppIconPreview(key: String, size: Dp = 58.dp) {
     }
 }
 
-// ---------- color strip on Home ----------
-
-@Composable
-fun ColorStrip(onDone: () -> Unit) {
-    val repo = LocalRepo.current
-    val t = LocalTok.current
-    val motion = LocalMotion.current
-    val p = repo.prefs.state
-    // With light and dark set apart, you pick which one you're coloring, and the app shows it as you go.
-    val sysDark = androidx.compose.foundation.isSystemInDarkTheme()
-    val split = p.splitLooks
-    var editDark by remember { mutableStateOf(StripTarget.dark.also { StripTarget.dark = null } ?: (split && sysDark)) }
-    val ed = split && editDark
-    androidx.compose.runtime.DisposableEffect(split, editDark) {
-        com.jpetrydesign.pyng.ui.LookPreview.dark = if (split) editDark else null
-        onDispose { com.jpetrydesign.pyng.ui.LookPreview.dark = null }
-    }
-    val lk = p.lookFor(ed)
-    var tab by remember { mutableStateOf(if (lk.key.startsWith("Custom")) "Custom" else Palettes.kindOf(lk.key).let { if (it == "Theme") "Solid" else it }) }
-    var target by remember { mutableStateOf("c1") }
-    val lib = remember { ThemeLibrary() }
-    BackHandler(onBack = onDone)
-    var shown by remember { mutableStateOf(false) }
-    androidx.compose.runtime.LaunchedEffect(Unit) { shown = true }
-    Box(Modifier.fillMaxSize().zIndex(15f), contentAlignment = Alignment.BottomCenter) {
-        AnimatedVisibility(shown, enter = slideInVertically(if (motion) spring(dampingRatio = 0.78f, stiffness = 380f) else tween(0)) { it }, exit = slideOutVertically { it } + fadeOut()) {
-            Column(
-                Modifier.fillMaxWidth().widthIn(max = 640.dp).shadow(24.dp, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp), ambientColor = t.shadow, spotColor = t.shadow)
-                    .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)).background(t.sheet).navigationBarsPadding().padding(top = 10.dp, bottom = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                Box(Modifier.align(Alignment.CenterHorizontally).size(36.dp, 4.dp).clip(RoundedCornerShape(2.dp)).background(t.faint))
-                Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        T("App color", size = 12.sp, weight = FontWeight.Medium, color = t.soft)
-                        T(Palettes.byKey(lk.key, lk.c1, lk.c2).name, size = 18.sp, weight = FontWeight.SemiBold, letterSpacing = (-0.3).sp)
-                    }
-                    PillButton("Done", onDone, height = 40.dp)
-                }
-                // See the color in both looks without leaving the sheet.
-                Seg(listOf("Light", "Dark", "Match system"), p.mode, { m -> repo.prefs.edit { it.copy(mode = m) } }, Modifier.padding(horizontal = 20.dp))
-                if (p.mode == "Match system") SplitLooksRow(Modifier.padding(horizontal = 20.dp))
-                if (split) Seg(listOf("Light look", "Dark look"), if (editDark) "Dark look" else "Light look", { editDark = it == "Dark look" }, Modifier.padding(horizontal = 20.dp))
-                // Themes you saved, ready to use for the whole app.
-                MyThemes(
-                    lib,
-                    isOn = { st -> lk.key.startsWith("Custom") && lk.c1 == st.c1 && (st.mode == "Mono") == (lk.key == "Custom color") && (st.mode == "Mono" || lk.c2 == st.c2) },
-                    onPick = { st -> repo.prefs.editLook(ed) { it.copy(key = if (st.mode == "Mono") "Custom color" else "Custom duotone", c1 = st.c1, c2 = st.c2) } },
-                    onSave = if (tab == "Custom" && lk.key.startsWith("Custom")) ({
-                        val mode = if (lk.key == "Custom duotone") "Duotone" else "Mono"
-                        lib.saving = com.jpetrydesign.pyng.data.SavedTheme(java.util.UUID.randomUUID().toString(), suggestName(mode, lk.c1, p.savedThemes.map { it.name }), mode, lk.c1, lk.c2)
-                    }) else null,
-                    side = 20.dp,
-                )
-                Seg(listOf("Solid", "Duotone", "Gradient", "Custom"), tab, { tab = it }, Modifier.padding(horizontal = 20.dp))
-                if (tab != "Custom") {
-                    // Solid: a row of plain colors, then the same six softly tinted. Duotone: everyday, retro, premium.
-                    val (list, cols) = when (tab) { "Duotone" -> Palettes.duos to 4; "Gradient" -> Palettes.grads to 6; else -> Palettes.solids to 6 }
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        list.chunked(cols).forEach { row ->
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                row.forEach { x -> Swatch(x.name, swatchOf(x), lk.key == x.name, size = 40.dp) { repo.prefs.editLook(ed) { it.copy(key = x.name) } } }
-                            }
-                        }
-                    }
-                } else {
-                    Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        val duo = lk.key == "Custom duotone"
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf("Custom color", "Custom duotone").forEach { key ->
-                                val on = lk.key == key || (key == "Custom color" && !lk.key.startsWith("Custom"))
-                                Box(Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(19.dp)).background(if (on) t.plusBg else Brush.linearGradient(listOf(t.neutral, t.neutral)))
-                                    .clickable { repo.prefs.editLook(ed) { it.copy(key = key) } }, contentAlignment = Alignment.Center) {
-                                    T(key, size = 13.5.sp, weight = FontWeight.SemiBold, color = if (on) t.plusInk else t.ink)
-                                }
-                            }
-                        }
-                        if (duo) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            listOf("c1" to "Main", "c2" to "Accent").forEach { (k, label) ->
-                                val on = target == k
-                                Row(Modifier.weight(1f).height(34.dp).clip(RoundedCornerShape(17.dp)).background(if (on) t.tone else t.surface).clickable { target = k }, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                                    Box(Modifier.size(14.dp).clip(CircleShape).background((if (k == "c1") lk.c1 else lk.c2).color()))
-                                    Spacer(Modifier.width(8.dp)); T(label, size = 13.sp, weight = FontWeight.SemiBold, color = if (on) t.p else t.soft)
-                                }
-                            }
-                        }
-                        val cur = if (duo && target == "c2") lk.c2 else lk.c1
-                        ColorWheel(cur) { h ->
-                            repo.prefs.editLook(ed) { l ->
-                                val key = if (l.key.startsWith("Custom")) l.key else "Custom color"
-                                if (duo && target == "c2") l.copy(c2 = h, key = key) else l.copy(c1 = h, key = key)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        ThemeLibrarySheets(lib)
-    }
-}
-
 /** Hue and softness on a wheel, a lightness slider, a hex field and quick colors. */
 @Composable
 fun ColorWheel(value: Hsl, onChange: (Hsl) -> Unit) {
@@ -810,10 +755,7 @@ private fun StyleStudio(kind: String?, onClose: () -> Unit) {
         Column(Modifier.fillMaxSize().background(t.bg).statusBarsPadding().navigationBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(start = 6.dp, end = 16.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 com.jpetrydesign.pyng.ui.kit.CircleButton(Icons.back, "Back", onClose)
-                Column(Modifier.weight(1f).padding(start = 4.dp)) {
-                    T(if (chat) "Chat style" else "Home style", size = 21.sp, weight = FontWeight.Bold, letterSpacing = (-0.3).sp)
-                    T("Pick a tab, then a style. The preview updates as you go.", size = 12.5.sp, color = t.soft)
-                }
+                T(if (chat) "Chat" else "Home", size = 21.sp, weight = FontWeight.Bold, letterSpacing = (-0.3).sp, modifier = Modifier.weight(1f).padding(start = 4.dp))
                 PillButton("Done", onClose, height = 40.dp)
             }
             // Live preview.
@@ -1098,25 +1040,5 @@ internal fun MotionMini(style: com.jpetrydesign.pyng.ui.kit.Mo, t: com.jpetrydes
 /** A tab for Style studio to open on (used when a link or the demo asks for one). */
 object StudioTab { var pending: String? = null }
 
-/** Which half the color sheet opens on, when you tap the Light or Dark card. */
+/** Which half (light or dark) the color page edits, when light and dark are set apart. */
 object StripTarget { var dark: Boolean? = null }
-
-/** "Customize light & dark": on, light and dark each get their own color; off, one color does both. */
-@Composable
-private fun SplitLooksRow(modifier: Modifier = Modifier) {
-    val repo = LocalRepo.current
-    val t = LocalTok.current
-    val on = repo.prefs.state.opt("splitLooks") == "1"
-    Row(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).pane(RoundedCornerShape(20.dp))
-            .clickable { repo.prefs.setOpt("splitLooks", if (on) "" else "1") }.padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            T("Customize light & dark", size = 15.sp, weight = FontWeight.SemiBold)
-            T(if (on) "Light and dark each have their own color" else "Off: one color, made light or dark for you", size = 12.5.sp, color = t.soft, lineHeight = 17.sp)
-        }
-        Spacer(Modifier.width(12.dp))
-        com.jpetrydesign.pyng.ui.kit.Toggle(on)
-    }
-}

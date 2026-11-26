@@ -60,6 +60,12 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import dev.chrisbanes.haze.hazeSource
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -288,99 +294,139 @@ fun ReviewScreen(attachments: SnapshotStateList<Pending>, start: Int, onClose: (
         }
     }
 
+    LightSystemBars()
+    // The ✓ wears the theme's dark-mode accent, which reads on the dark editor.
+    val acc = com.jpetrydesign.pyng.ui.theme.LocalTok.current.pal.let { it.plusD ?: it.pd }
+    val accInk = com.jpetrydesign.pyng.ui.theme.inkOn(acc)
     Box(Modifier.fillMaxSize()) {
         AnimatedVisibility(shown, enter = slideInVertically(spring(dampingRatio = 0.86f, stiffness = 420f)) { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut()) {
-            Column(Modifier.fillMaxSize().background(Color(0xFF0C0D11)).clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) {}.statusBarsPadding().navigationBarsPadding()) {
-                // Top: close, where you are, Done
-                Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(42.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.1f)).clickable { close() }, contentAlignment = Alignment.Center) { Ico(Icons.close, Color.White, 16.dp, 2.4f) }
-                    T(if (items.size > 1) "${cur + 1} of ${items.size}" else "Preview", size = 15.sp, weight = FontWeight.SemiBold, color = Color.White, modifier = Modifier.weight(1f).padding(horizontal = 8.dp), align = androidx.compose.ui.text.style.TextAlign.Center)
-                    Box(Modifier.height(40.dp).clip(RoundedCornerShape(20.dp)).background(Color(0xFF4D80F2)).clickable { done() }.padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
-                        T("Done", size = 14.5.sp, weight = FontWeight.Bold, color = Color.White)
+            val hz = remember { dev.chrisbanes.haze.HazeState() }
+            val item = items.getOrNull(cur)
+            if (item == null) { LaunchedEffect(Unit) { close() }; return@AnimatedVisibility }
+            val kind = kindOf(item.original)
+            Box(Modifier.fillMaxSize().background(Color(0xFF0C0D11)).clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) {}) {
+                // The picture itself, blurred big behind everything, so the glass has something to frost.
+                Box(Modifier.fillMaxSize().hazeSource(hz)) {
+                    if (kind == Kind.Photo || kind == Kind.Gif) androidx.compose.animation.Crossfade(item.original.path, label = "glow") { g ->
+                        AsyncImage(
+                            coil.request.ImageRequest.Builder(ctx).data(File(g)).size(96).memoryCacheKey("glow:$g").build(), null, contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.5f; scaleX = 1.3f; scaleY = 1.3f }.blur(44.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Rectangle),
+                        )
                     }
+                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)))
                 }
-                val item = items.getOrNull(cur)
-                if (item == null) { LaunchedEffect(Unit) { close() }; return@Column }
-                val kind = kindOf(item.original)
-                // The big preview. Swipe sideways to move between items when no tool is open.
-                Box(
-                    Modifier.weight(1f).fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp)
-                        .pointerInput(cur, tool) {
-                            if (tool != null) return@pointerInput
-                            var dx = 0f
-                            detectHorizontalDragGestures(onDragEnd = {
-                                if (dx < -90f && cur < items.size - 1) cur++ else if (dx > 90f && cur > 0) cur--
-                                dx = 0f
-                            }) { ch, d -> dx += d; ch.consume() }
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    when (kind) {
-                        Kind.Photo -> PhotoStage(item, tool == "Crop")
-                        Kind.Video -> VideoStage(item, tool == "Crop")
-                        Kind.Gif -> AsyncImage(File(item.original.path), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)))
-                        Kind.Other -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Box(Modifier.size(88.dp).clip(RoundedCornerShape(24.dp)).background(Color.White.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
-                                Ico(if (item.original.mime.contains("vcard")) Icons.contact else Icons.file, Color.White, 34.dp)
-                            }
-                            Spacer(Modifier.height(12.dp))
-                            T(item.original.name, size = 15.sp, color = Color.White, weight = FontWeight.Medium)
+                Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+                    // Top: close and what you're doing in one pill; remove this one on the right.
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.height(44.dp).clip(RoundedCornerShape(22.dp)).vFrost(hz, RoundedCornerShape(22.dp)).padding(start = 4.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(36.dp).clip(CircleShape).clickable { close() }.semantics { contentDescription = "Close" }, contentAlignment = Alignment.Center) { Ico(Icons.close, Color.White, 19.dp, 2.2f) }
+                            Spacer(Modifier.width(6.dp))
+                            Ico(Icons.pencil, Color.White, 17.dp, 2.2f)
+                            Spacer(Modifier.width(8.dp))
+                            T("Edit", size = 14.sp, weight = FontWeight.SemiBold, color = Color.White)
+                            if (items.size > 1) T("  ${cur + 1} of ${items.size}", size = 14.sp, weight = FontWeight.Medium, color = Color.White.copy(alpha = 0.6f))
                         }
-                    }
-                    if (kind == Kind.Gif) T("GIF", size = 11.sp, weight = FontWeight.Bold, color = Color.White,
-                        modifier = Modifier.align(Alignment.TopStart).padding(10.dp).clip(RoundedCornerShape(8.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 7.dp, vertical = 3.dp))
-                }
-                // Tools for this kind of item
-                val tools = when (kind) { Kind.Photo -> listOf("Crop", "Rotate", "Effects"); Kind.Video -> listOf("Trim", "Crop"); else -> emptyList() }
-                if (tools.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.Center) {
-                    tools.forEach { n ->
-                        val on = tool == n
-                        Column(
-                            Modifier.clip(RoundedCornerShape(14.dp)).background(if (on) Color.White.copy(alpha = 0.12f) else Color.Transparent).clickable { tool = if (on) null else n }.padding(horizontal = 16.dp, vertical = 7.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Ico(when (n) { "Crop" -> CROP; "Rotate" -> ROTATE; "Effects" -> Icons.spark; else -> TRIM }, if (on) Color.White else Color.White.copy(alpha = 0.6f), 22.dp, 2f)
-                            Spacer(Modifier.height(3.dp))
-                            T(n, size = 11.5.sp, weight = FontWeight.SemiBold, color = if (on) Color.White else Color.White.copy(alpha = 0.6f))
-                        }
-                    }
-                }
-                // The open tool's controls
-                Box(Modifier.fillMaxWidth().heightIn(min = 96.dp).padding(horizontal = 14.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
-                    when {
-                        kind == Kind.Gif -> Note("GIFs, stickers and clips send just as they are. Tap ✕ below to take one off.")
-                        kind == Kind.Other -> Note("Files send as they are.")
-                        tool == "Crop" -> CropControls(item)
-                        tool == "Rotate" -> RotateControls(item)
-                        tool == "Effects" -> EffectControls(item)
-                        tool == "Trim" -> TrimControls(item)
-                        else -> Note(if (kind == Kind.Video) "Trim to send just part of it, or crop it." else "Crop, turn or add an effect. Changes are saved when you tap Done.")
-                    }
-                }
-                // Everything you're sending, plus room for more
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items.forEachIndexed { i, x ->
-                        val on = i == cur
+                        Spacer(Modifier.weight(1f))
                         Box(
-                            Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)).border(2.dp, if (on) Color.White else Color.Transparent, RoundedCornerShape(14.dp))
-                                .clickable { cur = i; tool = null }.graphicsAlpha(if (on) 1f else 0.6f),
-                        ) {
-                            val k = kindOf(x.original)
-                            if (k == Kind.Other) Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) { Ico(Icons.file, Color.White, 20.dp) }
-                            else AsyncImage(File(x.original.path), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                            if (!x.edit.isPlain) Box(Modifier.align(Alignment.BottomEnd).padding(3.dp).size(16.dp).clip(CircleShape).background(Color(0xFF4D80F2)), contentAlignment = Alignment.Center) { Ico(PENCIL, Color.White, 9.dp, 2.6f) }
+                            Modifier.size(44.dp).clip(CircleShape).vFrost(hz, CircleShape).clickable {
+                                items.removeAt(cur); if (cur >= items.size) cur = max(0, items.size - 1); tool = null
+                                if (items.isEmpty()) { attachments.clear(); close() }
+                            }.semantics { contentDescription = "Remove this one" },
+                            contentAlignment = Alignment.Center,
+                        ) { Ico(Icons.trash, Color.White, 20.dp, 2f) }
+                    }
+                    // The big preview. Swipe sideways to move between items when no tool is open.
+                    Box(
+                        Modifier.weight(1f).fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)
+                            .pointerInput(cur, tool) {
+                                if (tool != null) return@pointerInput
+                                var dx = 0f
+                                detectHorizontalDragGestures(onDragEnd = {
+                                    if (dx < -90f && cur < items.size - 1) cur++ else if (dx > 90f && cur > 0) cur--
+                                    dx = 0f
+                                }) { ch, d -> dx += d; ch.consume() }
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        when (kind) {
+                            Kind.Photo -> PhotoStage(item, tool == "Crop")
+                            Kind.Video -> VideoStage(item, tool == "Crop")
+                            Kind.Gif -> AsyncImage(File(item.original.path), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)))
+                            Kind.Other -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Box(Modifier.size(88.dp).clip(RoundedCornerShape(24.dp)).background(Color.White.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
+                                    Ico(if (item.original.mime.contains("vcard")) Icons.contact else Icons.file, Color.White, 34.dp)
+                                }
+                                Spacer(Modifier.height(12.dp))
+                                T(item.original.name, size = 15.sp, color = Color.White, weight = FontWeight.Medium)
+                            }
+                        }
+                        if (kind == Kind.Gif) T("GIF", size = 11.sp, weight = FontWeight.Bold, color = Color.White,
+                            modifier = Modifier.align(Alignment.TopStart).padding(10.dp).clip(RoundedCornerShape(8.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 7.dp, vertical = 3.dp))
+                    }
+                    // The dock: the open tool's controls, everything you're sending (plus room for more), then the tools and ✓.
+                    Column(
+                        Modifier.padding(start = 12.dp, end = 12.dp, bottom = 14.dp).fillMaxWidth().clip(RoundedCornerShape(30.dp)).vFrost(hz, RoundedCornerShape(30.dp))
+                            .padding(start = 10.dp, end = 10.dp, top = 12.dp, bottom = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        AnimatedVisibility(tool != null, enter = androidx.compose.animation.expandVertically(spring(dampingRatio = 0.82f, stiffness = 380f)) + fadeIn(), exit = androidx.compose.animation.shrinkVertically() + fadeOut()) {
+                            Box(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 4.dp), contentAlignment = Alignment.Center) {
+                                when (tool) {
+                                    "Crop" -> CropControls(item)
+                                    "Rotate" -> RotateControls(item)
+                                    "Effects" -> EffectControls(item)
+                                    "Trim" -> TrimControls(item)
+                                }
+                            }
+                        }
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 2.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                items.forEachIndexed { i, x ->
+                                    val on = i == cur
+                                    val shape = RoundedCornerShape(13.dp)
+                                    val sc by androidx.compose.animation.core.animateFloatAsState(if (on) 1f else 0.9f, spring(dampingRatio = 0.6f, stiffness = 500f), label = "thumb")
+                                    Box(
+                                        Modifier.size(46.dp).graphicsLayer { scaleX = sc; scaleY = sc; alpha = if (on) 1f else 0.88f }
+                                            .border(if (on) 2.5.dp else 1.dp, if (on) Color.White else Color.White.copy(alpha = 0.18f), shape).clip(shape)
+                                            .clickable { cur = i; tool = null },
+                                    ) {
+                                        val k = kindOf(x.original)
+                                        if (k == Kind.Other) Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) { Ico(Icons.file, Color.White, 20.dp) }
+                                        else AsyncImage(File(x.original.path), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                        if (!x.edit.isPlain) Box(Modifier.align(Alignment.BottomEnd).padding(3.dp).size(16.dp).clip(CircleShape).background(acc), contentAlignment = Alignment.Center) { Ico(PENCIL, accInk, 9.dp, 2.6f) }
+                                    }
+                                }
+                                Box(
+                                    Modifier.size(46.dp).clip(RoundedCornerShape(13.dp)).border(1.5.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(13.dp))
+                                        .clickable { addMore.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }.semantics { contentDescription = "Add more" },
+                                    contentAlignment = Alignment.Center,
+                                ) { Ico(Icons.plus, Color.White, 20.dp, 2.4f) }
+                            }
+                        }
+                        Box(Modifier.padding(horizontal = 4.dp).fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.1f)))
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            val tools = when (kind) { Kind.Photo -> listOf("Crop", "Rotate", "Effects"); Kind.Video -> listOf("Trim", "Crop"); else -> emptyList() }
+                            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.SpaceAround) {
+                                tools.forEach { n ->
+                                    val on = tool == n
+                                    Column(
+                                        Modifier.widthIn(min = 58.dp).height(54.dp).clip(RoundedCornerShape(18.dp)).background(if (on) Color.White.copy(alpha = 0.14f) else Color.Transparent)
+                                            .clickable { tool = if (on) null else n }.padding(horizontal = 8.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+                                    ) {
+                                        Ico(when (n) { "Crop" -> CROP; "Rotate" -> ROTATE; "Effects" -> Icons.spark; else -> TRIM }, Color.White, 22.dp, 2.1f)
+                                        T(n, size = 11.5.sp, weight = FontWeight.Medium, color = Color.White.copy(alpha = if (on) 1f else 0.85f))
+                                    }
+                                }
+                            }
+                            // ✓ keeps the changes and goes back to your message, so you can keep typing.
                             Box(
-                                Modifier.align(Alignment.TopEnd).padding(3.dp).size(18.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f))
-                                    .clickable { items.removeAt(i); if (cur >= items.size) cur = max(0, items.size - 1); tool = null; if (items.isEmpty()) { attachments.clear(); close() } },
+                                Modifier.size(52.dp).shadow(10.dp, CircleShape, ambientColor = acc, spotColor = acc).clip(CircleShape).background(acc).clickable { done() }
+                                    .semantics { contentDescription = "Done, back to your message" },
                                 contentAlignment = Alignment.Center,
-                            ) { Ico(Icons.close, Color.White, 8.dp, 2.8f) }
+                            ) { Ico(Icons.check, accInk, 23.dp, 2.6f) }
                         }
                     }
-                    Box(
-                        Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.1f))
-                            .clickable { addMore.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
-                        contentAlignment = Alignment.Center,
-                    ) { Ico(Icons.plus, Color.White, 20.dp, 2.4f) }
                 }
             }
         }
@@ -400,11 +446,6 @@ private const val CROP = "M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14"
 private const val ROTATE = "M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"
 private const val TRIM = "M6 4v16M18 4v16M6 8h12M6 16h12"
 private const val PENCIL = "M4 20l4-1 11-11-3-3L5 16z"
-
-@Composable
-private fun Note(text: String) {
-    T(text, size = 13.sp, color = Color.White.copy(alpha = 0.65f), align = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 19.sp, modifier = Modifier.padding(horizontal = 18.dp))
-}
 
 @Composable
 private fun Chip(label: String, on: Boolean, onClick: () -> Unit) {

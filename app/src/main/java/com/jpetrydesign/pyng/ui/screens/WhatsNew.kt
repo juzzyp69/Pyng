@@ -224,6 +224,8 @@ private fun HeroArt(art: String, t: Tok) {
         "bleep" -> BleepArt(t)
         "glass" -> GlassArt(t)
         "looks" -> LooksArt(t)
+        "palettes" -> PalettesArt()
+        "photos" -> PhotosArt(t)
         "live" -> LiveArt(t)
         "groupname" -> GroupNameArt(t)
         else -> Box(Modifier.size(84.dp).clip(CircleShape).background(t.tone), contentAlignment = Alignment.Center) { Ico(Icons.spark, t.p, 38.dp, 1.8f) }
@@ -359,6 +361,45 @@ private fun LooksArt(t: Tok) {
                 T(if (i == 0) "Light" else "Dark", size = 11.sp, weight = FontWeight.Bold, color = ink.copy(alpha = 0.55f))
                 Box(Modifier.clip(RoundedCornerShape(12.dp)).background(ink.copy(alpha = 0.09f)).padding(horizontal = 10.dp, vertical = 6.dp)) { T("Dinner at 7?", size = 11.5.sp, color = ink, maxLines = 1) }
                 Box(Modifier.align(Alignment.End).clip(RoundedCornerShape(12.dp)).background(accent).padding(horizontal = 10.dp, vertical = 6.dp)) { T("Sounds good", size = 11.5.sp, color = Color.White, maxLines = 1) }
+            }
+        }
+    }
+}
+
+/** The new duotones and gradients, a row of each, drifting along. */
+@Composable
+private fun PalettesArt() {
+    var k by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) { while (true) { delay(1600); k = (k + 1) % 5 } }
+    Column(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically), horizontalAlignment = Alignment.CenterHorizontally) {
+        listOf(com.jpetrydesign.pyng.ui.theme.Palettes.duos, com.jpetrydesign.pyng.ui.theme.Palettes.grads).forEach { list ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                (0 until 6).forEach { i ->
+                    val x = list[(i * 5 + k) % list.size]
+                    androidx.compose.animation.Crossfade(x, animationSpec = androidx.compose.animation.core.tween(500), label = "sw$i") { q ->
+                        Box(Modifier.size(38.dp).clip(CircleShape).background(com.jpetrydesign.pyng.ui.theme.swatchOf(q)))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A photo on the dark stage with its frosted dock: thumbnails, then Save, Share and Reply. */
+@Composable
+private fun PhotosArt(t: Tok) {
+    Box(Modifier.fillMaxSize().padding(10.dp).clip(RoundedCornerShape(20.dp)).background(Color(0xFF0B0D0C))) {
+        Box(Modifier.align(Alignment.Center).padding(bottom = 34.dp).size(118.dp, 82.dp).clip(RoundedCornerShape(12.dp))
+            .background(Brush.linearGradient(listOf(androidx.compose.ui.graphics.lerp(t.p, Color.White, 0.3f), androidx.compose.ui.graphics.lerp(t.plusFlat, Color.Black, 0.2f)))))
+        Column(
+            Modifier.align(Alignment.BottomCenter).padding(8.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color(0x40FFFFFF)).padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                repeat(4) { i -> Box(Modifier.size(18.dp).clip(RoundedCornerShape(5.dp)).background(Color.White.copy(alpha = if (i == 1) 0.9f else 0.35f))) }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+                listOf(Icons.download, Icons.share, Icons.reply).forEach { Ico(it, Color.White, 15.dp, 2.1f) }
             }
         }
     }

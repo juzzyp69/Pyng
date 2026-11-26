@@ -779,7 +779,6 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
         WhatsNewSheet(if (fresh != null && p.setupDone && !askPerms && p.seenVersion != fresh.version) fresh else null, onAll = { nav.go(Route.Section("versions")) }) {
             repo.prefs.edit { it.copy(seenVersion = com.jpetrydesign.pyng.BuildConfig.VERSION_NAME) }
         }
-        if (nav.strip) ColorStrip(onDone = { nav.closeStrip() })
     }
 }
 
@@ -1023,7 +1022,7 @@ class DragHolder {
 }
 
 /** A thin bright edge and a soft, light shadow: reads as glass rather than a solid disc. */
-private fun Modifier.glassRim(shape: androidx.compose.ui.graphics.Shape): Modifier = composed {
+internal fun Modifier.glassRim(shape: androidx.compose.ui.graphics.Shape): Modifier = composed {
     val t = LocalTok.current
     this.shadow(3.dp, shape, clip = false, ambientColor = t.shadow, spotColor = t.shadow)
         .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = if (t.dark) 0.28f else 0.75f), Color.White.copy(alpha = if (t.dark) 0.06f else 0.2f))), shape)

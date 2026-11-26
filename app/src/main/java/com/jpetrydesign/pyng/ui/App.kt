@@ -114,20 +114,11 @@ class Nav(start: Route) {
         private set
     val top get() = stack.last()
 
-    /** The app color strip shown over Home for a live preview. */
+    /** The App appearance color page, shown over whatever's open. */
     var strip by mutableStateOf(false)
-    private var stripReturn: List<Route>? = null
 
-    /** Shows the color strip over Home, remembering where you came from. */
-    fun openStrip() { stripReturn = stack.toList(); strip = true; home() }
-
-    /** Done with the color strip: back to the page you opened it from (Appearance), not Home. */
-    fun closeStrip() {
-        strip = false
-        val back = stripReturn ?: return
-        stripReturn = null
-        if (back.size > 1) { forward = true; stack.clear(); stack.addAll(back) }
-    }
+    fun openStrip() { strip = true }
+    fun closeStrip() { strip = false }
 
     /** Screens that grew out of something you tapped, and so drain back into it. */
     val morphs = mutableMapOf<Route, Morph>()
@@ -164,6 +155,9 @@ class Nav(start: Route) {
 }
 
 /** Lets the color sheet show the light or dark look while you edit it, whatever the phone is set to. */
+/** Pages that draw their own background (the photo viewer, the color page) set which status bar icons they need. */
+object BarIcons { var light by androidx.compose.runtime.mutableStateOf<Boolean?>(null) }
+
 object LookPreview { var dark by androidx.compose.runtime.mutableStateOf<Boolean?>(null) }
 
 @Composable
@@ -213,9 +207,10 @@ fun PyngRoot(repo: Repo, nav: Nav) {
     }
     // Status bar and gesture bar icons follow the app's light or dark look, not the phone's.
     val view = androidx.compose.ui.platform.LocalView.current
+    val lightIcons = BarIcons.light ?: t.dark
     androidx.compose.runtime.SideEffect {
         (view.context as? android.app.Activity)?.window?.let { w ->
-            androidx.core.view.WindowCompat.getInsetsController(w, view).apply { isAppearanceLightStatusBars = !t.dark; isAppearanceLightNavigationBars = !t.dark }
+            androidx.core.view.WindowCompat.getInsetsController(w, view).apply { isAppearanceLightStatusBars = !lightIcons; isAppearanceLightNavigationBars = !lightIcons }
         }
     }
     MaterialTheme(colorScheme = scheme) {
@@ -252,6 +247,7 @@ fun PyngRoot(repo: Repo, nav: Nav) {
                 ToastHost(toast, onUndo = { toast?.undo?.invoke(); toast = null }, Modifier.align(Alignment.BottomCenter))
                 com.jpetrydesign.pyng.ui.kit.AskDialog(repo.ask) { repo.ask = null }
                 com.jpetrydesign.pyng.ui.screens.PhotoCropper(repo.crop) { repo.crop = null }
+                if (nav.strip) com.jpetrydesign.pyng.ui.screens.AppColorPage { nav.closeStrip() }
                 Box(Modifier.align(Alignment.TopCenter)) {
                     CompositionLocalProvider(com.jpetrydesign.pyng.ui.kit.LocalHaze provides appHaze) {
                     com.jpetrydesign.pyng.ui.screens.InAppBanner(banner, onOpen = { id -> banner = null; nav.openChat(id) }, onClose = { banner = null })

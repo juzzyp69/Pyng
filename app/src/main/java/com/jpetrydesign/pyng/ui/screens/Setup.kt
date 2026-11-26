@@ -348,8 +348,8 @@ private fun ColorsStep(onDone: () -> Unit) {
         Spacer(Modifier.height(18.dp))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Palettes.solids.forEach { x ->
-                val on = p.themeKey == x.name
-                Column(Modifier.width(66.dp).clickable { repo.prefs.edit { it.copy(themeKey = x.name) } }, horizontalAlignment = Alignment.CenterHorizontally) {
+                val on = p.themeKey == x.key
+                Column(Modifier.width(66.dp).clickable { repo.prefs.edit { it.copy(themeKey = x.key) } }, horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
                         Modifier.size(54.dp).then(if (on) Modifier.border(2.dp, t.ink, CircleShape).padding(4.dp) else Modifier)
                             .clip(CircleShape).background(swatchOf(x)),
@@ -419,8 +419,8 @@ private fun StyleStep(onDone: () -> Unit) {
                     "Colors" -> {
                         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Palettes.solids.forEach { x ->
-                                val on = p.themeKey == x.name
-                                Column(Modifier.width(66.dp).clickable { repo.prefs.edit { it.copy(themeKey = x.name) } }, horizontalAlignment = Alignment.CenterHorizontally) {
+                                val on = p.themeKey == x.key
+                                Column(Modifier.width(66.dp).clickable { repo.prefs.edit { it.copy(themeKey = x.key) } }, horizontalAlignment = Alignment.CenterHorizontally) {
                                     Box(Modifier.size(54.dp).then(if (on) Modifier.border(2.dp, t.ink, CircleShape).padding(4.dp) else Modifier).clip(CircleShape).background(swatchOf(x)))
                                     Spacer(Modifier.height(6.dp))
                                     T(x.name, size = 11.5.sp, weight = FontWeight.Medium, color = t.soft, maxLines = 1)
