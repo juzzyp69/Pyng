@@ -463,7 +463,7 @@ private fun ColorDot(c: Color, on: Boolean, gap: Color, ink: Color, enabled: Boo
 internal fun PickerCard(cur: Hsv, tile: Color, onChange: (Hsv) -> Unit, onHex: () -> Unit) {
     var live by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxWidth().background(tile, RoundedCornerShape(26.dp)).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        SatCanvas(cur, live == "c", { live = if (it) "c" else null }, onChange, onHex)
+        SatCanvas(cur, live == "c", { live = if (it) "c" else null }, onChange, onTapKnob = onHex)
         HueBar(cur, live == "h", { live = if (it) "h" else null }, onChange)
     }
 }
