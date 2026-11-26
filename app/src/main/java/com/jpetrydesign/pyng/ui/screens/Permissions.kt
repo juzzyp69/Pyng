@@ -108,7 +108,7 @@ fun PermissionRows(onAnyResult: () -> Unit = {}) {
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             T("New text alerts", size = 15.5.sp, weight = FontWeight.SemiBold)
-            T("Notification access, so texts arrive without Pyng running all the time", size = 12.5.sp, color = t.soft)
+            T("So texts arrive without Pyng always running", size = 12.5.sp, color = t.soft)
         }
         Box(
             Modifier.height(36.dp).clip(RoundedCornerShape(18.dp)).background(if (wake) t.p else t.tone)

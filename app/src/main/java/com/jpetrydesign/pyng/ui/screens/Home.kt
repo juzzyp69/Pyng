@@ -488,7 +488,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
                             Spacer(Modifier.width(14.dp))
                             Column {
                                 T("Pin your favorite people", size = 14.5.sp, weight = FontWeight.SemiBold)
-                                T("Hold a conversation and drag it up here, or tap Pin. Up to 8 show here as big circles.", size = 12.5.sp, color = t.soft, lineHeight = 17.sp)
+                                T("Hold a chat and drag it here, or tap Pin.", size = 12.5.sp, color = t.soft, lineHeight = 17.sp)
                             }
                         }
                     }
@@ -1837,7 +1837,7 @@ private fun UnknownSheet(visible: Boolean, list: List<Conv>, nav: Nav, onDismiss
     LaunchedEffect(visible, list.size) { if (visible && list.isEmpty()) onDismiss() }
     PadSheet(visible, onDismiss) {
         T("Unknown senders", size = 20.sp, weight = FontWeight.SemiBold)
-        T("From numbers that aren't in your contacts. Nothing here is hidden unless you choose to.", size = 13.5.sp, color = t.soft, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
+        T("From numbers not in your contacts.", size = 13.5.sp, color = t.soft, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
         list.forEach { c ->
             Row(
                 Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(20.dp)).pane(RoundedCornerShape(20.dp)).clickable { onDismiss(); nav.openChat(c.id) }.padding(12.dp),
@@ -2000,7 +2000,7 @@ private fun NewCategorySheet(visible: Boolean, onDone: (String?) -> Unit) {
     var name by remember(visible) { mutableStateOf("") }
     PadSheet(visible, { onDone(null) }) {
         T("New category", size = 20.sp, weight = FontWeight.SemiBold)
-        T("Give it a short name. Then hold any chat and tap Move to add it.", size = 13.5.sp, color = t.soft, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
+        T("Then hold any chat and tap Move.", size = 13.5.sp, color = t.soft, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
         Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).pane(RoundedCornerShape(22.dp)).padding(horizontal = 16.dp, vertical = 14.dp)) {
             androidx.compose.foundation.text.BasicTextField(
                 name, { if (it.length <= 24) name = it }, singleLine = true,
@@ -2031,7 +2031,7 @@ private fun MoveToCategorySheet(c: Conv?, onDismiss: () -> Unit) {
         if (cur == null) return@PadSheet
         T("Move ${cur.shortTitle} to…", size = 20.sp, weight = FontWeight.SemiBold, maxLines = 1)
         Spacer(Modifier.height(12.dp))
-        if (p.categories.isEmpty()) T("You haven't made any categories yet. Tap + at the end of the category bar to make one.", size = 14.sp, color = t.soft, lineHeight = 20.sp)
+        if (p.categories.isEmpty()) T("No categories yet. Tap + at the end of the category bar.", size = 14.sp, color = t.soft, lineHeight = 20.sp)
         else com.jpetrydesign.pyng.ui.kit.Card {
             val inAny = p.categories.any { cur.id in it.chats }
             p.categories.forEachIndexed { i, k ->

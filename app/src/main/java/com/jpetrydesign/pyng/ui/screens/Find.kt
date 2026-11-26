@@ -431,9 +431,9 @@ private fun GroupDetails(
                 if (photo != null) T("Remove photo", size = 13.5.sp, weight = FontWeight.SemiBold, color = t.p,
                     modifier = Modifier.padding(top = 10.dp).clip(RoundedCornerShape(14.dp)).clickable { onPhoto(null) }.padding(horizontal = 10.dp, vertical = 6.dp))
                 Spacer(Modifier.height(if (photo != null) 14.dp else 28.dp))
-                SearchField(name, onName, "Group name (optional)", prefix = "Name")
+                SearchField(name, onName, "Optional", prefix = "Name")
                 Spacer(Modifier.height(10.dp))
-                T("Everyone in the group sees the name. The photo shows in Pyng only.", size = 13.sp, color = t.soft, align = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(horizontal = 12.dp))
+                T("Everyone sees the name. The photo is just for you.", size = 13.sp, color = t.soft, align = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(horizontal = 12.dp))
             }
         }
         PillButton(

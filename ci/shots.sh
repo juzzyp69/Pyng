@@ -54,6 +54,9 @@ WAIT=6 shot 00a0-thread-citrus-dark --es route thread:c1 --es theme d:Citrus --e
 WAIT=6 shot 00a0-thread-blue --es route thread:c1 --es theme Blue --es mode Light
 WAIT=6 shot 00a0-thread-denim --es route thread:c1 --es theme Denim --es mode Light
 WAIT=10 shot 00a0-review --es route thread:c9 --es open review
+WAIT=6 shot 00a0-chat-theme --es route theme:c1 --es mode Light --es theme d:Merlot
+WAIT=6 shot 00a0-contact --es route contact:c1
+WAIT=6 shot 00a0-section-notifications --es route section:notifications
 # 0.9.7 first: settings groups, theme card and picker, glass sliders, select, dark home, photo stack.
 WAIT=6 shot 00a-settings-groups --es route settings
 WAIT=6 shot 00a-appearance --es route appearance

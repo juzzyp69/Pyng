@@ -366,6 +366,8 @@ fun PhotoViewer(
                 showChrome, modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(top = 8.dp, start = 14.dp, end = 14.dp),
                 enter = appear(0f), exit = vanish(0f),
             ) {
+              Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) {
                 Row(Modifier.height(44.dp).clip(RoundedCornerShape(22.dp)).vFrost(vHaze, RoundedCornerShape(22.dp)).padding(start = 4.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(36.dp).clip(CircleShape).press(0.88f) { close() }.semantics { contentDescription = "Close" }, contentAlignment = Alignment.Center) { Ico(Icons.close, VInk, 19.dp, 2.2f) }
                     Spacer(Modifier.width(6.dp))
@@ -381,6 +383,13 @@ fun PhotoViewer(
                     val name = if (m.fromMe) "You" else m.sender.ifBlank { conv?.title ?: "" }
                     T(listOf(name, viewerTime(m.ts)).filter { it.isNotEmpty() }.joinToString(" · "), size = 14.sp, weight = FontWeight.SemiBold, color = VInk, maxLines = 1)
                 }
+                }
+                Spacer(Modifier.width(8.dp))
+                // Less-used actions as small circles on the right, like the editor's trash.
+                if (showInChat != null) { TopCircle("Go to chat", Icons.message, vHaze) { showInChat(m) }; Spacer(Modifier.width(8.dp)) }
+                TopCircle("Open in another app", OPEN_OUT, vHaze) { if (path.isNotEmpty()) openFile(ctx, path, ref.mime) else repo.toast("Still downloading") }
+                if (m.id.isNotEmpty()) { Spacer(Modifier.width(8.dp)); TopCircle("Delete", Icons.trash, vHaze) { onDelete(m) } }
+              }
             }
             // Bottom: one frosted dock with the set's thumbnails, then what you can do with this one.
             androidx.compose.animation.AnimatedVisibility(
@@ -431,14 +440,24 @@ fun PhotoViewer(
                                     ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType(ref.mime).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Share"))
                                 }
                             }
+                            if (m.id.isNotEmpty()) DockAction("Forward", Icons.forward) { onForward(m) }
                             if (m.id.isNotEmpty()) DockAction("Reply", Icons.reply) { onReply(m) }
                             if (m.id.isNotEmpty()) DockAction("React", Icons.heart, emoji = mine) { reacting = true }
-                            if (showInChat != null) DockAction("Go to chat", Icons.message) { showInChat(m) }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+private const val OPEN_OUT = "M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"
+
+/** A small frosted circle at the top of the viewer. */
+@Composable
+private fun TopCircle(label: String, icon: String, hz: dev.chrisbanes.haze.HazeState, onClick: () -> Unit) {
+    Box(Modifier.size(44.dp).clip(CircleShape).vFrost(hz, CircleShape).press(0.88f, onClick).semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
+        Ico(icon, VInk, 19.dp, 2.1f)
     }
 }
 

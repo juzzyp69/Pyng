@@ -146,14 +146,14 @@ fun SetupScreen(startStep: Int, onDone: () -> Unit, onLog: () -> Unit) {
             label = "setup",
         ) { s ->
             when (s) {
-                0 -> SetupPage(Icons.message, "Messages, Your Way", "Texts, chat features and group chats in one app that you can make yours.", "Get started", { step = 1 }) {
-                    Feature(0, Icons.pinned, "Your people, front and center", "Pin up to 8 favorites into your pinned chat bar")
-                    Feature(1, Icons.palette, "Make it yours", "Colors, duotones, a color wheel and themes")
-                    Feature(2, Icons.shield, "Private and secure", "Messages stay between your phone and Google Messages, and nothing is shared with anyone else")
+                0 -> SetupPage(Icons.message, "Messages, your way", "Texts, chat features and group chats, in one app you make yours.", "Get started", { step = 1 }) {
+                    Feature(0, Icons.pinned, "Your people, front and center", "Pin up to 8 favorites at the top")
+                    Feature(1, Icons.palette, "Make it yours", "Colors, duotones and gradients")
+                    Feature(2, Icons.shield, "Private and secure", "Messages stay between your phone and Google Messages")
                 }
                 1 -> Permissions { step = 2 }
                 2 -> SetupPage(
-                    Icons.link, "Turn On Chat Features",
+                    Icons.link, "Turn on chat features",
                     "Typing, read receipts, group names and HD media come from RCS, borrowed from Google Messages.",
                     if (link == "done") "Continue" else "Link Google Messages",
                     { if (link == "done") step = 3 else { error = null; link = "signin" } },
@@ -312,7 +312,7 @@ private fun Permissions(onNext: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { onNext() }
     SetupPage(
-        Icons.shield, "A Few Permissions", "Only what the app needs. You can change these any time in Android settings.",
+        Icons.shield, "A few permissions", "Only what Pyng needs. Change them any time in Android settings.",
         "Allow and continue", {
             val need = missingPerms(ctx).flatMap { it.perms }
             if (need.isEmpty()) onNext() else launcher.launch(need.toTypedArray())
@@ -328,7 +328,7 @@ private fun ColorsStep(onDone: () -> Unit) {
     val repo = LocalRepo.current
     val t = LocalTok.current
     val p = repo.prefs.state
-    SetupPage(Icons.palette, "Pick Your Colors", "Change this any time, or make your own with the color wheel in Appearance.", "Start messaging", onDone) {
+    SetupPage(Icons.palette, "Pick your colors", "Change this any time in Appearance.", "Start messaging", onDone) {
         Box(Modifier.enter(3)) {
             WhiteCard {
                 Column(Modifier.padding(18.dp)) {
@@ -378,7 +378,7 @@ private fun StyleStep(onDone: () -> Unit) {
     Column(Modifier.fillMaxSize().systemBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
         Column(Modifier.widthIn(max = 560.dp).fillMaxWidth().padding(horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(18.dp))
-            T("Choose Your Style", size = 27.sp, weight = FontWeight.Bold, letterSpacing = (-0.6).sp, modifier = Modifier.enter(0))
+            T("Choose your style", size = 27.sp, weight = FontWeight.Bold, letterSpacing = (-0.6).sp, modifier = Modifier.enter(0))
             T("Tap around. You can change all of it later.", size = 14.sp, color = t.soft, modifier = Modifier.padding(top = 4.dp).enter(1))
             Spacer(Modifier.height(14.dp))
             // The preview: your home screen for pinned chats, the animation for Send, reactions for

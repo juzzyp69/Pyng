@@ -563,7 +563,7 @@ fun SelectTextSheet(m: Msg?, onDismiss: () -> Unit) {
     com.jpetrydesign.pyng.ui.kit.Sheet(m != null, onDismiss) {
         val cur = last ?: return@Sheet
         T("Select text", size = 18.sp, weight = FontWeight.Bold, modifier = Modifier.padding(start = 22.dp, end = 22.dp, bottom = 2.dp))
-        T("Hold a word, then drag the handles to choose what you want. Copy shows up above it.", size = 12.5.sp, color = t.soft, lineHeight = 17.sp,
+        T("Hold a word, then drag the handles.", size = 12.5.sp, color = t.soft, lineHeight = 17.sp,
             modifier = Modifier.padding(horizontal = 22.dp))
         Spacer(Modifier.height(12.dp))
         androidx.compose.foundation.layout.Box(

@@ -333,20 +333,20 @@ fun SectionScreen(nav: Nav, key: String) {
             "versions" -> VersionHistory()
             "chats" -> {
                 Group("Conversation") {
-                    TogRow("Smart replies", "smart", "Suggestions above the keyboard"); Hairline()
-                    TogRow("Typing indicators", "typing", "Show when people are typing, and let them see when you are"); Hairline()
-                    TogRow("Voice message button", "micBtn", "Show the mic next to the message box"); Hairline()
-                    TogRow("Transcribe voice messages", "autoTranscribe", "Turn voice messages into text automatically, right on your phone"); Hairline()
-                    TogRow("Hide swear words", "maskWords", "Bleep out curse words in voice message transcripts"); Hairline()
-                    TogRow("Link previews", "previews", "Show a preview card for links"); Hairline()
-                    TogRow("Enter key sends", "enterSend", "Your keyboard's enter key sends instead of adding a line"); Hairline()
-                    TogRow("Undo send", "undoSend", "A few seconds to take back a message after you send it")
+                    TogRow("Smart replies", "smart"); Hairline()
+                    TogRow("Typing indicators", "typing"); Hairline()
+                    TogRow("Voice message button", "micBtn"); Hairline()
+                    TogRow("Transcribe voice messages", "autoTranscribe", "Done on your phone"); Hairline()
+                    TogRow("Hide swear words in transcripts", "maskWords"); Hairline()
+                    TogRow("Link previews", "previews"); Hairline()
+                    TogRow("Enter key sends", "enterSend"); Hairline()
+                    TogRow("Undo send", "undoSend", "A few seconds to take it back")
                 }
                 // Whether others see that you've read their texts is Google Messages' setting, so this points there.
                 Group("Read receipts") {
                     ListRow(
                         "Send read receipts",
-                        "Lets people see when you've read their texts. This lives in Google Messages, tap to open it",
+                        "Set in Google Messages",
                         onClick = {
                             repo.ask = com.jpetrydesign.pyng.data.Repo.Ask(
                                 "Open Google Messages?",
@@ -360,8 +360,8 @@ fun SectionScreen(nav: Nav, key: String) {
                     )
                 }
                 Group("Reactions & effects") {
-                    ListRow("Quick reactions", p.quickReacts.joinToString("  "), onClick = { nav.go(Route.ReactPick) }); Hairline()
-                    TogRow("Message effects", "effects", "Confetti, balloons and hearts for phrases like \"happy birthday\"")
+                    ValueRow("Quick reactions", p.quickReacts.joinToString(" ")) { nav.go(Route.ReactPick) }; Hairline()
+                    TogRow("Message effects", "effects", "Confetti for \"happy birthday\" and more")
                 }
                 Group("Media & GIFs") {
                     SegRow("Auto-download media", "autoDl", listOf("Always", "Wi-Fi only", "Never")); Hairline()
@@ -371,24 +371,24 @@ fun SectionScreen(nav: Nav, key: String) {
                 Group("Gestures & layout") {
                     SegRow("Swipe a conversation right to", "swipeR", listOf("Read/Unread", "Archive", "Delete", "Pin", "Mute", "Off")); Hairline()
                     SegRow("Swipe a conversation left to", "swipe", listOf("Archive", "Read/Unread", "Delete", "Pin", "Mute", "Off")); Hairline()
-                    SegRow("Timestamps", "stamps", listOf("Grouped", "Every message"), "Grouped shows a time between bursts. Tap beside any message for its status.")
+                    SegRow("Timestamps", "stamps", listOf("Grouped", "Every message"))
                 }
             }
             "notifications" -> {
                 Group("Alerts") {
-                    TogRow("Notifications", "notif", "Alerts for new messages"); Hairline()
+                    TogRow("Notifications", "notif"); Hairline()
                     TogRow("Vibrate", "vibrate"); Hairline()
-                    TogRow("Reply and mark as read from notifications", "quick"); Hairline()
-                    TogRow("Chat bubbles", "bubbles", "Chats can float as bubbles over other apps. Tap the bubble icon on a notification to start one."); Hairline()
-                    ListRow("Bubble settings", "Choose which chats can bubble in Android settings", onClick = {
+                    TogRow("Reply from notifications", "quick"); Hairline()
+                    TogRow("Chat bubbles", "bubbles", "Chats float over other apps"); Hairline()
+                    ListRow("Choose which chats bubble", onClick = {
                         runCatching { ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_BUBBLE_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, ctx.packageName)) }
                     })
                 }
                 Group("Quiet hours") {
-                    TogRow("Quiet hours", "quiet", "No sound or vibration while you sleep. Texts still arrive."); Hairline()
+                    TogRow("Quiet hours", "quiet", "Silent, texts still arrive"); Hairline()
                     TimeRow("From", "quietFrom"); Hairline()
                     TimeRow("To", "quietTo"); Hairline()
-                    TogRow("Let pinned chats through", "quietFavs", "Texts from chats you pinned still alert you")
+                    TogRow("Let pinned chats through", "quietFavs")
                 }
                 Group("New texts") {
                     // Re-check access each time this screen shows.
@@ -402,14 +402,14 @@ fun SectionScreen(nav: Nav, key: String) {
                     val access = com.jpetrydesign.pyng.data.Link.listenerOn(ctx)
                     ListRow(
                         "Wake for new texts",
-                        if (access) "On. Pyng sleeps until Google Messages gets a text, then shows it here." else "Off. Tap to allow notification access so texts reach you without Pyng running all the time.",
+                        if (access) null else "Needs notification access",
                         onClick = { openListenerSettings(ctx) },
                         trailing = { Toggle(access) },
                     )
                     Hairline()
-                    TogRow("Hide Google Messages' alerts", "hideGmAlerts", "Clears Google Messages' copy so you only see Pyng's. Keep Google Messages' notifications on (set them to Silent so your phone only buzzes once). Codes and other texts Android hides are always left alone")
+                    TogRow("Hide Google Messages' alerts", "hideGmAlerts", "So you only see Pyng's")
                     Hairline()
-                    TogRow("Offer Pyng for text links", "smsLinks", "Tapping a text link or a Text button in another app asks whether to open Google Messages or Pyng") { on ->
+                    TogRow("Offer Pyng for text links", "smsLinks") { on ->
                         runCatching {
                             ctx.packageManager.setComponentEnabledSetting(
                                 android.content.ComponentName(ctx, "com.jpetrydesign.pyng.SmsLinks"),
@@ -419,22 +419,21 @@ fun SectionScreen(nav: Nav, key: String) {
                         }
                     }
                     Hairline()
-                    ListRow("Silence Google Messages", "Set its notifications to Silent (not off) so you only hear Pyng", onClick = {
+                    ListRow("Silence Google Messages", "Set to Silent, not off", onClick = {
                         runCatching { ctx.startActivity(Intent(SysSettings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(SysSettings.EXTRA_APP_PACKAGE, com.jpetrydesign.pyng.data.GmListener.GM)) }
                     })
                     Hairline()
-                    TogRow("Always connected", "alwaysOn", "Faster, but runs in the background all the time and uses more battery") { on ->
+                    TogRow("Always connected", "alwaysOn", "Faster, uses more battery") { on ->
                         if (on) LinkService.start(ctx) else LinkService.stop(ctx)
                     }
                     Hairline()
-                    ListRow("Sound and lock screen", "Choose the notification sound in Android settings", onClick = {
+                    ListRow("Sound and lock screen", onClick = {
                         runCatching {
                             ctx.startActivity(Intent(SysSettings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(SysSettings.EXTRA_APP_PACKAGE, ctx.packageName).putExtra(SysSettings.EXTRA_CHANNEL_ID, "messages"))
                         }
                     })
                 }
-                Note("If Android says notification access is a restricted setting: open App info for Messages, tap ⋮ in the top corner, choose Allow restricted settings, then try again.")
-                Note("Each chat can turn its own alerts off in its contact card. Do Not Disturb follows your phone settings.")
+                Note("If Android says notification access is restricted: open App info for Pyng, tap ⋮, choose Allow restricted settings, then try again.")
             }
             "chatfeat" -> {
                 Group("Status") {
@@ -444,69 +443,65 @@ fun SectionScreen(nav: Nav, key: String) {
                         Spacer(Modifier.width(12.dp))
                         Column {
                             T(when (conn) { "ready", "idle" -> "Connected"; "phone_not_responding" -> "Your phone isn't responding"; "relink" -> "Link Google Messages again"; "error" -> "Connection problem"; else -> "Connecting…" }, size = 15.5.sp, weight = FontWeight.SemiBold)
-                            T("Linked through Google Messages on your phone", size = 12.5.sp, color = t.soft)
                         }
                     }
                     repo.sims.forEach { s ->
                         Hairline()
-                        ListRow(s.name.ifBlank { "SIM" }, (s.number.ifBlank { "Number hidden" }) + if (s.rcs) " · chat features on" else " · texts only", icon = Icons.sim, trailing = null)
+                        ListRow(s.name.ifBlank { "SIM" }, (s.number.ifBlank { "Number hidden" }) + if (s.rcs) " · Chat features" else " · Texts only", icon = Icons.sim, trailing = null)
                     }
                     Hairline()
-                    ListRow("Reconnect", "Use if new messages stop arriving", onClick = { repo.refresh(); repo.toast("Reconnecting…") })
+                    ListRow("Reconnect", onClick = { repo.refresh(); repo.toast("Reconnecting…") })
                 }
                 Group(null) {
-                    ListRow("Unlink Google Messages", "Signs this app out. Your messages stay in Google Messages.", icon = Icons.logout, danger = true, onClick = {
+                    ListRow("Unlink Google Messages", "Your messages stay in Google Messages", icon = Icons.logout, danger = true, onClick = {
                         repo.unpair(); LinkService.stop(ctx)
                     }, trailing = null)
                 }
-                Note("Chat features (RCS) come from Google Messages running on your phone. Group names, reactions, typing and read receipts only reach people who also have chat features on.")
             }
             "privacy" -> {
                 Group("Permissions") { PermissionRows() }
                 Group("Protection") {
-                    TogRow("Spam protection", "spam", "Checks unknown senders and their links on this phone"); Hairline()
-                    ListRow("Spam & blocked", "Chats Google Messages marked as spam, and numbers you blocked", onClick = { nav.go(Route.Lists("spam")) }); Hairline()
-                    TogRow("Filter unknown senders", "unknownFilter", "Texts from numbers that aren't in your contacts get a slim banner to review them. Nothing is hidden unless you choose."); Hairline()
-                    ListRow("Blocked words", if (p.blockedWords.isEmpty()) "Texts with these words go to Spam, with no alert" else "${p.blockedWords.size} word" + (if (p.blockedWords.size > 1) "s" else "") + " · texts with them go to Spam", onClick = { nav.go(Route.Section("blockedWords")) }); Hairline()
-                    TogRow("Copy buttons for codes", "otpChip", "Shows a Copy button for verification codes in your list"); Hairline()
-                    TogRow("Copy codes automatically", "otpAuto", "New verification codes go straight to your clipboard, so your keyboard can suggest them"); Hairline()
-                    TogRow("Delete codes after 24 hours", "autoDelCodes", "Verification texts clear themselves a day after they arrive")
+                    TogRow("Spam protection", "spam"); Hairline()
+                    ListRow("Spam & blocked", onClick = { nav.go(Route.Lists("spam")) }); Hairline()
+                    TogRow("Filter unknown senders", "unknownFilter"); Hairline()
+                    ValueRow("Blocked words", if (p.blockedWords.isEmpty()) "" else "${p.blockedWords.size}") { nav.go(Route.Section("blockedWords")) }; Hairline()
+                    TogRow("Copy buttons for codes", "otpChip"); Hairline()
+                    TogRow("Copy codes automatically", "otpAuto"); Hairline()
+                    TogRow("Delete codes after 24 hours", "autoDelCodes")
                 }
                 Group("App lock") {
-                    TogRow("Lock with fingerprint", "bioLock", "Require your fingerprint or face to open Messages"); Hairline()
-                    TogRow("Hide in recent apps", "hideSwitcher", "Blank out conversations in the app switcher and block screenshots")
+                    TogRow("Lock with fingerprint", "bioLock"); Hairline()
+                    TogRow("Hide in recent apps", "hideSwitcher", "Also blocks screenshots")
                 }
             }
             "access" -> {
                 Group("Text") {
                     Column(Modifier.padding(16.dp)) {
                         T("Text size", size = 15.5.sp, weight = FontWeight.SemiBold)
-                        T("Messages and your conversation list", size = 12.5.sp, color = t.soft)
                         Spacer(Modifier.height(10.dp))
                         Chips(listOf("S", "M", "L", "XL"), p.textSize, { v -> repo.prefs.edit { it.copy(textSize = v) } })
                     }
                     Hairline()
-                    TogRow("Bold text", "boldText", "Heavier text in chats and your conversation list"); Hairline()
-                    TogRow("High contrast", "highContrast", "Darker secondary text, stronger dividers and fields")
+                    TogRow("Bold text", "boldText"); Hairline()
+                    TogRow("High contrast", "highContrast")
                 }
                 Group("Visual") {
-                    TogRow("Reduce transparency", "reduceBlur", "Solid surfaces instead of frosted glass"); Hairline()
-                    TogRow("Reduce motion", "reduceMotion", "Turns off animations like typing dots and effects")
+                    TogRow("Reduce transparency", "reduceBlur"); Hairline()
+                    TogRow("Reduce motion", "reduceMotion")
                 }
                 Group("Audio") {
-                    TogRow("Read messages aloud", "readAloud", "Adds \"Read aloud\" when you long-press a message"); Hairline()
-                    TogRow("Raise to listen", "raiseListen", "Lift your phone to your ear while a voice message plays to hear it through the earpiece")
+                    TogRow("Read messages aloud", "readAloud", "Hold a message, then Read aloud"); Hairline()
+                    TogRow("Raise to listen", "raiseListen", "Voice messages through the earpiece")
                 }
                 val scale = remember { runCatching { SysSettings.Global.getFloat(ctx.contentResolver, SysSettings.Global.ANIMATOR_DURATION_SCALE, 1f) }.getOrDefault(1f) }
                 if (scale == 0f) {
                     Spacer(Modifier.height(12.dp))
                     Card {
-                        ListRow("Android animations are off", "Your phone's \"Remove animations\" setting turns off motion in every app, including this one. Tap to open accessibility settings.", icon = Icons.access, onClick = {
+                        ListRow("Android animations are off", "Turn them on in accessibility settings", icon = Icons.access, onClick = {
                             runCatching { ctx.startActivity(Intent(SysSettings.ACTION_ACCESSIBILITY_SETTINGS)) }
                         })
                     }
                 }
-                Note("These work alongside your phone's accessibility settings, including system font size and TalkBack.")
             }
             "blockedWords" -> BlockedWords()
             "categories" -> Categories()
@@ -514,8 +509,8 @@ fun SectionScreen(nav: Nav, key: String) {
                 var size by remember { mutableStateOf(-1L) }
                 LaunchedEffect(Unit) { size = withContext(Dispatchers.IO) { repo.cacheBytes() } }
                 Group("Usage") {
-                    ListRow("Cached photos and files", if (size < 0) "Calculating…" else sizeText(size).ifEmpty { "Nothing cached" }, icon = Icons.storage, trailing = null); Hairline()
-                    ListRow("Clear cache", "Photos download again when you open them", onClick = { repo.clearCache(); size = 0 })
+                    ListRow("Cached photos and files", icon = Icons.storage, trailing = { T(if (size < 0) "…" else sizeText(size).ifEmpty { "None" }, size = 14.sp, color = t.soft) }); Hairline()
+                    ListRow("Clear cache", onClick = { repo.clearCache(); size = 0 }, trailing = null)
                 }
                 val ctxB = LocalContext.current
                 val saveTo = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -532,22 +527,27 @@ fun SectionScreen(nav: Nav, key: String) {
                 }
                 Group("Backup") {
                     val last = p.opt("lastBackup").toLongOrNull()
-                    ListRow("Back up now", if (last == null) "Saves your settings, looks, categories, stars and Trash to a file" else "Last backup: " + java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault()).format(java.util.Date(last)), icon = Icons.download, onClick = {
+                    ListRow("Back up now", if (last == null) null else "Last: " + java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault()).format(java.util.Date(last)), icon = Icons.download, onClick = {
                         saveTo.launch("pyng-backup-" + java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date()) + ".json")
                     }); Hairline()
-                    ListRow("Restore from backup", "Pick a Pyng backup file to bring everything back", icon = Icons.restore, onClick = { openFrom.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) })
+                    ListRow("Restore from backup", icon = Icons.restore, onClick = { openFrom.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) })
                 }
-                Group("Trash") {
-                    ListRow("Trash", if (p.trash.isEmpty()) "Empty · deleted things wait here 30 days" else "${p.trash.size} item" + (if (p.trash.size > 1) "s" else "") + " · kept 30 days", icon = Icons.trash, onClick = { nav.go(Route.Lists("trash")) })
+                Group(null) {
+                    ListRow("Trash", "Kept 30 days", icon = Icons.trash, onClick = { nav.go(Route.Lists("trash")) }, trailing = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (p.trash.isNotEmpty()) { T("${p.trash.size}", size = 14.sp, color = t.soft); Spacer(Modifier.width(10.dp)) }
+                            Ico(Icons.chev, t.faint, 16.dp, 2f)
+                        }
+                    })
                 }
-                Note("Your messages and media are kept and backed up by Google Messages with your Google account. This app only keeps its own settings and a cache.")
+                Note("Your messages are backed up by Google Messages. Pyng only keeps its settings and a cache.")
             }
             else -> {
                 Group(null) {
-                    ListRow("Version", BuildConfig.VERSION_NAME + " · See what's new", onClick = { nav.go(Route.Section("versions")) }); Hairline()
-                    ListRow("Debug log", "Share this if something isn't working", onClick = { nav.go(Route.Log) }); Hairline()
-                    ListRow("Replay setup", "See the welcome screens again", onClick = { nav.replace(Route.Setup(0)) }); Hairline()
-                    ListRow("Open-source licenses", "libgm (AGPL-3.0) · Google Sans Flex and Geist fonts (OFL)", onClick = {
+                    ValueRow("What's new", BuildConfig.VERSION_NAME) { nav.go(Route.Section("versions")) }; Hairline()
+                    ListRow("Debug log", onClick = { nav.go(Route.Log) }); Hairline()
+                    ListRow("Replay setup", onClick = { nav.replace(Route.Setup(0)) }); Hairline()
+                    ListRow("Open-source licenses", onClick = {
                         runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/mautrix/gmessages"))) }
                     })
                 }
@@ -555,6 +555,18 @@ fun SectionScreen(nav: Nav, key: String) {
         }
     }
     @Suppress("UNUSED_EXPRESSION") app
+}
+
+/** A row that opens something, with its current value on the right. */
+@Composable
+private fun ValueRow(label: String, value: String, onClick: () -> Unit) {
+    val t = LocalTok.current
+    ListRow(label, onClick = onClick, trailing = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (value.isNotEmpty()) { T(value, size = 14.sp, color = t.soft, maxLines = 1); Spacer(Modifier.width(10.dp)) }
+            Ico(Icons.chev, t.faint, 16.dp, 2f)
+        }
+    })
 }
 
 @Composable

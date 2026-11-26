@@ -202,13 +202,9 @@ object Palettes {
         return base.copy(plus = plus, plusInk = if (plus.luminance() > 0.36f) hex("#16181D") else Color.White)
     }
 
-    fun chatCustom(look: ChatLook): Pal {
-        val base = fromColor(look.c1, "Custom · ${look.mode}")
-        if (look.mode == "Mono") return base
-        val p2 = look.c2.color()
-        val extra = base.copy(plus = p2, plusInk = if (p2.luminance() > 0.36f) hex("#16181D") else Color.White, s = hsl(look.c2.h, look.c2.s * 60f, 80f))
-        return if (look.mode == "Gradient") extra.copy(grad = base.p to p2) else extra
-    }
+    /** A chat's own colors: one, two, or two blended, made the same way as the app's. */
+    fun chatCustom(look: ChatLook): Pal =
+        byKey(when (look.mode) { "Duotone" -> "Custom duotone"; "Gradient" -> "Custom gradient"; else -> "Custom color" }, look.c1, look.c2)
 
     /**
      * Your own colors: "Custom color" (one), "Custom duotone" (two) or "Custom gradient" (two, blended),

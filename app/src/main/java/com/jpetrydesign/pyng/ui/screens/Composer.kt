@@ -938,7 +938,7 @@ private fun LocationPanel(t: Tok, onBack: () -> Unit, onSend: (String) -> Unit) 
                     T("Accurate to ${l.accuracy.toInt()} m · opens in Google Maps", size = 12.5.sp, color = t.soft)
                 }
             }
-        } else if (failed) T("Couldn't find your location. Check that location is on and allowed for Messages.", size = 13.5.sp, color = t.soft, lineHeight = 19.sp)
+        } else if (failed) T("Couldn't find your location. Check that location is on.", size = 13.5.sp, color = t.soft, lineHeight = 19.sp)
     }
 }
 
@@ -1014,7 +1014,7 @@ private fun SchedulePanel(t: Tok, onBack: () -> Unit, onPick: (Pair<Long, String
         }.padding(horizontal = 14.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(36.dp).clip(CircleShape).background(t.fill), contentAlignment = Alignment.Center) { Ico(Icons.cal, t.onFill, 18.dp) }
             Spacer(Modifier.width(12.dp))
-            Column { T("Pick date and time", size = 15.sp, weight = FontWeight.SemiBold); T("Choose exactly when it sends", size = 12.5.sp, color = t.soft) }
+            Column { T("Pick date and time", size = 15.sp, weight = FontWeight.SemiBold) }
         }
         Spacer(Modifier.height(8.dp))
         T("Suggested", size = 12.sp, weight = FontWeight.SemiBold, color = t.soft, modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 2.dp))

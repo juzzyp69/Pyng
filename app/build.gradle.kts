@@ -15,7 +15,7 @@ android {
         minSdk = 31
         targetSdk = 35
         versionCode = buildNumber
-        versionName = "0.9.7.5"
+        versionName = "0.9.7.6"
         buildConfigField("String", "GIPHY_KEY", "\"" + (System.getenv("GIPHY_KEY") ?: "") + "\"")
         buildConfigField("String", "KLIPY_KEY", "\"" + (System.getenv("KLIPY_KEY") ?: "") + "\"")
     }

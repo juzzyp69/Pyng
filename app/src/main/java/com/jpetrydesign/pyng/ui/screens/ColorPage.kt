@@ -19,6 +19,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -125,14 +128,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** A color as the canvas edits it: hue, saturation across, brightness down. */
-private data class Hsv(val h: Float, val s: Float, val v: Float) {
+internal data class Hsv(val h: Float, val s: Float, val v: Float) {
     fun color(): Color = Color(android.graphics.Color.HSVToColor(floatArrayOf(h.coerceIn(0f, 359.9f), s.coerceIn(0f, 1f), v.coerceIn(0f, 1f))))
 }
 
-private fun Color.hsv(): Hsv { val a = FloatArray(3); android.graphics.Color.colorToHSV(toArgb(), a); return Hsv(a[0], a[1], a[2]) }
+internal fun Color.hsv(): Hsv { val a = FloatArray(3); android.graphics.Color.colorToHSV(toArgb(), a); return Hsv(a[0], a[1], a[2]) }
 
 /** What's being picked, before it's saved: the mode, one color or two (blended or not), a preset or your own, tinted or plain. */
-private data class Draft(val mode: String, val style: String, val preset: String?, val tint: Boolean, val a: Hsv, val b: Hsv) {
+internal data class Draft(val mode: String, val style: String, val preset: String?, val tint: Boolean, val a: Hsv, val b: Hsv) {
     val key: String get() = preset ?: (when (style) { "duo" -> "Custom duotone"; "grad" -> "Custom gradient"; else -> "Custom color" } + if (tint) "" else " flat")
     fun look() = AppLook(key, toHsl(a.color()), toHsl(b.color()))
     fun pal(): Pal { val l = look(); return Palettes.byKey(l.key, l.c1, l.c2) }
@@ -140,15 +143,23 @@ private data class Draft(val mode: String, val style: String, val preset: String
     val sig: String get() = mode + "|" + key + if (preset == null) "|" + a.color().hexString() + (if (style != "solid") b.color().hexString() else "") else ""
 }
 
-private fun styleOf(kind: String) = when (kind) { "Duotone" -> "duo"; "Gradient" -> "grad"; else -> "solid" }
+/** A property that reads and writes through to whichever draft is being edited. */
+private class Pick(val get: () -> Draft, val put: (Draft) -> Unit) {
+    operator fun getValue(r: Any?, k: kotlin.reflect.KProperty<*>): Draft = get()
+    operator fun setValue(r: Any?, k: kotlin.reflect.KProperty<*>, v: Draft) = put(v)
+}
 
-private fun presetDraft(d: Draft, x: Pal): Draft {
+internal fun styleOfSaved(mode: String) = when (mode) { "Duotone" -> "duo"; "Gradient" -> "grad"; else -> "solid" }
+
+internal fun styleOf(kind: String) = when (kind) { "Duotone" -> "duo"; "Gradient" -> "grad"; else -> "solid" }
+
+internal fun presetDraft(d: Draft, x: Pal): Draft {
     val st = styleOf(Palettes.kindOf(x.key))
     val second = if (x.inB != null) x.pd else (x.grad?.second ?: x.plus ?: x.pd)
     return d.copy(style = st, preset = x.key, tint = Palettes.plain.none { it.key == x.key }, a = x.p.hsv(), b = if (st == "solid") d.b else second.hsv())
 }
 
-private fun draftOf(mode: String, lk: AppLook): Draft {
+internal fun draftOf(mode: String, lk: AppLook): Draft {
     val base = Draft(mode, "solid", null, true, lk.c1.color().hsv(), lk.c2.color().hsv())
     if (lk.key.startsWith("Custom")) {
         val st = when (lk.key.removeSuffix(" flat")) { "Custom duotone" -> "duo"; "Custom gradient" -> "grad"; else -> "solid" }
@@ -177,23 +188,32 @@ fun AppColorPage(onClose: () -> Unit) {
     val sysDark = isSystemInDarkTheme()
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
-    // With light and dark set apart, this edits the half that's showing.
-    val ed = remember { (StripTarget.dark.also { StripTarget.dark = null } ?: sysDark) && p.splitLooks }
-    val start = remember { draftOf(p.mode, p.lookFor(ed)) }
-    var saved by remember { mutableStateOf(start) }
-    var d by remember { mutableStateOf(start) }
+    // Light and dark can each have their own color (under System). Both halves are drafts until Done.
+    var dl by remember { mutableStateOf(draftOf(p.mode, p.lookFor(false))) }
+    var dd by remember { mutableStateOf(draftOf(p.mode, p.lookFor(true))) }
+    var split by remember { mutableStateOf(p.opt("splitLooks") == "1") }
+    var editDark by remember { mutableStateOf(StripTarget.dark.also { StripTarget.dark = null } ?: sysDark) }
+    val splitOn = split && dl.mode == "Match system"
+    val onDark = splitOn && editDark
+    // The half being edited.
+    var d by Pick({ if (onDark) dd else dl }) { v -> if (onDark) dd = v.copy(mode = dl.mode) else { dl = v; if (dd.mode != v.mode) dd = dd.copy(mode = v.mode) } }
+    fun sigAll() = dl.sig + "|" + (if (splitOn) "split|" + dd.sig else "")
+    var saved by remember { mutableStateOf(sigAll()) }
+    val lib = remember { ThemeLibrary() }
     var slot by remember { mutableStateOf("a") }
     var live by remember { mutableStateOf<String?>(null) }
     var front by remember { mutableStateOf("chat") }
     var asking by remember { mutableStateOf(false) }
     var hexOpen by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
-    val dark = when (d.mode) { "Dark" -> true; "Light" -> false; else -> sysDark }
+    val dark = if (splitOn) editDark else when (dl.mode) { "Dark" -> true; "Light" -> false; else -> sysDark }
     val pal = remember(d.sig, d.key) { d.pal() }
+    val palL = remember(dl.sig) { dl.pal() }
+    val palD = if (splitOn) remember(dd.sig) { dd.pal() } else palL
     val solid = app.solid
     val L = remember(pal, dark, solid) { tok(pal, dark, solid) }
-    val Ll = remember(pal, solid) { tok(pal, false, solid) }
-    val Ld = remember(pal, solid) { tok(pal, true, solid) }
+    val Ll = remember(palL, solid) { tok(palL, false, solid) }
+    val Ld = remember(palD, solid) { tok(palD, true, solid) }
     val two = d.style != "solid"
     if (!two && slot == "b") slot = "a"
     val cur = if (slot == "b") d.b else d.a
@@ -205,13 +225,14 @@ fun AppColorPage(onClose: () -> Unit) {
     var leaving by remember { mutableStateOf(false) }
     fun close() { if (leaving) return; leaving = true; asking = false; scope.launch { slide.animateTo(1f, tween(240)); onClose() } }
     fun save() {
-        val look = d.look()
-        repo.prefs.edit { it.copy(mode = d.mode) }
-        repo.prefs.editLook(ed) { it.copy(key = look.key, c1 = look.c1, c2 = look.c2) }
-        saved = d; asking = false; saving = true
+        val l = dl.look()
+        repo.prefs.edit { it.copy(mode = dl.mode, opts = it.opts + ("splitLooks" to if (split) "1" else "")) }
+        repo.prefs.editLook(false) { it.copy(key = l.key, c1 = l.c1, c2 = l.c2) }
+        if (splitOn) { val k = dd.look(); repo.prefs.editLook(true) { it.copy(key = k.key, c1 = k.c1, c2 = k.c2) } }
+        saved = sigAll(); asking = false; saving = true
         scope.launch { delay(750); close() }
     }
-    val dirty = d.sig != saved.sig
+    val dirty = sigAll() != saved
     fun back() { if (hexOpen) hexOpen = false else if (asking) asking = false else if (dirty && !saving) asking = true else close() }
     BackHandler(onBack = ::back)
     // Status bar icons follow the look you're trying, not the one behind.
@@ -249,11 +270,11 @@ fun AppColorPage(onClose: () -> Unit) {
                     // Light, Dark or System, each with a tiny look at itself.
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         listOf("Light" to "Light", "Dark" to "Dark", "Match system" to "System").forEach { (m, label) ->
-                            val on = d.mode == m
+                            val on = dl.mode == m
                             val shape = RoundedCornerShape(18.dp)
                             Column(
                                 Modifier.weight(1f).clip(shape).background(tile).border(if (on) 2.dp else 1.dp, if (on) sel else soft.copy(alpha = 0.16f), shape)
-                                    .clickable { d = d.copy(mode = m) }.padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 9.dp),
+                                    .clickable { dl = dl.copy(mode = m); dd = dd.copy(mode = m) }.padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 9.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 val mini = when (m) { "Light" -> Brush.linearGradient(listOf(Ll.bg, Ll.bg)); "Dark" -> Brush.linearGradient(listOf(Ld.bg, Ld.bg))
@@ -272,6 +293,25 @@ fun AppColorPage(onClose: () -> Unit) {
                             }
                         }
                     }
+                    // Under System: light and dark can each get their own color.
+                    AnimatedVisibility(dl.mode == "Match system", enter = androidx.compose.animation.expandVertically(spring(dampingRatio = 0.8f, stiffness = 380f)) + fadeIn(), exit = androidx.compose.animation.shrinkVertically() + fadeOut()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Row(
+                                Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).clickable {
+                                    // Turning it on starts the dark look from the light one.
+                                    if (!split) dd = dl.copy()
+                                    split = !split
+                                }.padding(horizontal = 4.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                T("Separate light & dark", size = 15.sp, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                com.jpetrydesign.pyng.ui.kit.Toggle(split)
+                            }
+                            AnimatedVisibility(split, enter = androidx.compose.animation.expandVertically() + fadeIn(), exit = androidx.compose.animation.shrinkVertically() + fadeOut()) {
+                                com.jpetrydesign.pyng.ui.kit.Seg(listOf("Light", "Dark"), if (editDark) "Dark" else "Light", { editDark = it == "Dark"; slot = "a" })
+                            }
+                        }
+                    }
                     ColorChips(d, slot, two, tile, panelBg, sel, ink, soft,
                         onTint = { d = d.copy(tint = !d.tint, preset = null) },
                         onSlot = { slot = it },
@@ -287,7 +327,18 @@ fun AppColorPage(onClose: () -> Unit) {
                         SatCanvas(cur, live == "c", { live = if (it) "c" else null }, ::edit) { hexOpen = true }
                         HueBar(cur, live == "h", { live = if (it) "h" else null }, ::edit)
                     }
-                    Presets(d, soft, ink) { x -> d = presetDraft(d, x); slot = "a" }
+                    val savedList = p.savedThemes.filter { styleOfSaved(it.mode) == d.style && it.custom.isEmpty() }
+                    Presets(
+                        d, soft, ink, savedList,
+                        isOn = { st -> d.preset == null && d.a.color().hexString() == st.c1.color().hexString() && (d.style == "solid" || d.b.color().hexString() == st.c2.color().hexString()) },
+                        onSaved = { st -> d = d.copy(style = styleOfSaved(st.mode), preset = null, a = st.c1.color().hsv(), b = st.c2.color().hsv()); slot = "a" },
+                        onHold = { st -> lib.managing = st },
+                        onSave = if (d.preset == null) ({
+                            val mode = when (d.style) { "duo" -> "Duotone"; "grad" -> "Gradient"; else -> "Mono" }
+                            val l = d.look()
+                            lib.saving = com.jpetrydesign.pyng.data.SavedTheme(java.util.UUID.randomUUID().toString(), suggestName(mode, l.c1, p.savedThemes.map { it.name }), mode, l.c1, l.c2)
+                        }) else null,
+                    ) { x -> d = presetDraft(d, x); slot = "a" }
                 }
             }
             // Header: back, the title and Done.
@@ -313,10 +364,11 @@ fun AppColorPage(onClose: () -> Unit) {
             if (asking) PopDialog(panelBg, onDismiss = { asking = false }) {
                 T("Keep your changes?", size = 21.sp, weight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    DialogButton("Discard", tile, ink, Modifier.weight(1f)) { d = saved; close() }
+                    DialogButton("Discard", tile, ink, Modifier.weight(1f)) { close() }
                     DialogButton("Save", acc, onAcc, Modifier.weight(1f)) { save() }
                 }
             }
+            ThemeLibrarySheets(lib)
             if (hexOpen) HexDialog(cur.color(), panelBg, tile, acc, onAcc, ink, onCancel = { hexOpen = false }) { c -> edit(c.hsv()); hexOpen = false }
         }
     }
@@ -324,9 +376,9 @@ fun AppColorPage(onClose: () -> Unit) {
 
 /** Tint, then your color, then a second one (with a remove badge) and Blend, or a + to add it. They slide to stay centered. */
 @Composable
-private fun ColorChips(
+internal fun ColorChips(
     d: Draft, slot: String, two: Boolean, tile: Color, panelBg: Color, sel: Color, ink: Color, soft: Color,
-    onTint: () -> Unit, onSlot: (String) -> Unit, onAdd: () -> Unit, onDrop: () -> Unit, onBlend: () -> Unit,
+    onTint: (() -> Unit)?, onSlot: (String) -> Unit, onAdd: () -> Unit, onDrop: () -> Unit, onBlend: () -> Unit,
 ) {
     val A = d.a.color(); val B = d.b.color()
     val bW by animateDpAsState(if (two) 44.dp else 0.dp, Bounce, label = "bW")
@@ -341,7 +393,8 @@ private fun ColorChips(
     val grad = d.style == "grad"
     Row(Modifier.fillMaxWidth().height(48.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
         val chip = RoundedCornerShape(22.dp)
-        Row(
+        // Tint (a soft background in your color, or plain): only where it applies.
+        if (onTint != null) Row(
             Modifier.height(44.dp).clip(chip).background(if (d.tint) sel.copy(alpha = 0.12f) else Color.Transparent)
                 .border(if (d.tint) 2.dp else 1.5.dp, if (d.tint) sel else soft.copy(alpha = 0.3f), chip).clickable(onClick = onTint)
                 .padding(start = 10.dp, end = 16.dp),
@@ -355,7 +408,7 @@ private fun ColorChips(
             ) { if (d.tint) Ico(Icons.check, if (sel.luminance() > 0.45f) hex("#10131A") else Color.White, 14.dp, 3.4f) }
             T("Tint", size = 14.5.sp, weight = FontWeight.SemiBold, color = if (d.tint) ink else soft)
         }
-        Box(Modifier.padding(horizontal = 12.dp).size(1.dp, 28.dp).background(soft.copy(alpha = 0.22f)))
+        if (onTint != null) Box(Modifier.padding(horizontal = 12.dp).size(1.dp, 28.dp).background(soft.copy(alpha = 0.22f)))
         ColorDot(A, slot == "a", panelBg, ink) { onSlot("a") }
         Box(Modifier.padding(start = bM.coerceAtLeast(0.dp)).width(bW.coerceAtLeast(0.dp)).height(44.dp), contentAlignment = Alignment.Center) {
             Box(Modifier.requiredSize(44.dp).graphicsLayer { scaleX = twoS; scaleY = twoS; alpha = twoA }) {
@@ -402,9 +455,19 @@ private fun ColorDot(c: Color, on: Boolean, gap: Color, ink: Color, enabled: Boo
     )
 }
 
+/** The canvas and hue bar together in one card, for anywhere a color is picked. Tap the dot to type a hex code. */
+@Composable
+internal fun PickerCard(cur: Hsv, tile: Color, onChange: (Hsv) -> Unit, onHex: () -> Unit) {
+    var live by remember { mutableStateOf<String?>(null) }
+    Column(Modifier.fillMaxWidth().background(tile, RoundedCornerShape(26.dp)).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        SatCanvas(cur, live == "c", { live = if (it) "c" else null }, onChange, onHex)
+        HueBar(cur, live == "h", { live = if (it) "h" else null }, onChange)
+    }
+}
+
 /** Saturation across and brightness down. Drag anywhere to pick; tap the dot itself to type a hex code. */
 @Composable
-private fun SatCanvas(cur: Hsv, live: Boolean, onLive: (Boolean) -> Unit, onChange: (Hsv) -> Unit, onTapKnob: () -> Unit) {
+internal fun SatCanvas(cur: Hsv, live: Boolean, onLive: (Boolean) -> Unit, onChange: (Hsv) -> Unit, onTapKnob: () -> Unit) {
     val density = LocalDensity.current
     val now by rememberUpdatedState(cur)
     val change by rememberUpdatedState(onChange)
@@ -446,7 +509,7 @@ private fun SatCanvas(cur: Hsv, live: Boolean, onLive: (Boolean) -> Unit, onChan
 
 /** The hue bar under the canvas. */
 @Composable
-private fun HueBar(cur: Hsv, live: Boolean, onLive: (Boolean) -> Unit, onChange: (Hsv) -> Unit) {
+internal fun HueBar(cur: Hsv, live: Boolean, onLive: (Boolean) -> Unit, onChange: (Hsv) -> Unit) {
     val density = LocalDensity.current
     val now by rememberUpdatedState(cur)
     val change by rememberUpdatedState(onChange)
@@ -512,9 +575,14 @@ private fun HexBubble(on: Boolean, c: Color, x: Float, y: Float) {
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 /** Ready-made colors for the style you're on, in color order, in one row that scrolls sideways. */
 @Composable
-private fun Presets(d: Draft, soft: Color, ink: Color, onPick: (Pal) -> Unit) {
+internal fun Presets(
+    d: Draft, soft: Color, ink: Color, saved: List<com.jpetrydesign.pyng.data.SavedTheme>,
+    isOn: (com.jpetrydesign.pyng.data.SavedTheme) -> Boolean, onSaved: (com.jpetrydesign.pyng.data.SavedTheme) -> Unit,
+    onHold: (com.jpetrydesign.pyng.data.SavedTheme) -> Unit, onSave: (() -> Unit)?, onPick: (Pal) -> Unit,
+) {
     AnimatedContent(d.style, label = "presets", transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(120)) }) { st ->
         val list = when (st) { "duo" -> Palettes.duos; "grad" -> Palettes.grads; else -> Palettes.solids }
         val sc = rememberScrollState()
@@ -525,6 +593,24 @@ private fun Presets(d: Draft, soft: Color, ink: Color, onPick: (Pal) -> Unit) {
         }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(Modifier.fillMaxWidth().height(56.dp).horizontalScroll(sc), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                // Your own: save the custom color you're on, then the ones you saved (hold one to rename or delete).
+                if (onSave != null && saved.none(isOn)) Box(
+                    Modifier.size(52.dp).clip(CircleShape).clickable(onClick = onSave).semantics { contentDescription = "Save this color" },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(Modifier.size(42.dp).border(1.5.dp, soft.copy(alpha = 0.45f), CircleShape), contentAlignment = Alignment.Center) { Ico(Icons.plus, soft, 18.dp, 2.4f) }
+                }
+                saved.sortedByDescending { it.at }.forEach { st ->
+                    val on = isOn(st)
+                    Box(
+                        Modifier.size(52.dp).border(2.5.dp, if (on) ink else Color.Transparent, CircleShape).clip(CircleShape)
+                            .combinedClickable(onClick = { onSaved(st) }, onLongClick = { onHold(st) }).semantics { contentDescription = st.name },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(Modifier.size(42.dp).clip(CircleShape).background(st.brush()).border(1.dp, Color.Black.copy(alpha = 0.08f), CircleShape))
+                    }
+                }
+                if (saved.isNotEmpty() || onSave != null) Box(Modifier.padding(horizontal = 6.dp).size(1.dp, 30.dp).background(soft.copy(alpha = 0.22f)))
                 list.forEach { x ->
                     val on = d.preset == x.key
                     val s by animateFloatAsState(if (on) 0.9f else 1f, BounceF, label = "preset")
@@ -679,7 +765,7 @@ fun HomeMock(L: Tok, modifier: Modifier = Modifier, rows: Int = 5, pins: Int = 3
 
 /** A card over a dimmed page that pops in. */
 @Composable
-private fun PopDialog(bg: Color, onDismiss: () -> Unit, content: @Composable () -> Unit) {
+internal fun PopDialog(bg: Color, onDismiss: () -> Unit, content: @Composable () -> Unit) {
     val a = remember { Animatable(0f) }
     LaunchedEffect(Unit) { a.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = 420f)) }
     Box(Modifier.fillMaxSize().zIndex(8f).background(Color.Black.copy(alpha = 0.34f * a.value.coerceIn(0f, 1f)))
@@ -696,7 +782,7 @@ private fun PopDialog(bg: Color, onDismiss: () -> Unit, content: @Composable () 
 }
 
 @Composable
-private fun DialogButton(label: String, bg: Color, ink: Color, modifier: Modifier, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun DialogButton(label: String, bg: Color, ink: Color, modifier: Modifier, enabled: Boolean = true, onClick: () -> Unit) {
     Box(modifier.height(50.dp).graphicsLayer { alpha = if (enabled) 1f else 0.45f }.clip(RoundedCornerShape(25.dp)).background(bg).clickable(enabled = enabled, onClick = onClick), contentAlignment = Alignment.Center) {
         T(label, size = 16.sp, weight = FontWeight.SemiBold, color = ink)
     }
@@ -710,7 +796,7 @@ private fun hexFull(s: String): Color? {
 
 /** Type a hex code: the dot shows it as you go; Apply takes three or six digits. */
 @Composable
-private fun HexDialog(c: Color, bg: Color, tile: Color, acc: Color, onAcc: Color, ink: Color, onCancel: () -> Unit, onApply: (Color) -> Unit) {
+internal fun HexDialog(c: Color, bg: Color, tile: Color, acc: Color, onAcc: Color, ink: Color, onCancel: () -> Unit, onApply: (Color) -> Unit) {
     var draft by remember { mutableStateOf(c.hexString().removePrefix("#")) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { delay(80); runCatching { focus.requestFocus() } }

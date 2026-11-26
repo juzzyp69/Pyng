@@ -36,6 +36,18 @@ data class Release(val version: String, val date: String, val added: List<String
  */
 val RELEASES = listOf(
     Release(
+        "0.9.7.6", "Nov 26, 2026",
+        highlights = listOf(
+            Highlight("Chat themes, rebuilt", "Each chat picks its colors the same way as App appearance: one color or two, blended or not, or the same as the app.", "palettes"),
+            Highlight("Your saved colors", "Save a color you made and it waits at the start of the color row, for the app and every chat.", "looks"),
+        ),
+        added = listOf(
+            "Separate light & dark\nUnder System on App appearance, give light and dark their own colors",
+            "More in the photo viewer\nForward sits in the dock; Open in another app and Delete sit up top",
+            "Cleaner everywhere\nSettings pages, the contact card and setup say less and show more",
+        ),
+    ),
+    Release(
         "0.9.7.5", "Nov 25, 2026",
         highlights = listOf(
             Highlight("New colors, made in pairs", "Sixty new duotones and gradients in color order, plus crisp and tinted solids. Received bubbles take a soft shade of your theme.", "palettes"),

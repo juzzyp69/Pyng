@@ -43,6 +43,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import com.jpetrydesign.pyng.ui.theme.hexString
+import com.jpetrydesign.pyng.ui.theme.color
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -179,11 +182,14 @@ fun ContactScreen(nav: Nav, convId: String) {
                     Spacer(Modifier.height(16.dp))
                     Card {
                         ListRow(
-                            "Chat theme",
-                            sub = (if (look == null || look.key.isEmpty()) "Matches app (${p.themeKey})" else if (look.key == "chat-custom") "Custom · ${look.mode}" else look.key) +
-                                " · " + ((look?.wall?.ifEmpty { null } ?: p.defWall).let { if (it.startsWith("photo:")) "Photo" else it }) + " wallpaper",
+                            "Chat theme", icon = Icons.palette,
                             onClick = { nav.go(Route.ChatTheme(convId)) },
-                            trailing = { Ico(Icons.chev, t.faint, 16.dp, 2f) },
+                            trailing = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(Modifier.size(22.dp).clip(CircleShape).background(swatchOf(t.pal)).border(1.dp, Color.Black.copy(alpha = 0.08f), CircleShape))
+                                    Spacer(Modifier.width(10.dp)); Ico(Icons.chev, t.faint, 16.dp, 2f)
+                                }
+                            },
                         )
                         Hairline()
                         Row(Modifier.fillMaxWidth().clickable { repo.prefs.edit { it.copy(alerts = it.alerts + (convId to alerts.copy(on = !alerts.on))) } }.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -195,12 +201,12 @@ fun ContactScreen(nav: Nav, convId: String) {
                         if (alerts.on) {
                             Hairline()
                             Column(Modifier.padding(16.dp)) {
-                                T("Vibration for ${c.shortTitle}", size = 14.5.sp, weight = FontWeight.SemiBold)
+                                T("Vibration", size = 14.5.sp, weight = FontWeight.SemiBold)
                                 Spacer(Modifier.height(10.dp))
                                 Chips(listOf("Default", "Off"), alerts.vibrate, { v -> repo.prefs.edit { it.copy(alerts = it.alerts + (convId to alerts.copy(vibrate = v))) } })
                             }
                             Hairline()
-                            ListRow("Sound", "Choose a sound just for ${c.shortTitle}", icon = Icons.volume, onClick = {
+                            ListRow("Sound", icon = Icons.volume, onClick = {
                                 com.jpetrydesign.pyng.data.Notifier.openChatSound(ctx, convId, c.title)
                             })
                         }
@@ -309,26 +315,18 @@ fun ContactScreen(nav: Nav, convId: String) {
                                     }
                                 }
                             }
-                            if (msgs.isNotEmpty()) T("From the messages loaded in this chat", size = 11.5.sp, color = t.faint, modifier = Modifier.padding(top = 8.dp, start = 4.dp))
                         }
                     }
                     Spacer(Modifier.height(14.dp))
-                    // Encryption, and whether this chat only sends texts.
-                    Card {
-                        ListRow(
-                            when (enc) { Enc.E2EE -> "End-to-end encryption: On"; Enc.RCS -> "End-to-end encryption: Off"; Enc.SMS -> "Not encrypted · SMS/MMS" },
-                            sub = encExplain(enc), icon = Icons.lock, onClick = null, trailing = null,
-                        )
-                        if (!c.group) {
-                            Hairline()
+                    // Whether this chat only sends texts (encryption is the badge under the name).
+                    if (!c.group) {
+                        Card {
                             ListRow(
-                                "Only send SMS & MMS messages",
-                                sub = if (c.smsOnly) "On · this chat sends texts, not chat messages" else "Off · uses RCS chat when it can",
-                                icon = Icons.message, onClick = { smsInfo = true }, trailing = { com.jpetrydesign.pyng.ui.kit.Toggle(c.smsOnly) },
+                                "Only send SMS & MMS", icon = Icons.message, onClick = { smsInfo = true }, trailing = { com.jpetrydesign.pyng.ui.kit.Toggle(c.smsOnly) },
                             )
                         }
+                        Spacer(Modifier.height(14.dp))
                     }
-                    Spacer(Modifier.height(14.dp))
                     Card {
                         if (!c.known && !c.group) {
                             ListRow("Add to contacts", icon = Icons.contact, onClick = {
@@ -400,6 +398,9 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
     }
     val wall = look.wall.ifEmpty { p.defWall }
     val lib = remember { ThemeLibrary() }
+    // The color being picked (and where it goes), for the hex code dialog.
+    var hexOpen by remember { mutableStateOf(false) }
+    val pick = remember { PickHold() }
     fun currentAsTheme(): com.jpetrydesign.pyng.data.SavedTheme {
         val own = look.key == "chat-custom"
         val mode = if (own) look.mode else "Mono"
@@ -428,8 +429,6 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
                         Box(Modifier.align(Alignment.End)) { Bubble1("See you there", true, t) }
                     }
                 }
-                // Light or dark, right here, so you can see the chat's colors both ways. Same switch as in Appearance.
-                Seg(listOf("Light", "Dark", "Match system"), p.mode, { m -> repo.prefs.edit { it.copy(mode = m) } }, Modifier.padding(horizontal = 16.dp).padding(top = 12.dp))
                 // Two modes, never both at once: Theme (pick a theme or one overall color) and
                 // Custom (set each part's color on its own). Switching crossfades.
                 androidx.compose.animation.Crossfade(customizing, label = "themeMode") { custom ->
@@ -452,41 +451,67 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
                         }
                         Spacer(Modifier.height(14.dp))
                         // Starts from what the chat looks like now, so you're tweaking, not starting over.
-                        val cur = look.custom[part] ?: com.jpetrydesign.pyng.ui.theme.toHsl(shown(part))
-                        ColorWheel(cur) { h -> set { it.copy(custom = it.custom + (part to h)) } }
-                        Spacer(Modifier.height(14.dp))
-                        MyThemes(lib, savedOn, usePicked, if (look.custom.isNotEmpty()) ({ lib.saving = currentAsTheme() }) else null, side = 0.dp)
+                        val cur = (look.custom[part]?.color() ?: shown(part)).hsv()
+                        pick.target = { h -> set { it.copy(custom = it.custom + (part to com.jpetrydesign.pyng.ui.theme.toHsl(h.color()))) } }
+                        pick.color = cur.color()
+                        PickerCard(cur, panelTile(t), pick.target) { hexOpen = true }
                         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
                             if (look.custom.containsKey(part)) T("Use automatic", size = 13.5.sp, weight = FontWeight.SemiBold, color = t.p,
                                 modifier = Modifier.clip(RoundedCornerShape(14.dp)).clickable { set { it.copy(custom = it.custom - part) } }.padding(horizontal = 10.dp, vertical = 6.dp))
                         }
-                    } else Column {
-                        com.jpetrydesign.pyng.ui.kit.SectionLabel("Color", Modifier.padding(start = 16.dp))
-                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Swatch("App theme", swatchOf(Palettes.byKey(p.themeKey, p.c1, p.c2)), look.key.isEmpty()) { set { it.copy(key = "") } }
-                            Swatch("Any color", androidx.compose.ui.graphics.Brush.sweepGradient(listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)), look.key == "chat-custom") { set { it.copy(key = "chat-custom") } }
-                            (Palettes.solids + Palettes.duos + Palettes.grads).forEach { x -> Swatch(x.name, swatchOf(x), look.key == x.key) { set { it.copy(key = x.key) } } }
-                        }
-                        Spacer(Modifier.height(16.dp))
-                        MyThemes(lib, savedOn, usePicked, if (look.key == "chat-custom" || look.custom.isNotEmpty()) ({ lib.saving = currentAsTheme() }) else null)
-                        if (look.key == "chat-custom") {
-                            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                Seg(listOf("Mono", "Duotone", "Gradient"), look.mode, { m -> set { it.copy(mode = m) } })
-                                if (look.mode != "Mono") {
-                                    Spacer(Modifier.height(10.dp))
-                                    Seg(listOf("Main color", "Second color"), if (editing == "c1") "Main color" else "Second color", { editing = if (it == "Main color") "c1" else "c2" })
-                                }
-                                Spacer(Modifier.height(12.dp))
-                                val cur = if (editing == "c2" && look.mode != "Mono") look.c2 else look.c1
-                                ColorWheel(cur) { h -> set { if (editing == "c2" && it.mode != "Mono") it.copy(c2 = h) else it.copy(c1 = h) } }
-                            }
-                        }
-                        // Custom colors are kept when you switch back; say so, with a way to clear them.
-                        if (look.custom.isNotEmpty()) Row(
-                            Modifier.padding(horizontal = 16.dp).padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(t.tone).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                    } else Column(Modifier.padding(horizontal = 16.dp).padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        // Same as the app, or this chat's own colors, picked the same way as App appearance.
+                        val matchApp = look.key.isEmpty()
+                        val appLook = p.lookFor(t.dark)
+                        val d = remember(look, appLook) { chatDraft(look, appLook, p.mode) }
+                        var slot by remember { mutableStateOf("a") }
+                        val two = d.style != "solid"
+                        if (!two && slot == "b") slot = "a"
+                        fun put(nd: Draft) = set { it.copy(key = nd.preset ?: "chat-custom", mode = when (nd.style) { "duo" -> "Duotone"; "grad" -> "Gradient"; else -> "Mono" },
+                            c1 = com.jpetrydesign.pyng.ui.theme.toHsl(nd.a.color()), c2 = com.jpetrydesign.pyng.ui.theme.toHsl(nd.b.color())) }
+                        val panel = if (t.dark) androidx.compose.ui.graphics.lerp(t.bg, Color.White, 0.075f) else Color.White
+                        val sel = if (t.dark) t.plusFlat else if (t.plusFlat.luminance() > 0.45f) t.fill else t.plusFlat
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(panel)
+                                .clickable { if (matchApp) put(d) else set { it.copy(key = "") } }.padding(horizontal = 18.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            T("Custom colors on", size = 13.5.sp, weight = FontWeight.Medium, color = t.ink, modifier = Modifier.weight(1f))
+                            T("Same as the app", size = 15.5.sp, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                            com.jpetrydesign.pyng.ui.kit.Toggle(matchApp)
+                        }
+                        androidx.compose.animation.AnimatedVisibility(!matchApp, enter = androidx.compose.animation.expandVertically(androidx.compose.animation.core.spring(dampingRatio = 0.82f, stiffness = 360f)) + androidx.compose.animation.fadeIn(),
+                            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()) {
+                            Column(
+                                Modifier.fillMaxWidth().background(panel, RoundedCornerShape(30.dp)).padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 18.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                            ) {
+                                ColorChips(d, slot, two, panelTile(t), panel, sel, t.ink, t.soft,
+                                    onTint = null,
+                                    onSlot = { slot = it },
+                                    onAdd = {
+                                        val b = if (d.b.color().hexString() == d.a.color().hexString()) Hsv((d.a.h + 150f) % 360f, 0.55f, 0.95f) else d.b
+                                        put(d.copy(style = "duo", preset = null, b = b)); slot = "b"
+                                    },
+                                    onDrop = { put(d.copy(style = "solid", preset = null)); slot = "a" },
+                                    onBlend = { put(d.copy(style = if (d.style == "grad") "duo" else "grad", preset = null)) },
+                                )
+                                val cur = if (slot == "b") d.b else d.a
+                                pick.target = { h -> put(if (slot == "b") d.copy(b = h, preset = null) else d.copy(a = h, preset = null)) }
+                                pick.color = cur.color()
+                                PickerCard(cur, panelTile(t), pick.target) { hexOpen = true }
+                                Presets(
+                                    d, t.soft, t.ink, p.savedThemes.filter { styleOfSaved(it.mode) == d.style },
+                                    isOn = savedOn, onSaved = { st -> usePicked(st) }, onHold = { st -> lib.managing = st },
+                                    onSave = if (d.preset == null) ({ lib.saving = currentAsTheme() }) else null,
+                                ) { x -> put(presetDraft(d, x)); slot = "a" }
+                            }
+                        }
+                        // Custom part colors are kept when you switch back; say so, with a way to clear them.
+                        if (look.custom.isNotEmpty()) Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(t.tone).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            T("Colors set by part are on", size = 13.5.sp, weight = FontWeight.Medium, color = t.ink, modifier = Modifier.weight(1f))
                             T("Clear", size = 13.5.sp, weight = FontWeight.SemiBold, color = t.p,
                                 modifier = Modifier.clip(RoundedCornerShape(14.dp)).clickable { set { it.copy(custom = emptyMap()) } }.padding(horizontal = 10.dp, vertical = 6.dp))
                         }
@@ -504,7 +529,7 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
                 Spacer(Modifier.height(8.dp))
                 // Custom switches to setting each color yourself; Theme switches back. Nothing is lost either way.
                 Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PillButton(if (customizing) "Theme" else "Custom", {
+                    PillButton(if (customizing) "Back to themes" else "Color by part", {
                         customizing = !customizing
                         scope.launch { scroll.animateScrollTo(0) }
                     }, Modifier.weight(1f), primary = false, height = 50.dp)
@@ -512,11 +537,27 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
                 }
             }
             }
-            com.jpetrydesign.pyng.ui.kit.PageTop("Chat theme", { nav.back() }, sub = "Only for ${c?.title ?: "this chat"}", haze = themeHaze,
+            com.jpetrydesign.pyng.ui.kit.PageTop("Chat theme", { nav.back() }, sub = c?.title, haze = themeHaze,
                 modifier = Modifier.align(Alignment.TopCenter).onSizeChanged { barH = it.height })
             ThemeLibrarySheets(lib)
+            if (hexOpen) {
+                val panel = if (t.dark) androidx.compose.ui.graphics.lerp(t.bg, Color.White, 0.075f) else Color.White
+                HexDialog(pick.color, panel, panelTile(t), t.plusFlat, t.plusInk, t.ink, onCancel = { hexOpen = false }) { c -> pick.target(c.hsv()); hexOpen = false }
+            }
         }
     }
+}
+
+/** Where a picked color goes (not state: it's just kept for the hex code dialog). */
+private class PickHold { var color: Color = Color.Unspecified; var target: (Hsv) -> Unit = {} }
+
+private fun panelTile(t: com.jpetrydesign.pyng.ui.theme.Tok) = if (t.dark) androidx.compose.ui.graphics.lerp(t.bg, Color.White, 0.1f) else com.jpetrydesign.pyng.ui.theme.hex("#F3F4F6")
+
+/** A chat's colors as a draft for the picker: its own, a preset, or (when it matches the app) the app's. */
+private fun chatDraft(look: ChatLook, app: com.jpetrydesign.pyng.data.AppLook, mode: String): Draft = when {
+    look.key == "chat-custom" -> Draft(mode, styleOfSaved(look.mode), null, true, look.c1.color().hsv(), look.c2.color().hsv())
+    look.key.isEmpty() -> draftOf(mode, app)
+    else -> draftOf(mode, com.jpetrydesign.pyng.data.AppLook(look.key, look.c1, look.c2))
 }
 
 @Composable
