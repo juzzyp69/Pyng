@@ -255,7 +255,10 @@ fun AppColorPage(onClose: () -> Unit) {
         ) {
             val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 64.dp
             var panelH by remember { mutableStateOf(540.dp) }
-            val prevH = (maxHeight - top - panelH).coerceAtLeast(230.dp)
+            // Shorter phones get a tighter panel and a smaller preview, so everything fits without scrolling.
+            val compact = maxHeight < 820.dp
+            val gap = if (compact) 12.dp else 18.dp
+            val prevH = (maxHeight - top - panelH).coerceAtLeast(if (compact) 140.dp else 230.dp)
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 Spacer(Modifier.height(top))
                 PreviewFan(L, front, prevH) { front = it }
@@ -264,8 +267,8 @@ fun AppColorPage(onClose: () -> Unit) {
                         .navigationBarsPadding().padding(start = 10.dp, end = 10.dp, bottom = 16.dp)
                         .shadow(28.dp, RoundedCornerShape(34.dp), ambientColor = Color.Black.copy(alpha = if (dark) 0.5f else 0.12f), spotColor = Color.Black.copy(alpha = if (dark) 0.5f else 0.12f))
                         .background(panelBg, RoundedCornerShape(34.dp))
-                        .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 22.dp),
-                    verticalArrangement = Arrangement.spacedBy(18.dp),
+                        .padding(start = if (compact) 16.dp else 20.dp, end = if (compact) 16.dp else 20.dp, top = if (compact) 14.dp else 20.dp, bottom = if (compact) 14.dp else 22.dp),
+                    verticalArrangement = Arrangement.spacedBy(gap),
                 ) {
                     // Light, Dark or System, each with a tiny look at itself.
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -279,10 +282,10 @@ fun AppColorPage(onClose: () -> Unit) {
                             ) {
                                 val mini = when (m) { "Light" -> Brush.linearGradient(listOf(Ll.bg, Ll.bg)); "Dark" -> Brush.linearGradient(listOf(Ld.bg, Ld.bg))
                                     else -> Brush.linearGradient(0f to Ll.bg, 0.5f to Ll.bg, 0.5f to Ld.bg, 1f to Ld.bg) }
-                                Box(Modifier.fillMaxWidth().height(38.dp).clip(RoundedCornerShape(12.dp)).background(mini).border(1.dp, Color.Black.copy(alpha = 0.06f), RoundedCornerShape(12.dp))) {
+                                Box(Modifier.fillMaxWidth().height(if (compact) 26.dp else 38.dp).clip(RoundedCornerShape(if (compact) 9.dp else 12.dp)).background(mini).border(1.dp, Color.Black.copy(alpha = 0.06f), RoundedCornerShape(12.dp))) {
                                     val inT = if (m == "Dark") Ld else Ll; val outT = if (m == "Light") Ll else Ld
-                                    Box(Modifier.padding(start = 8.dp, top = 7.dp).fillMaxWidth(0.46f).height(10.dp).clip(RoundedCornerShape(5.dp)).background(inT.inBg.compositeOver(inT.bg)))
-                                    Box(Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 7.dp).fillMaxWidth(0.4f).height(10.dp).clip(RoundedCornerShape(5.dp)).background(Brush.horizontalGradient(listOf(outT.outTop, outT.outBottom))))
+                                    Box(Modifier.padding(start = 8.dp, top = if (compact) 4.dp else 7.dp).fillMaxWidth(0.46f).height(if (compact) 8.dp else 10.dp).clip(RoundedCornerShape(5.dp)).background(inT.inBg.compositeOver(inT.bg)))
+                                    Box(Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = if (compact) 4.dp else 7.dp).fillMaxWidth(0.4f).height(if (compact) 8.dp else 10.dp).clip(RoundedCornerShape(5.dp)).background(Brush.horizontalGradient(listOf(outT.outTop, outT.outBottom))))
                                 }
                                 Row(Modifier.padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                                     Box(Modifier.size(16.dp).border(1.6.dp, if (on) sel else soft.copy(alpha = 0.6f), CircleShape), contentAlignment = Alignment.Center) {
@@ -323,8 +326,8 @@ fun AppColorPage(onClose: () -> Unit) {
                         onBlend = { d = d.copy(style = if (d.style == "grad") "duo" else "grad", preset = null) },
                     )
                     // The canvas and the hue bar, together in one card.
-                    Column(Modifier.fillMaxWidth().background(tile, RoundedCornerShape(26.dp)).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        SatCanvas(cur, live == "c", { live = if (it) "c" else null }, ::edit) { hexOpen = true }
+                    Column(Modifier.fillMaxWidth().background(tile, RoundedCornerShape(26.dp)).padding(start = 12.dp, end = 12.dp, top = if (compact) 10.dp else 12.dp, bottom = if (compact) 12.dp else 16.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 16.dp)) {
+                        SatCanvas(cur, live == "c", { live = if (it) "c" else null }, ::edit, if (compact) 112.dp else 150.dp) { hexOpen = true }
                         HueBar(cur, live == "h", { live = if (it) "h" else null }, ::edit)
                     }
                     val savedList = p.savedThemes.filter { styleOfSaved(it.mode) == d.style && it.custom.isEmpty() }
@@ -467,14 +470,14 @@ internal fun PickerCard(cur: Hsv, tile: Color, onChange: (Hsv) -> Unit, onHex: (
 
 /** Saturation across and brightness down. Drag anywhere to pick; tap the dot itself to type a hex code. */
 @Composable
-internal fun SatCanvas(cur: Hsv, live: Boolean, onLive: (Boolean) -> Unit, onChange: (Hsv) -> Unit, onTapKnob: () -> Unit) {
+internal fun SatCanvas(cur: Hsv, live: Boolean, onLive: (Boolean) -> Unit, onChange: (Hsv) -> Unit, height: Dp = 150.dp, onTapKnob: () -> Unit) {
     val density = LocalDensity.current
     val now by rememberUpdatedState(cur)
     val change by rememberUpdatedState(onChange)
     val liveFn by rememberUpdatedState(onLive)
     val tap by rememberUpdatedState(onTapKnob)
-    BoxWithConstraints(Modifier.fillMaxWidth().height(150.dp)) {
-        val w = with(density) { maxWidth.toPx() }; val h = with(density) { 150.dp.toPx() }
+    BoxWithConstraints(Modifier.fillMaxWidth().height(height)) {
+        val w = with(density) { maxWidth.toPx() }; val h = with(density) { height.toPx() }
         Canvas(
             Modifier.matchParentSize().clip(RoundedCornerShape(18.dp)).pointerInput(Unit) {
                 fun apply(o: Offset) = change(now.copy(s = (o.x / size.width).coerceIn(0f, 1f), v = (1f - o.y / size.height).coerceIn(0f, 1f)))
@@ -639,9 +642,10 @@ internal fun Presets(
 /** Two small phones, one in front of the other: the chat and Home in the look you're trying. Tap the one behind to bring it forward. */
 @Composable
 private fun PreviewFan(L: Tok, front: String, height: Dp, onFront: (String) -> Unit) {
-    val scale = ((height.value - 20f) / 350f).coerceIn(0.4f, 0.86f)
+    val scale = ((height.value - 16f) / 350f).coerceIn(0.34f, 0.86f)
     Box(Modifier.fillMaxWidth().height(height)) {
-        Box(Modifier.align(Alignment.TopCenter).padding(top = 8.dp).size(340.dp, 350.dp).graphicsLayer { scaleX = scale; scaleY = scale; transformOrigin = TransformOrigin(0.5f, 0f) }) {
+        // The phones keep their full size and are scaled to fit, centered in the space above the panel.
+        Box(Modifier.align(Alignment.Center).requiredSize(340.dp, 350.dp).graphicsLayer { scaleX = scale; scaleY = scale }) {
             listOf("home" to true, "chat" to false).sortedBy { if (it.first == front) 1 else 0 }.forEach { (which, right) -> androidx.compose.runtime.key(which) {
                 val isFront = which == front
                 val tx by animateFloatAsState(if (isFront) (if (right) 66f else -66f) else (if (right) 74f else -74f), BounceF, label = "fx$which")
