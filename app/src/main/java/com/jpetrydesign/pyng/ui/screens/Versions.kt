@@ -38,12 +38,11 @@ val RELEASES = listOf(
     Release(
         "0.9.7.7", "Nov 26, 2026",
         highlights = listOf(
-            Highlight("Glass all the way through", "The menu under your photo now frosts what's behind it, like the rest of the app.", "glass"),
+            Highlight("Softer Liquid Glass", "Glass is mostly frosted now, with a soft reflection and simpler edges on cards, bars and menus. The menu under your photo frosts what's behind it too.", "glass"),
         ),
         added = emptyList(),
         fixed = listOf(
             "The menu under your photo frosts what's behind it",
-            "Liquid Glass bends a little more gently on small buttons",
         ),
     ),
     Release(

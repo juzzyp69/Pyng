@@ -191,12 +191,11 @@ fun Modifier.frost(shape: Shape, tint: Color, blur: Dp = 26.dp): Modifier = comp
     val hz = LocalHaze.current
     val (gs, gb) = LocalGlassTune.current
     if (hz != null && !t.solid && LocalGlass.current && "haze" !in DebugFlags.off) {
-        // Liquid Glass: the screen behind seen through a lens (bent at the edges, barely blurred), a light
-        // tint, and a lit rim. The frost underneath only shows on phones that can't bend light.
-        val light = tint.copy(alpha = (tint.alpha * 0.4f * gs).coerceAtMost(0.9f))
+        // Liquid Glass: mostly blurred, with a light tint, a slight bend at the edge and a soft reflection. The frost underneath only shows on phones that can't bend light.
+        val light = tint.copy(alpha = (tint.alpha * 0.55f * gs).coerceAtMost(0.9f))
         this.clip(shape)
-            .hazeEffect(state = hz, style = HazeStyle(backgroundColor = t.bg, tint = HazeTint(light), blurRadius = blur * 0.5f * gb, noiseFactor = 0f))
-            .liquidLens(hz, shape, light.copy(alpha = light.alpha * 0.8f), blur * 0.22f * gb)
+            .hazeEffect(state = hz, style = HazeStyle(backgroundColor = t.bg, tint = HazeTint(light), blurRadius = blur * 0.9f * gb, noiseFactor = 0f))
+            .liquidLens(hz, shape, light.copy(alpha = light.alpha * 0.85f), blur * 0.75f * gb)
             .liquidShine(shape)
     } else if (hz != null && !t.solid) {
         // Frost: a heavier, milkier blur, matte with no shine.
@@ -218,7 +217,7 @@ fun Modifier.pane(shape: Shape): Modifier = composed {
     val gs = LocalGlassTune.current.first
     when {
         t.solid -> this.background(if (t.dark) t.card.compositeOver(t.bg) else Color.White)
-        liquid -> this.background(Color.White.copy(alpha = ((if (t.dark) 0.05f else 0.34f) * gs).coerceAtMost(0.95f))).liquidShine(shape)
+        liquid -> this.background(Color.White.copy(alpha = ((if (t.dark) 0.06f else 0.5f) * gs).coerceAtMost(0.95f))).liquidShine(shape)
         else -> this.background(Color.White.copy(alpha = ((if (t.dark) 0.07f else 0.72f) * gs).coerceAtMost(0.95f)))
             .border(1.dp, Color.White.copy(alpha = if (t.dark) 0.06f else 0.85f), shape)
     }

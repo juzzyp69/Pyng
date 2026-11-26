@@ -161,8 +161,9 @@ private fun DrawScope.drawLensed(lens: Lens, gfx: GraphicsLayer, src: GraphicsLa
     val w = if (bar) size.width + far * 2 else size.width
     val h = if (bar) size.height + far else size.height
     val bend = min(r.coerceAtLeast(8.dp.toPx()), 24.dp.toPx()).coerceAtMost(min(size.width, size.height) / 2f)
-    val amount = bend * 0.6f
-    val split = 1.6.dp.toPx()
+    // Mostly blur: the edge only bends a little, with no color splitting.
+    val amount = bend * 0.3f
+    val split = 0f
     val key = "$ox,$oy,$w,$h,$r,$bend,$blurPx"
     if (key != lens.key || lens.effect == null) {
         lens.shader.setFloatUniform("origin", ox, oy)
@@ -172,7 +173,7 @@ private fun DrawScope.drawLensed(lens: Lens, gfx: GraphicsLayer, src: GraphicsLa
         lens.shader.setFloatUniform("amount", amount)
         lens.shader.setFloatUniform("split", split)
         // Blur first, a touch more color, then bend.
-        val vivid = ColorMatrix().apply { setSaturation(1.35f) }
+        val vivid = ColorMatrix().apply { setSaturation(1.2f) }
         var e: RenderEffect = RenderEffect.createColorFilterEffect(ColorMatrixColorFilter(vivid))
         if (blurPx > 0.5f) e = RenderEffect.createChainEffect(e, RenderEffect.createBlurEffect(blurPx, blurPx, Shader.TileMode.CLAMP))
         e = RenderEffect.createChainEffect(RenderEffect.createRuntimeShaderEffect(lens.shader, "content"), e)
@@ -191,33 +192,29 @@ private fun outlinePath(o: Outline): Path = when (o) {
 }
 
 /**
- * Liquid Glass's lit edge: a fine bright line that's strongest where light hits (top left) and catches
- * again at the opposite corner, over a soft glow just inside the rim. Bars along the top or bottom of the
- * screen only light the edge you can see.
+ * Liquid Glass's edge: kept simple, like frosted glass catching a little light. A faint sheen falls from
+ * the top left, and a hairline is brighter along the top than the bottom. Bars along the top or bottom of
+ * the screen only show the edge you can see.
  */
 fun Modifier.liquidShine(shape: Shape): Modifier = if ("shine" in DebugFlags.off) this else composed {
     val t = LocalTok.current
-    val hi = Color.White.copy(alpha = if (t.dark) 0.42f else 0.95f)
-    val lo = Color.White.copy(alpha = if (t.dark) 0.05f else 0.16f)
-    val back = Color.White.copy(alpha = if (t.dark) 0.22f else 0.6f)
+    val sheen = Color.White.copy(alpha = if (t.dark) 0.05f else 0.22f)
+    val top = Color.White.copy(alpha = if (t.dark) 0.14f else 0.7f)
+    val bottom = Color.White.copy(alpha = if (t.dark) 0.03f else 0.25f)
     this.drawWithContent {
-        drawContent()
         val (r, topBar, bottomBar) = edges(shape)
-        val path = outlinePath(shape.createOutline(size, layoutDirection, this))
-        val rim = Brush.linearGradient(0f to hi, 0.32f to lo, 0.68f to lo, 1f to back, start = Offset.Zero, end = Offset(size.width, size.height))
-        val barRim = Brush.horizontalGradient(0f to lo, 0.5f to hi, 1f to lo)
-        val brush = if (topBar || bottomBar) barRim else rim
-        val line = 1.1.dp.toPx()
-        val glow = 7.dp.toPx()
+        val outline = shape.createOutline(size, layoutDirection, this)
+        val path = outlinePath(outline)
+        // The reflection, under the content.
+        if (!topBar && !bottomBar) drawPath(path, Brush.linearGradient(0f to sheen, 0.55f to Color.Transparent, start = Offset.Zero, end = Offset(size.width * 0.7f, size.height)))
+        drawContent()
+        val line = 1.dp.toPx()
         val draw: DrawScope.() -> Unit = {
-            clipPath(path) {
-                drawPath(path, brush, alpha = if (t.dark) 0.18f else 0.22f, style = Stroke(glow * 2))
-                drawPath(path, brush, style = Stroke(line * 2))
-            }
+            clipPath(path) { drawPath(path, Brush.verticalGradient(listOf(top, bottom)), style = Stroke(line * 2)) }
         }
         when {
-            topBar -> clipRect(top = size.height - r - line * 2) { draw() }
-            bottomBar -> clipRect(bottom = r + line * 2) { draw() }
+            topBar -> clipRect(top = size.height - r - line * 2) { clipPath(path) { drawPath(path, bottom.copy(alpha = bottom.alpha * 2f), style = Stroke(line * 2)) } }
+            bottomBar -> clipRect(bottom = r + line * 2) { clipPath(path) { drawPath(path, top, style = Stroke(line * 2)) } }
             else -> draw()
         }
     }
