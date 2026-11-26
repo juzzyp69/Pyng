@@ -38,6 +38,7 @@ val RELEASES = listOf(
     Release(
         "0.9.7.6", "Nov 26, 2026",
         highlights = listOf(
+            Highlight("Real Liquid Glass", "Glass now bends what's behind it at the edges, like a thick piece of glass, with a lit rim. Bars along the top only light their bottom edge.", "glass"),
             Highlight("Chat themes, rebuilt", "Each chat picks its colors the same way as App appearance: one color or two, blended or not, or the same as the app.", "palettes"),
             Highlight("Your saved colors", "Save a color you made and it waits at the start of the color row, for the app and every chat.", "looks"),
         ),
