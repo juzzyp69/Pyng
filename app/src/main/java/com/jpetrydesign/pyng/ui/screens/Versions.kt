@@ -36,6 +36,13 @@ data class Release(val version: String, val date: String, val added: List<String
  */
 val RELEASES = listOf(
     Release(
+        "0.9.7.7", "Nov 26, 2026",
+        fixed = listOf(
+            "The menu under your photo frosts what's behind it",
+            "Liquid Glass bends a little more gently on small buttons",
+        ),
+    ),
+    Release(
         "0.9.7.6", "Nov 26, 2026",
         highlights = listOf(
             Highlight("Real Liquid Glass", "Glass now bends what's behind it at the edges, like a thick piece of glass, with a lit rim. Bars along the top only light their bottom edge.", "glass"),

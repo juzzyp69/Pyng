@@ -161,7 +161,7 @@ private fun DrawScope.drawLensed(lens: Lens, gfx: GraphicsLayer, src: GraphicsLa
     val w = if (bar) size.width + far * 2 else size.width
     val h = if (bar) size.height + far else size.height
     val bend = min(r.coerceAtLeast(8.dp.toPx()), 24.dp.toPx()).coerceAtMost(min(size.width, size.height) / 2f)
-    val amount = bend * 0.85f
+    val amount = bend * 0.6f
     val split = 1.6.dp.toPx()
     val key = "$ox,$oy,$w,$h,$r,$bend,$blurPx"
     if (key != lens.key || lens.effect == null) {

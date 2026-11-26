@@ -159,6 +159,9 @@ class Nav(start: Route) {
 /** Pages that draw their own background (the photo viewer, the color page) set which status bar icons they need. */
 object BarIcons { var light by androidx.compose.runtime.mutableStateOf<Boolean?>(null) }
 
+/** A menu or card drawn over the whole app (instead of in its own window), so it can frost what's behind it. */
+object Floating { var content by androidx.compose.runtime.mutableStateOf<(@androidx.compose.runtime.Composable () -> Unit)?>(null) }
+
 object LookPreview { var dark by androidx.compose.runtime.mutableStateOf<Boolean?>(null) }
 
 @Composable
@@ -225,7 +228,8 @@ fun PyngRoot(repo: Repo, nav: Nav) {
             // is up (and a moment after, while it slides away), so normal scrolling costs nothing extra.
             val appHaze = remember { dev.chrisbanes.haze.HazeState() }
             var hazeOn by remember { mutableStateOf(false) }
-            LaunchedEffect(banner != null) { if (banner != null) hazeOn = true else { delay(450); hazeOn = false } }
+            val floating = Floating.content
+            LaunchedEffect(banner != null || floating != null) { if (banner != null || floating != null) hazeOn = true else { delay(450); hazeOn = false } }
             BoxWithConstraints(Modifier.fillMaxSize().background(t.bg)) {
                 val wide = maxWidth >= 600.dp
                 val fullW = maxWidth
@@ -249,6 +253,7 @@ fun PyngRoot(repo: Repo, nav: Nav) {
                 com.jpetrydesign.pyng.ui.kit.AskDialog(repo.ask) { repo.ask = null }
                 com.jpetrydesign.pyng.ui.screens.PhotoCropper(repo.crop) { repo.crop = null }
                 if (nav.strip) com.jpetrydesign.pyng.ui.screens.AppColorPage { nav.closeStrip() }
+                floating?.let { f -> CompositionLocalProvider(com.jpetrydesign.pyng.ui.kit.LocalHaze provides appHaze) { f() } }
                 Box(Modifier.align(Alignment.TopCenter)) {
                     CompositionLocalProvider(com.jpetrydesign.pyng.ui.kit.LocalHaze provides appHaze) {
                     com.jpetrydesign.pyng.ui.screens.InAppBanner(banner, onOpen = { id -> banner = null; nav.openChat(id) }, onClose = { banner = null })

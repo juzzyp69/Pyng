@@ -1,5 +1,8 @@
 package com.jpetrydesign.pyng.ui.screens
 
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import com.jpetrydesign.pyng.ui.kit.glassSource
 import com.jpetrydesign.pyng.ui.kit.LocalGlass
 import com.jpetrydesign.pyng.ui.kit.pane
@@ -1886,44 +1889,81 @@ private fun UnknownSheet(visible: Boolean, list: List<Conv>, nav: Nav, onDismiss
 /** Your photo opens this: you at the top with a settings gear, then the places you go most. */
 @Composable
 private fun ProfileMenu(open: Boolean, nav: Nav, trashCount: Int, onClose: () -> Unit) {
+    // Drawn over the whole app (not in a separate window) so it can frost what's behind it.
+    var anchor by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    Box(Modifier.size(44.dp).onGloballyPositioned { anchor = it.boundsInRoot() })
+    val close by androidx.compose.runtime.rememberUpdatedState(onClose)
+    val count by androidx.compose.runtime.rememberUpdatedState(trashCount)
+    DisposableEffect(open) {
+        if (open) com.jpetrydesign.pyng.ui.Floating.content = { ProfileCard(anchor, nav, count) { close() } }
+        onDispose { com.jpetrydesign.pyng.ui.Floating.content = null }
+    }
+}
+
+@Composable
+private fun ProfileCard(anchor: androidx.compose.ui.geometry.Rect, nav: Nav, trashCount: Int, onClose: () -> Unit) {
     val repo = LocalRepo.current
     val t = LocalTok.current
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val p = repo.prefs.state
-    androidx.compose.material3.DropdownMenu(
-        open, onClose, containerColor = t.sheet, shape = RoundedCornerShape(26.dp), shadowElevation = 14.dp,
-        modifier = Modifier.widthIn(min = 260.dp),
-    ) {
-        Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Avatar(p.profilePhoto.ifEmpty { null }, com.jpetrydesign.pyng.ui.kit.initialsOf(p.profileName.ifBlank { "Me" }), 40.dp, t.tone, t.p, 14.sp)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f).clickable { onClose(); nav.go(Route.Profile) }) {
-                T(p.profileName.ifBlank { "Your profile" }, size = 15.sp, weight = FontWeight.SemiBold, maxLines = 1)
-                T("Name and photo", size = 12.5.sp, color = t.soft)
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    androidx.activity.compose.BackHandler(onBack = onClose)
+    val pop = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) { pop.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.78f, stiffness = 520f)) }
+    val shape = RoundedCornerShape(26.dp)
+    Box(Modifier.fillMaxSize().clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null, onClick = onClose)) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val w = 272.dp
+            val right = with(density) { anchor.right.toDp() }
+            val x = (right - w).coerceIn(12.dp, (maxWidth - w - 12.dp).coerceAtLeast(12.dp))
+            val y = with(density) { anchor.bottom.toDp() } + 8.dp
+            Column(
+                Modifier.offset(x, y).width(w)
+                    .graphicsLayer {
+                        val s = 0.86f + 0.14f * pop.value
+                        scaleX = s; scaleY = s; alpha = pop.value.coerceIn(0f, 1f)
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 0f)
+                    }
+                    .shadow(18.dp, shape, ambientColor = t.shadow, spotColor = t.shadow)
+                    .frost(shape, if (t.solid) t.sheet else t.sheet.copy(alpha = if (t.dark) 0.62f else 0.7f), 32.dp)
+                    .then(if (com.jpetrydesign.pyng.ui.kit.LocalGlass.current || t.solid) Modifier else Modifier.border(1.dp, Color.White.copy(alpha = if (t.dark) 0.08f else 0.6f), shape))
+                    .clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) { }
+                    .padding(vertical = 6.dp),
+            ) {
+                Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Avatar(p.profilePhoto.ifEmpty { null }, com.jpetrydesign.pyng.ui.kit.initialsOf(p.profileName.ifBlank { "Me" }), 40.dp, t.tone, t.p, 14.sp)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable { onClose(); nav.go(Route.Profile) }) {
+                        T(p.profileName.ifBlank { "Your profile" }, size = 15.sp, weight = FontWeight.SemiBold, maxLines = 1)
+                        T("Name and photo", size = 12.5.sp, color = t.soft)
+                    }
+                    Box(Modifier.size(40.dp).clip(CircleShape).clickable { onClose(); nav.go(Route.Settings) }.semantics { contentDescription = "Settings" }, contentAlignment = Alignment.Center) {
+                        Ico(Icons.settings, t.ink, 21.dp)
+                    }
+                }
+                Hairline()
+                val rows = listOf(
+                    Triple(Icons.star, "Starred") { nav.go(Route.Lists("starred")) },
+                    Triple(Icons.archive, "Archived") { nav.go(Route.Lists("archived")) },
+                    Triple(Icons.clock, "Scheduled") { nav.go(Route.Lists("scheduled")) },
+                    Triple(Icons.shield, "Spam & blocked") { nav.go(Route.Lists("spam")) },
+                    Triple(Icons.trash, if (trashCount > 0) "Trash · $trashCount" else "Trash") { nav.go(Route.Lists("trash")) },
+                    Triple(Icons.spark, "What's new") { nav.go(Route.Section("versions")) },
+                    Triple(Icons.message, "Send feedback") {
+                        runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/juzzyp69/Pyng/issues/new")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    },
+                )
+                rows.forEach { (icon, label, go) ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 6.dp).clip(RoundedCornerShape(16.dp)).clickable { onClose(); go() }.padding(horizontal = 14.dp, vertical = 13.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Ico(icon, t.p, 19.dp)
+                        Spacer(Modifier.width(14.dp))
+                        T(label, size = 15.sp)
+                    }
+                }
             }
-            Box(Modifier.size(40.dp).clip(CircleShape).clickable { onClose(); nav.go(Route.Settings) }, contentAlignment = Alignment.Center) {
-                Ico(Icons.settings, t.ink, 21.dp)
-            }
-        }
-        Hairline()
-        val rows = listOf(
-            Triple(Icons.star, "Starred") { nav.go(Route.Lists("starred")) },
-            Triple(Icons.archive, "Archived") { nav.go(Route.Lists("archived")) },
-            Triple(Icons.clock, "Scheduled") { nav.go(Route.Lists("scheduled")) },
-            Triple(Icons.shield, "Spam & blocked") { nav.go(Route.Lists("spam")) },
-            Triple(Icons.trash, if (trashCount > 0) "Trash · $trashCount" else "Trash") { nav.go(Route.Lists("trash")) },
-            Triple(Icons.spark, "What's new") { nav.go(Route.Section("versions")) },
-            Triple(Icons.message, "Send feedback") {
-                runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/juzzyp69/Pyng/issues/new")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
-            },
-        )
-        rows.forEach { (icon, label, go) ->
-            androidx.compose.material3.DropdownMenuItem(
-                text = { T(label, size = 15.sp) },
-                leadingIcon = { Ico(icon, t.p, 19.dp) },
-                onClick = { onClose(); go() },
-                modifier = Modifier.padding(horizontal = 4.dp),
-            )
         }
     }
 }
