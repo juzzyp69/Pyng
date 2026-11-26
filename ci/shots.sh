@@ -44,15 +44,15 @@ shot() {
 # Everything the phone logs during the run, to see what happened if it stops answering.
 ( adb logcat -v time > ci-logs/logcat.txt 2>&1 & )
 # 0.9.7.5 first: the color page, Appearance with Style open, the viewer dock and the editor.
-WAIT=6 shot 00a0-color --es open strip
+WAIT=8 shot 00a0-color --es open strip --es mode Light --es theme Blue
 WAIT=6 shot 00a0-color-dark --es open strip --es mode Dark
-WAIT=6 shot 00a0-color-merlot --es open strip --es theme d:Merlot
+WAIT=8 shot 00a0-color-merlot --es open strip --es theme d:Merlot --es mode Light
 WAIT=6 shot 00a0-color-aurora --es open strip --es theme g:Aurora --es mode Dark
-WAIT=6 shot 00a0-appearance-style --es route appearance --es open style
-WAIT=6 shot 00a0-thread-merlot --es route thread:c1 --es theme d:Merlot
+WAIT=6 shot 00a0-appearance-style --es route appearance --es open style --es mode Light --es theme d:Merlot
+WAIT=6 shot 00a0-thread-merlot --es route thread:c1 --es theme d:Merlot --es mode Light
 WAIT=6 shot 00a0-thread-citrus-dark --es route thread:c1 --es theme d:Citrus --es mode Dark
-WAIT=6 shot 00a0-thread-blue --es route thread:c1 --es theme Blue
-WAIT=6 shot 00a0-thread-denim --es route thread:c1 --es theme Denim
+WAIT=6 shot 00a0-thread-blue --es route thread:c1 --es theme Blue --es mode Light
+WAIT=6 shot 00a0-thread-denim --es route thread:c1 --es theme Denim --es mode Light
 WAIT=10 shot 00a0-review --es route thread:c9 --es open review
 # 0.9.7 first: settings groups, theme card and picker, glass sliders, select, dark home, photo stack.
 WAIT=6 shot 00a-settings-groups --es route settings

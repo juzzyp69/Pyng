@@ -331,7 +331,7 @@ private fun ColorChips(
     val A = d.a.color(); val B = d.b.color()
     val bW by animateDpAsState(if (two) 44.dp else 0.dp, Bounce, label = "bW")
     val bM by animateDpAsState(if (two) 10.dp else 0.dp, Bounce, label = "bM")
-    val blW by animateDpAsState(if (two) 98.dp else 0.dp, Bounce, label = "blW")
+    val blW by animateDpAsState(if (two) 112.dp else 0.dp, Bounce, label = "blW")
     val blM by animateDpAsState(if (two) 12.dp else 0.dp, Bounce, label = "blM")
     val pW by animateDpAsState(if (two) 0.dp else 44.dp, Bounce, label = "pW")
     val pM by animateDpAsState(if (two) 0.dp else 10.dp, Bounce, label = "pM")
@@ -369,7 +369,7 @@ private fun ColorChips(
         }
         Box(Modifier.padding(start = blM.coerceAtLeast(0.dp)).width(blW.coerceAtLeast(0.dp)).height(48.dp).clipToBounds(), contentAlignment = Alignment.CenterStart) {
             Row(
-                Modifier.requiredWidth(98.dp).height(44.dp).graphicsLayer { alpha = twoA }.clip(chip)
+                Modifier.requiredWidth(112.dp).height(44.dp).graphicsLayer { alpha = twoA }.clip(chip)
                     .background(if (grad) sel.copy(alpha = 0.12f) else Color.Transparent)
                     .border(if (grad) 2.dp else 1.5.dp, if (grad) sel else soft.copy(alpha = 0.3f), chip)
                     .clickable(enabled = two, onClick = onBlend).padding(start = 12.dp, end = 14.dp),

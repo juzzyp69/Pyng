@@ -100,6 +100,8 @@ fun swatchOf(x: Pal): Brush {
     // Gradients show the whole run, deep to light; duotones their two colors side by side.
     if (x.grad != null && x.gradD != null) return Brush.linearGradient(listOf(x.grad.first, x.grad.second, x.gradD.second))
     if (x.inB != null && x.grad == null) return Brush.linearGradient(0f to x.p, 0.5f to x.p, 0.5f to x.pd, 1f to x.pd)
+    // A plain solid (on pure white) is just its color.
+    if (x.bg == Color.White && x.plus == null) return Brush.linearGradient(listOf(x.p, x.p))
     x.grad?.let { return Brush.linearGradient(listOf(it.first, it.second)) }
     val second = x.plus ?: x.bg ?: x.s
     return Brush.linearGradient(0f to x.p, 0.5f to x.p, 0.5f to second, 1f to second)

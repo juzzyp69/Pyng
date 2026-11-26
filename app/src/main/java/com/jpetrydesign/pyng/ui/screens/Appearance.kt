@@ -240,19 +240,19 @@ private fun StylePreview() {
     val hz = remember { dev.chrisbanes.haze.HazeState() }
     val shape = RoundedCornerShape(22.dp)
     val mid = androidx.compose.ui.graphics.lerp(t.outTop, t.outBottom, 0.5f)
-    Box(Modifier.fillMaxWidth().height(250.dp).clip(shape).background(t.bg)) {
+    Box(Modifier.fillMaxWidth().height(300.dp).clip(shape).background(t.bg)) {
+        // A photo runs under the header and the last bubble under the message box, so the glass has something to show.
         Column(
             Modifier.matchParentSize().hazeSource(hz).padding(horizontal = 12.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            Spacer(Modifier.height(30.dp))
+            Spacer(Modifier.height(22.dp))
+            Box(Modifier.size(170.dp, 96.dp).clip(RoundedCornerShape(18.dp)).background(Brush.linearGradient(listOf(androidx.compose.ui.graphics.lerp(t.bg, t.plusFlat, 0.7f), androidx.compose.ui.graphics.lerp(t.bg, t.fill, 0.85f)))))
             Box(Modifier.clip(RoundedCornerShape(18.dp)).background(t.inBg).padding(horizontal = 13.dp, vertical = 8.dp)) { T("Back from the trip!!", size = 14.sp, color = t.inInk, maxLines = 1) }
-            // A photo for the glass to blur over.
-            Box(Modifier.size(150.dp, 74.dp).clip(RoundedCornerShape(18.dp)).background(Brush.linearGradient(listOf(androidx.compose.ui.graphics.lerp(t.bg, t.plusFlat, 0.55f), androidx.compose.ui.graphics.lerp(t.bg, t.fill, 0.7f)))))
             Spacer(Modifier.weight(1f))
             Box(Modifier.align(Alignment.End).clip(RoundedCornerShape(18.dp)).background(Brush.verticalGradient(listOf(t.outTop, mid))).padding(horizontal = 13.dp, vertical = 8.dp)) { T("Ok these are so good", size = 14.sp, color = t.outInk, maxLines = 1) }
             Box(Modifier.align(Alignment.End).clip(RoundedCornerShape(18.dp)).background(Brush.verticalGradient(listOf(mid, t.outBottom))).padding(horizontal = 13.dp, vertical = 8.dp)) { T("How was the drive?", size = 14.sp, color = t.outInk, maxLines = 1) }
-            Spacer(Modifier.height(64.dp))
+            Spacer(Modifier.height(36.dp))
         }
         androidx.compose.runtime.CompositionLocalProvider(com.jpetrydesign.pyng.ui.kit.LocalHaze provides hz) {
             Row(
