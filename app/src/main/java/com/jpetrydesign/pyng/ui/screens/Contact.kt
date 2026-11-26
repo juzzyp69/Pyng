@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.jpetrydesign.pyng.data.ChatAlerts
 import com.jpetrydesign.pyng.data.ChatLook
+import com.jpetrydesign.pyng.data.lookFor
 import com.jpetrydesign.pyng.ui.Nav
 import com.jpetrydesign.pyng.ui.Route
 import com.jpetrydesign.pyng.ui.kit.Avatar
