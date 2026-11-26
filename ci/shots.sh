@@ -57,11 +57,7 @@ WAIT=10 shot 00a0-review --es route thread:c9 --es open review
 WAIT=6 shot 00a0-chat-theme --es route theme:c1 --es mode Light --es theme d:Merlot
 WAIT=6 shot 00a0-contact --es route contact:c1
 WAIT=6 shot 00a0-section-notifications --es route section:notifications
-# A shorter phone (about the height of a Fold cover screen) for the color page.
-adb shell wm size 1080x1960
-WAIT=8 shot 00a1-color-short --es open strip --es mode Dark --es theme d:Volt
-WAIT=8 shot 00a1-color-short-light --es open strip --es mode Light --es theme d:Merlot
-adb shell wm size reset
+WAIT=8 shot 00a1-color-volt --es open strip --es mode Dark --es theme d:Volt
 WAIT=8 shot 00a1-profile-frost --es open profile --es mode Dark --es theme Blue
 WAIT=8 shot 00a1-liquid-home --es glass "'Liquid Glass'" --es theme d:Lagoon --es mode Light
 WAIT=8 shot 00a1-liquid-profile --es open profile --es glass "'Liquid Glass'"
