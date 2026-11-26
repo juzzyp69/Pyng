@@ -65,6 +65,9 @@ WAIT=8 shot 00a1-liquid-thread --es route thread:c1 --es glass "'Liquid Glass'"
 WAIT=8 shot 00a1-liquid-appearance --es route appearance --es glass "'Liquid Glass'" --es mode Dark --es theme Blue
 WAIT=8 shot 00a1-liquid-settings --es route settings --es glass "'Liquid Glass'" --es mode Dark
 WAIT=6 shot 00a1-frost-reset --es glass Frost --es mode Light --es theme Blue
+WAIT=8 shot 00a1-frost-settings --es route settings --es mode Dark
+WAIT=8 shot 00a1-frost-thread --es route thread:c1 --es mode Light
+WAIT=8 shot 00a1-frost-home --es mode Light --es theme d:Merlot
 # 0.9.7 first: settings groups, theme card and picker, glass sliders, select, dark home, photo stack.
 WAIT=6 shot 00a-settings-groups --es route settings
 WAIT=6 shot 00a-appearance --es route appearance
