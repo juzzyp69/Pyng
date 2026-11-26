@@ -57,6 +57,11 @@ WAIT=10 shot 00a0-review --es route thread:c9 --es open review
 WAIT=6 shot 00a0-chat-theme --es route theme:c1 --es mode Light --es theme d:Merlot
 WAIT=6 shot 00a0-contact --es route contact:c1
 WAIT=6 shot 00a0-section-notifications --es route section:notifications
+WAIT=8 shot 00a1-liquid-home --es glass "'Liquid Glass'" --es theme d:Lagoon --es mode Light
+WAIT=8 shot 00a1-liquid-thread --es route thread:c1 --es glass "'Liquid Glass'"
+WAIT=8 shot 00a1-liquid-appearance --es route appearance --es glass "'Liquid Glass'" --es mode Dark --es theme Blue
+WAIT=8 shot 00a1-liquid-settings --es route settings --es glass "'Liquid Glass'" --es mode Dark
+WAIT=6 shot 00a1-frost-reset --es glass Frost --es mode Light --es theme Blue
 # 0.9.7 first: settings groups, theme card and picker, glass sliders, select, dark home, photo stack.
 WAIT=6 shot 00a-settings-groups --es route settings
 WAIT=6 shot 00a-appearance --es route appearance

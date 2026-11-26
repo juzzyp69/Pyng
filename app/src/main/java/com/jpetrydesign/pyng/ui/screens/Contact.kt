@@ -1,5 +1,6 @@
 package com.jpetrydesign.pyng.ui.screens
 
+import com.jpetrydesign.pyng.ui.kit.glassSource
 import com.jpetrydesign.pyng.ui.kit.pane
 import android.content.Intent
 import android.net.Uri
@@ -417,7 +418,7 @@ fun ChatThemeScreen(nav: Nav, convId: String) {
         var barH by remember { androidx.compose.runtime.mutableIntStateOf(0) }
         val dens = androidx.compose.ui.platform.LocalDensity.current
         Box(Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxSize().hazeSource(themeHaze)) {
+            Box(Modifier.fillMaxSize().glassSource(themeHaze)) {
             Glow(t)
             Column(Modifier.fillMaxSize().verticalScroll(scroll).navigationBarsPadding().padding(bottom = 30.dp)) {
                 Spacer(Modifier.height(with(dens) { if (barH > 0) barH.toDp() else androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(this).toDp() + 62.dp } + 10.dp))

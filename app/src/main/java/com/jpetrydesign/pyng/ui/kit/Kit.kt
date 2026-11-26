@@ -191,10 +191,12 @@ fun Modifier.frost(shape: Shape, tint: Color, blur: Dp = 26.dp): Modifier = comp
     val hz = LocalHaze.current
     val (gs, gb) = LocalGlassTune.current
     if (hz != null && !t.solid && LocalGlass.current && "haze" !in DebugFlags.off) {
-        // Liquid Glass: less tint and a lighter blur so more shows through, a lit rim along the top,
-        // and a soft sheen across the upper half, like light on a curved surface.
+        // Liquid Glass: the screen behind seen through a lens (bent at the edges, barely blurred), a light
+        // tint, and a lit rim. The frost underneath only shows on phones that can't bend light.
+        val light = tint.copy(alpha = (tint.alpha * 0.4f * gs).coerceAtMost(0.9f))
         this.clip(shape)
-            .hazeEffect(state = hz, style = HazeStyle(backgroundColor = t.bg, tint = HazeTint(tint.copy(alpha = (tint.alpha * 0.4f * gs).coerceAtMost(0.9f))), blurRadius = blur * 0.5f * gb, noiseFactor = 0f))
+            .hazeEffect(state = hz, style = HazeStyle(backgroundColor = t.bg, tint = HazeTint(light), blurRadius = blur * 0.5f * gb, noiseFactor = 0f))
+            .liquidLens(hz, shape, light.copy(alpha = light.alpha * 0.8f), blur * 0.22f * gb)
             .liquidShine(shape)
     } else if (hz != null && !t.solid) {
         // Frost: a heavier, milkier blur, matte with no shine.
@@ -204,33 +206,6 @@ fun Modifier.frost(shape: Shape, tint: Color, blur: Dp = 26.dp): Modifier = comp
     } else {
         this.clip(shape).background(tint)
     }
-}
-
-/**
- * Liquid Glass's light: a glossy rim (bright along the top, catching again at the bottom), a sheen across
- * the upper part, and a soft glint that slides along as the surface moves on screen, so scrolling makes
- * the glass catch the light differently.
- */
-fun Modifier.liquidShine(shape: Shape): Modifier = if ("shine" in DebugFlags.off) this else composed {
-    val t = LocalTok.current
-    val y = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
-    val screenH = with(androidx.compose.ui.platform.LocalDensity.current) { androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp.toPx() }.coerceAtLeast(1f)
-    val rimTop = Color.White.copy(alpha = if (t.dark) 0.34f else 0.95f)
-    val rimMid = Color.White.copy(alpha = if (t.dark) 0.03f else 0.12f)
-    val rimLow = Color.White.copy(alpha = if (t.dark) 0.14f else 0.5f)
-    val sheen = Color.White.copy(alpha = if (t.dark) 0.09f else 0.3f)
-    val glint = Color.White.copy(alpha = if (t.dark) 0.1f else 0.28f)
-    this.onGloballyPositioned { c -> y.floatValue = c.positionInRoot().y }
-        .drawWithContent {
-            drawContent()
-            drawRect(Brush.verticalGradient(0f to sheen, 0.42f to Color.Transparent))
-            // The glint: a soft diagonal band whose place follows where the glass sits on screen.
-            val k = (y.floatValue / screenH).coerceIn(-0.5f, 1.5f)
-            val cx = size.width * (0.15f + 0.7f * k)
-            val band = size.width * 0.35f
-            drawRect(Brush.linearGradient(listOf(Color.Transparent, glint, Color.Transparent), Offset(cx - band, 0f), Offset(cx + band, size.height)))
-        }
-        .border(1.2.dp, Brush.verticalGradient(listOf(rimTop, rimMid, rimMid, rimLow)), shape)
 }
 
 /**
@@ -655,7 +630,7 @@ fun Page(title: String, onBack: () -> Unit, sub: String? = null, trailing: (@Com
     val density = LocalDensity.current
     val guess = with(density) { WindowInsets.statusBars.getTop(this).toDp() } + 56.dp
     Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().hazeSource(haze)) {
+        Box(Modifier.fillMaxSize().glassSource(haze)) {
             Glow()
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 Spacer(Modifier.height(if (barH > 0) with(density) { barH.toDp() } else guess))

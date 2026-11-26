@@ -1,5 +1,6 @@
 package com.jpetrydesign.pyng.ui
 
+import com.jpetrydesign.pyng.ui.kit.glassSource
 import com.jpetrydesign.pyng.data.lookFor
 
 import dev.chrisbanes.haze.hazeSource
@@ -239,7 +240,7 @@ fun PyngRoot(repo: Repo, nav: Nav) {
                     Modifier.fillMaxSize()
                         .graphicsLayer { scaleX = peekSink; scaleY = peekSink }
                         .then(if (peekBlur > 0.5.dp) Modifier.blur(peekBlur) else Modifier)
-                        .then(if (hazeOn) Modifier.hazeSource(appHaze) else Modifier),
+                        .then(if (hazeOn) Modifier.glassSource(appHaze) else Modifier),
                 ) {
                     if (wide) WideLayout(nav, fullW) else Pane(nav, Modifier.fillMaxSize(), wide = false)
                 }

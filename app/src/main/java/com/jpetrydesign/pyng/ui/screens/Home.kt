@@ -1,5 +1,7 @@
 package com.jpetrydesign.pyng.ui.screens
 
+import com.jpetrydesign.pyng.ui.kit.glassSource
+import com.jpetrydesign.pyng.ui.kit.LocalGlass
 import com.jpetrydesign.pyng.ui.kit.pane
 import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.verticalScroll
@@ -445,7 +447,7 @@ fun HomeScreen(nav: Nav, wide: Boolean) {
         } else Glow()
         androidx.compose.runtime.CompositionLocalProvider(LocalHaze provides haze) {
             LazyColumn(
-                Modifier.fillMaxSize().hazeSource(haze),
+                Modifier.fillMaxSize().glassSource(haze),
                 state = listState,
                 contentPadding = PaddingValues(start = if (sheetMode) 0.dp else 18.dp, end = if (sheetMode) 0.dp else 18.dp, top = with(density) { if (barH > 0) barH.toDp() else WindowInsets.statusBars.getTop(this).toDp() + 66.dp } + 14.dp, bottom = 150.dp),
             ) {
@@ -1024,6 +1026,8 @@ class DragHolder {
 /** A thin bright edge and a soft, light shadow: reads as glass rather than a solid disc. */
 internal fun Modifier.glassRim(shape: androidx.compose.ui.graphics.Shape): Modifier = composed {
     val t = LocalTok.current
+    // Liquid Glass lights its own edge.
+    if (LocalGlass.current && !t.solid) return@composed this.shadow(3.dp, shape, clip = false, ambientColor = t.shadow, spotColor = t.shadow)
     this.shadow(3.dp, shape, clip = false, ambientColor = t.shadow, spotColor = t.shadow)
         .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = if (t.dark) 0.28f else 0.75f), Color.White.copy(alpha = if (t.dark) 0.06f else 0.2f))), shape)
 }

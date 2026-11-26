@@ -1,5 +1,6 @@
 package com.jpetrydesign.pyng.ui.screens
 
+import com.jpetrydesign.pyng.ui.kit.glassSource
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -452,7 +453,7 @@ fun ThreadScreen(nav: Nav, convId: String, highlight: String?, startSearch: Bool
                 LazyColumn(
                     state = list,
                     reverseLayout = true,
-                    modifier = Modifier.fillMaxSize().hazeSource(haze)
+                    modifier = Modifier.fillMaxSize().glassSource(haze)
                         .pointerInput(Unit) {
                             awaitEachGesture {
                                 awaitFirstDown(requireUnconsumed = false)
