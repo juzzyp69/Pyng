@@ -1925,7 +1925,7 @@ private fun ProfileCard(anchor: androidx.compose.ui.geometry.Rect, nav: Nav, tra
                         transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 0f)
                     }
                     .shadow(18.dp, shape, ambientColor = t.shadow, spotColor = t.shadow)
-                    .frost(shape, if (t.solid) t.sheet else t.sheet.copy(alpha = if (t.dark) 0.62f else 0.7f), 32.dp)
+                    .frost(shape, if (t.solid) t.sheet else t.sheet.copy(alpha = if (t.dark) 0.46f else 0.56f), 32.dp)
                     .then(if (com.jpetrydesign.pyng.ui.kit.LocalGlass.current || t.solid) Modifier else Modifier.border(1.dp, Color.White.copy(alpha = if (t.dark) 0.08f else 0.6f), shape))
                     .clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) { }
                     .padding(vertical = 6.dp),
