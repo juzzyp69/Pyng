@@ -1,0 +1,359 @@
+--------- beginning of main
+11-26 20:18:58.300 11962 11981 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:18:58.300 11962 11981 E GoLog   : s_glBindAttribLocation: bind attrib 1 name localCoord
+11-26 20:18:58.301 11962 11981 E GoLog   : s_glBindAttribLocation: bind attrib 2 name texSubset
+11-26 20:18:58.403 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 0 name radii_selector
+11-26 20:18:58.404 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 1 name corner_and_radius_outsets
+11-26 20:18:58.405 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 2 name aa_bloat_and_coverage
+11-26 20:18:58.405 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 3 name radii_x
+11-26 20:18:58.406 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 4 name radii_y
+11-26 20:18:58.406 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 5 name skew
+11-26 20:18:58.407 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 6 name translate_and_localrotate
+11-26 20:18:58.407 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 7 name localrect
+11-26 20:18:58.407 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 8 name color
+11-26 20:18:58.592 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:18:58.592 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:18:58.592 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inEllipseOffset
+11-26 20:18:58.592 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 3 name inEllipseRadii
+11-26 20:18:58.712 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:18:58.712 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:18:58.712 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inEllipseOffset
+11-26 20:18:58.712 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 3 name inEllipseRadii
+11-26 20:18:58.827 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:18:58.827 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 1 name color
+11-26 20:18:58.960 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:18:58.960 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:18:58.960 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+11-26 20:18:59.018 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:18:59.021 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:18:59.027 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+11-26 20:18:59.028 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 3 name inClipPlane
+11-26 20:18:59.028 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 4 name inUnionPlane
+11-26 20:18:59.029 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 5 name inRoundCapCenters
+11-26 20:18:59.112 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:18:59.113 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:18:59.113 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+11-26 20:18:59.277 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:18:59.277 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:18:59.277 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+11-26 20:18:59.359 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:18:59.359 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 1 name localCoord
+11-26 20:18:59.359 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 2 name texSubset
+11-26 20:18:59.407 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:18:59.407 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:18:59.407 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+11-26 20:18:59.464 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:18:59.464 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:18:59.464 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+11-26 20:18:59.525 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:18:59.525 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 1 name color
+11-26 20:18:59.525 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 2 name localCoord
+11-26 20:18:59.632 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:18:59.632 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:18:59.632 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+11-26 20:18:59.632 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 3 name inClipPlane
+11-26 20:18:59.632 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 4 name inIsectPlane
+11-26 20:18:59.632 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 5 name inRoundCapCenters
+11-26 20:18:59.677 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:18:59.677 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 1 name color
+11-26 20:18:59.677 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 2 name localCoord
+11-26 20:18:59.738 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:18:59.738 11962 11988 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inTextureCoords
+11-26 20:19:00.022  3458  3458 W PageIndicator: Total number of pages invalid: 0. Assuming 1 page.
+11-26 20:19:00.142 12005 12005 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+11-26 20:19:00.143 12005 12005 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+--------- beginning of system
+11-26 20:19:01.138   526   960 W ActivityTaskManager: Force removing ActivityRecord{76725d2 u0 com.jpetrydesign.pyng/.IconClassic t93 f}}: app died, no saved state
+11-26 20:19:01.203   526  1942 W InputManager-JNI: Input channel object '5b462f5 com.jpetrydesign.pyng/com.jpetrydesign.pyng.IconClassic (client)' was disposed without first being removed with the input manager!
+11-26 20:19:01.281  3458  3627 W Looper  : Drained
+11-26 20:19:01.299   526   591 W WindowManager: Failed to deliver inset control state change to w=Window{5b462f5 u0 com.jpetrydesign.pyng/com.jpetrydesign.pyng.IconClassic EXITING}
+11-26 20:19:01.299   526   591 W WindowManager: android.os.DeadObjectException
+11-26 20:19:01.299   526   591 W WindowManager: 	at android.os.BinderProxy.transactNative(Native Method)
+11-26 20:19:01.299   526   591 W WindowManager: 	at android.os.BinderProxy.transact(BinderProxy.java:584)
+11-26 20:19:01.299   526   591 W WindowManager: 	at android.view.IWindow$Stub$Proxy.insetsControlChanged(IWindow.java:479)
+11-26 20:19:01.299   526   591 W WindowManager: 	at com.android.server.wm.WindowState.notifyInsetsControlChanged(WindowState.java:3802)
+11-26 20:19:01.299   526   591 W WindowManager: 	at com.android.server.wm.InsetsStateController.lambda$notifyPendingInsetsControlChanged$3(InsetsStateController.java:343)
+11-26 20:19:01.299   526   591 W WindowManager: 	at com.android.server.wm.InsetsStateController.$r8$lambda$8yykPRG1GyNq_J17QvL9d5xANMc(InsetsStateController.java:0)
+11-26 20:19:01.299   526   591 W WindowManager: 	at com.android.server.wm.InsetsStateController$$ExternalSyntheticLambda2.run(R8$$SyntheticClass:0)
+11-26 20:19:01.299   526   591 W WindowManager: 	at com.android.server.wm.WindowAnimator.executeAfterPrepareSurfacesRunnables(WindowAnimator.java:294)
+11-26 20:19:01.299   526   591 W WindowManager: 	at com.android.server.wm.RootWindowContainer.performSurfacePlacementNoTrace(RootWindowContainer.java:811)
+11-26 20:19:01.299   526   591 W WindowManager: 	at com.android.server.wm.RootWindowContainer.performSurfacePlacement(RootWindowContainer.java:756)
+11-26 20:19:01.299   526   591 W WindowManager: 	at com.android.server.wm.WindowSurfacePlacer.performSurfacePlacementLoop(WindowSurfacePlacer.java:177)
+11-26 20:19:01.299   526   591 W WindowManager: 	at com.android.server.wm.WindowSurfacePlacer.performSurfacePlacement(WindowSurfacePlacer.java:126)
+11-26 20:19:01.299   526   591 W WindowManager: 	at com.android.server.wm.WindowSurfacePlacer.performSurfacePlacement(WindowSurfacePlacer.java:115)
+11-26 20:19:01.299   526   591 W WindowManager: 	at com.android.server.wm.WindowSurfacePlacer$Traverser.run(WindowSurfacePlacer.java:57)
+11-26 20:19:01.299   526   591 W WindowManager: 	at android.os.Handler.handleCallback(Handler.java:958)
+11-26 20:19:01.299   526   591 W WindowManager: 	at android.os.Handler.dispatchMessage(Handler.java:99)
+11-26 20:19:01.299   526   591 W WindowManager: 	at android.os.Looper.loopOnce(Looper.java:205)
+11-26 20:19:01.299   526   591 W WindowManager: 	at android.os.Looper.loop(Looper.java:294)
+11-26 20:19:01.299   526   591 W WindowManager: 	at android.os.HandlerThread.run(HandlerThread.java:67)
+11-26 20:19:01.299   526   591 W WindowManager: 	at com.android.server.ServiceThread.run(ServiceThread.java:46)
+11-26 20:19:01.313   526  1696 W ActivityTaskManager: callingPackage for (uid=2000, pid=12027) has no WPC
+11-26 20:19:01.380   526   591 W WindowManager: Failed to deliver inset control state change to w=Window{5b462f5 u0 com.jpetrydesign.pyng/com.jpetrydesign.pyng.IconClassic EXITING}
+11-26 20:19:01.380   526   591 W WindowManager: android.os.DeadObjectException
+11-26 20:19:01.380   526   591 W WindowManager: 	at android.os.BinderProxy.transactNative(Native Method)
+11-26 20:19:01.380   526   591 W WindowManager: 	at android.os.BinderProxy.transact(BinderProxy.java:584)
+11-26 20:19:01.380   526   591 W WindowManager: 	at android.view.IWindow$Stub$Proxy.insetsControlChanged(IWindow.java:479)
+11-26 20:19:01.380   526   591 W WindowManager: 	at com.android.server.wm.WindowState.notifyInsetsControlChanged(WindowState.java:3802)
+11-26 20:19:01.380   526   591 W WindowManager: 	at com.android.server.wm.InsetsStateController.lambda$notifyPendingInsetsControlChanged$3(InsetsStateController.java:343)
+11-26 20:19:01.380   526   591 W WindowManager: 	at com.android.server.wm.InsetsStateController.$r8$lambda$8yykPRG1GyNq_J17QvL9d5xANMc(InsetsStateController.java:0)
+11-26 20:19:01.380   526   591 W WindowManager: 	at com.android.server.wm.InsetsStateController$$ExternalSyntheticLambda2.run(R8$$SyntheticClass:0)
+11-26 20:19:01.380   526   591 W WindowManager: 	at com.android.server.wm.WindowAnimator.executeAfterPrepareSurfacesRunnables(WindowAnimator.java:294)
+11-26 20:19:01.380   526   591 W WindowManager: 	at com.android.server.wm.WindowAnimator.animate(WindowAnimator.java:202)
+11-26 20:19:01.380   526   591 W WindowManager: 	at com.android.server.wm.WindowAnimator.lambda$new$1(WindowAnimator.java:99)
+11-26 20:19:01.380   526   591 W WindowManager: 	at com.android.server.wm.WindowAnimator.$r8$lambda$aHNu1uhcqxihX5NZc4McDDQPAyw(WindowAnimator.java:0)
+11-26 20:19:01.380   526   591 W WindowManager: 	at com.android.server.wm.WindowAnimator$$ExternalSyntheticLambda1.doFrame(R8$$SyntheticClass:0)
+11-26 20:19:01.380   526   591 W WindowManager: 	at android.view.Choreographer$CallbackRecord.run(Choreographer.java:1337)
+11-26 20:19:01.380   526   591 W WindowManager: 	at android.view.Choreographer$CallbackRecord.run(Choreographer.java:1348)
+11-26 20:19:01.380   526   591 W WindowManager: 	at android.view.Choreographer.doCallbacks(Choreographer.java:952)
+11-26 20:19:01.380   526   591 W WindowManager: 	at android.view.Choreographer.doFrame(Choreographer.java:878)
+11-26 20:19:01.380   526   591 W WindowManager: 	at android.view.Choreographer$FrameDisplayEventReceiver.run(Choreographer.java:1322)
+11-26 20:19:01.380   526   591 W WindowManager: 	at android.os.Handler.handleCallback(Handler.java:958)
+11-26 20:19:01.380   526   591 W WindowManager: 	at android.os.Handler.dispatchMessage(Handler.java:99)
+11-26 20:19:01.380   526   591 W WindowManager: 	at android.os.Looper.loopOnce(Looper.java:205)
+11-26 20:19:01.380   526   591 W WindowManager: 	at android.os.Looper.loop(Looper.java:294)
+11-26 20:19:01.380   526   591 W WindowManager: 	at android.os.HandlerThread.run(HandlerThread.java:67)
+11-26 20:19:01.380   526   591 W WindowManager: 	at com.android.server.ServiceThread.run(ServiceThread.java:46)
+11-26 20:19:01.465 12030 12030 W etrydesign.pyng: Unexpected CPU variant for x86: x86_64.
+11-26 20:19:01.465 12030 12030 W etrydesign.pyng: Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, tremont, kabylake, default
+11-26 20:19:01.479 12030 12030 E etrydesign.pyng: Not starting debugger since process cannot load the jdwp agent.
+11-26 20:19:01.498   526  1944 W WindowManager: Exception thrown during dispatchAppVisibility Window{5b462f5 u0 com.jpetrydesign.pyng/com.jpetrydesign.pyng.IconClassic EXITING}
+11-26 20:19:01.498   526  1944 W WindowManager: android.os.DeadObjectException
+11-26 20:19:01.498   526  1944 W WindowManager: 	at android.os.BinderProxy.transactNative(Native Method)
+11-26 20:19:01.498   526  1944 W WindowManager: 	at android.os.BinderProxy.transact(BinderProxy.java:584)
+11-26 20:19:01.498   526  1944 W WindowManager: 	at android.view.IWindow$Stub$Proxy.dispatchAppVisibility(IWindow.java:546)
+11-26 20:19:01.498   526  1944 W WindowManager: 	at com.android.server.wm.WindowState.sendAppVisibilityToClients(WindowState.java:3271)
+11-26 20:19:01.498   526  1944 W WindowManager: 	at com.android.server.wm.WindowContainer.sendAppVisibilityToClients(WindowContainer.java:1221)
+11-26 20:19:01.498   526  1944 W WindowManager: 	at com.android.server.wm.WindowToken.setClientVisible(WindowToken.java:409)
+11-26 20:19:01.498   526  1944 W WindowManager: 	at com.android.server.wm.ActivityRecord.setClientVisible(ActivityRecord.java:6946)
+11-26 20:19:01.498   526  1944 W WindowManager: 	at com.android.server.wm.ActivityRecord.postApplyAnimation(ActivityRecord.java:5637)
+11-26 20:19:01.498   526  1944 W WindowManager: 	at com.android.server.wm.ActivityRecord.commitVisibility(ActivityRecord.java:5580)
+11-26 20:19:01.498   526  1944 W WindowManager: 	at com.android.server.wm.Transition.finishTransition(Transition.java:1151)
+11-26 20:19:01.498   526  1944 W WindowManager: 	at com.android.server.wm.TransitionController.finishTransition(TransitionController.java:868)
+11-26 20:19:01.498   526  1944 W WindowManager: 	at com.android.server.wm.WindowOrganizerController.finishTransition(WindowOrganizerController.java:396)
+11-26 20:19:01.498   526  1944 W WindowManager: 	at android.window.IWindowOrganizerController$Stub.onTransact(IWindowOrganizerController.java:286)
+11-26 20:19:01.498   526  1944 W WindowManager: 	at com.android.server.wm.WindowOrganizerController.onTransact(WindowOrganizerController.java:181)
+11-26 20:19:01.498   526  1944 W WindowManager: 	at android.os.Binder.execTransactInternal(Binder.java:1339)
+11-26 20:19:01.498   526  1944 W WindowManager: 	at android.os.Binder.execTransact(Binder.java:1275)
+11-26 20:19:01.501   526  1944 W WindowManager: Failed to deliver inset control state change to w=Window{5b462f5 u0 com.jpetrydesign.pyng/com.jpetrydesign.pyng.IconClassic EXITING}
+11-26 20:19:01.501   526  1944 W WindowManager: android.os.DeadObjectException
+11-26 20:19:01.501   526  1944 W WindowManager: 	at android.os.BinderProxy.transactNative(Native Method)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at android.os.BinderProxy.transact(BinderProxy.java:584)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at android.view.IWindow$Stub$Proxy.insetsControlChanged(IWindow.java:479)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.WindowState.notifyInsetsControlChanged(WindowState.java:3802)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.InsetsStateController.lambda$notifyPendingInsetsControlChanged$3(InsetsStateController.java:343)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.InsetsStateController.$r8$lambda$8yykPRG1GyNq_J17QvL9d5xANMc(InsetsStateController.java:0)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.InsetsStateController$$ExternalSyntheticLambda2.run(R8$$SyntheticClass:0)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.WindowAnimator.executeAfterPrepareSurfacesRunnables(WindowAnimator.java:294)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.RootWindowContainer.performSurfacePlacementNoTrace(RootWindowContainer.java:811)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.RootWindowContainer.performSurfacePlacement(RootWindowContainer.java:756)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.WindowSurfacePlacer.performSurfacePlacementLoop(WindowSurfacePlacer.java:177)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.WindowSurfacePlacer.performSurfacePlacement(WindowSurfacePlacer.java:126)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.WindowSurfacePlacer.performSurfacePlacement(WindowSurfacePlacer.java:115)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.WindowState.setupWindowForRemoveOnExit(WindowState.java:2538)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.WindowState.removeIfPossible(WindowState.java:2498)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.WindowToken.removeAllWindowsIfPossible(WindowToken.java:249)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.ActivityRecord.removeIfPossible(ActivityRecord.java:4259)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.ActivityRecord.handleCompleteDeferredRemoval(ActivityRecord.java:4266)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.WindowContainer.handleCompleteDeferredRemoval(WindowContainer.java:1396)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.TaskFragment.handleCompleteDeferredRemoval(TaskFragment.java:2844)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.WindowContainer.handleCompleteDeferredRemoval(WindowContainer.java:1396)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.WindowContainer.handleCompleteDeferredRemoval(WindowContainer.java:1396)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.WindowContainer.handleCompleteDeferredRemoval(WindowContainer.java:1396)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.WindowContainer.handleCompleteDeferredRemoval(WindowContainer.java:1396)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.WindowContainer.handleCompleteDeferredRemoval(WindowContainer.java:1396)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.WindowContainer.handleCompleteDeferredRemoval(WindowContainer.java:1396)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.DisplayContent.handleCompleteDeferredRemoval(DisplayContent.java:3382)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.Transition.finishTransition(Transition.java:1322)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.TransitionController.finishTransition(TransitionController.java:868)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.WindowOrganizerController.finishTransition(WindowOrganizerController.java:396)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at android.window.IWindowOrganizerController$Stub.onTransact(IWindowOrganizerController.java:286)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at com.android.server.wm.WindowOrganizerController.onTransact(WindowOrganizerController.java:181)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at android.os.Binder.execTransactInternal(Binder.java:1339)
+11-26 20:19:01.501   526  1944 W WindowManager: 	at android.os.Binder.execTransact(Binder.java:1275)
+11-26 20:19:01.504   526   590 W ActivityManager: setHasOverlayUi called on unknown pid: 11962
+11-26 20:19:01.537  3458  3592 W Looper  : Slow dispatch took 40ms wmshell.main h=android.os.Handler c=com.android.wm.shell.transition.DefaultTransitionHandler$$ExternalSyntheticLambda0@6c3ceb0 m=0
+11-26 20:19:01.537  3458  3592 W Looper  : Slow delivery took 37ms wmshell.main h=android.os.Handler c=android.window.TaskOrganizer$1$$ExternalSyntheticLambda5@678d129 m=0
+11-26 20:19:01.538  3458  3592 W Looper  : Drained
+11-26 20:19:01.582 12030 12030 W OpenGLRenderer: Unknown dataspace 0
+11-26 20:19:01.601   402   402 E BpTransactionCompletedListener: Failed to transact (-32)
+11-26 20:19:02.240 12030 12057 W OpenGLRenderer: Failed to initialize 101010-2 format, error = EGL_SUCCESS
+11-26 20:19:02.417 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:02.418 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name color
+11-26 20:19:02.553 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:02.553 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name localCoord
+11-26 20:19:02.662 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name a_vertex
+11-26 20:19:02.733 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:02.733 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name localCoord
+11-26 20:19:02.836 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:02.836 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name localCoord
+11-26 20:19:02.936 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:02.937 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name localCoord
+11-26 20:19:03.109 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:03.109 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name color
+11-26 20:19:03.109 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name localCoord
+11-26 20:19:03.192 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name resolveLevel_and_idx
+11-26 20:19:03.192 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name p01
+11-26 20:19:03.192 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name p23
+11-26 20:19:03.192 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 3 name fanPointAttrib
+11-26 20:19:03.335 12030 12061 E SurfaceSyncGroup: Failed to receive transaction ready in 1000ms. Marking SurfaceSyncGroup(wmsSync-VRI[IconClassic]#0) as ready
+11-26 20:19:03.336 12030 12061 E SurfaceSyncGroup: Failed to receive transaction ready in 1000ms. Marking SurfaceSyncGroup(VRI[IconClassic]#1) as ready
+11-26 20:19:03.395 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:03.396 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name color
+11-26 20:19:03.500 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:19:03.500 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:19:03.500 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inTextureCoords
+11-26 20:19:03.613 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name pos
+11-26 20:19:03.613 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name color
+11-26 20:19:03.709 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name pos
+11-26 20:19:03.710 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name color
+11-26 20:19:03.758   526  1696 W InputManager-JNI: Input channel object '6d820c6 Splash Screen com.jpetrydesign.pyng (client)' was disposed without first being removed with the input manager!
+11-26 20:19:03.768 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:03.768 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name localCoord
+11-26 20:19:03.831 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name fillBounds
+11-26 20:19:03.831 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name color
+11-26 20:19:03.831 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name locations
+11-26 20:19:03.843  3458  3670 W FrameTracker: Missed App frame:UNKNOWN: 10, 260829, 0, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+11-26 20:19:03.843  3458  3670 W FrameTracker: Missed SF frame:UNKNOWN: 10, 260829, 0, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+11-26 20:19:03.843  3458  3670 W FrameTracker: Missing HWUI jank callback for vsyncId: 260829, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+11-26 20:19:03.843  3458  3670 W FrameTracker: Missed App frame:UNKNOWN: 74, 260842, 228076467, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+11-26 20:19:03.843  3458  3670 W FrameTracker: Missed SF frame:UNKNOWN: 74, 260842, 228076467, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+11-26 20:19:03.916   526   590 W ActivityTaskManager: Launch timeout has expired, giving up wake lock!
+11-26 20:19:03.940 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:19:03.941 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:19:03.941 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inShadowParams
+11-26 20:19:04.039 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:04.039 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name color
+11-26 20:19:04.088 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:04.088 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name color
+11-26 20:19:04.127 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name radii_selector
+11-26 20:19:04.127 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name corner_and_radius_outsets
+11-26 20:19:04.127 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name aa_bloat_and_coverage
+11-26 20:19:04.127 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 3 name radii_x
+11-26 20:19:04.127 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 4 name radii_y
+11-26 20:19:04.127 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 5 name skew
+11-26 20:19:04.127 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 6 name translate_and_localrotate
+11-26 20:19:04.127 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 7 name color
+11-26 20:19:04.250 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:04.251 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name color
+11-26 20:19:04.295 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:19:04.295 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:19:04.295 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+11-26 20:19:04.347 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:19:04.347 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:19:04.347 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCoverage
+11-26 20:19:04.389 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:04.389 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name localCoord
+11-26 20:19:04.389 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name texSubset
+11-26 20:19:04.445 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:04.446 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name color
+11-26 20:19:04.478 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:19:04.478 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:19:04.478 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+11-26 20:19:04.529 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:04.529 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name color
+11-26 20:19:04.529 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name localCoord
+11-26 20:19:04.584 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:19:04.584 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:19:04.584 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCoverage
+11-26 20:19:04.650   526  1696 E ShortcutService: Invalid icon type in shortcut c1. Bitmaps are not allowed in long-lived shortcuts. Use Resource icons, or Uri-based icons instead.
+11-26 20:19:04.800 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:19:04.800 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:19:04.800 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inShadowParams
+11-26 20:19:04.857 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:04.857 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name localCoord
+11-26 20:19:04.857 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name texSubset
+11-26 20:19:04.916 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:19:04.916 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:19:04.916 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+11-26 20:19:04.991 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:19:04.991 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:19:04.991 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+11-26 20:19:05.044 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:19:05.044 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:19:05.044 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+11-26 20:19:05.079 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:05.079 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name color
+11-26 20:19:05.079 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name localCoord
+11-26 20:19:05.079 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 3 name texSubset
+11-26 20:19:05.172 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:05.173 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name localCoord
+11-26 20:19:05.173 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name texSubset
+11-26 20:19:05.224 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name radii_selector
+11-26 20:19:05.224 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name corner_and_radius_outsets
+11-26 20:19:05.224 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name aa_bloat_and_coverage
+11-26 20:19:05.224 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 3 name radii_x
+11-26 20:19:05.224 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 4 name radii_y
+11-26 20:19:05.224 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 5 name skew
+11-26 20:19:05.224 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 6 name translate_and_localrotate
+11-26 20:19:05.224 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 7 name localrect
+11-26 20:19:05.225 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 8 name color
+11-26 20:19:05.331   526  3486 E TaskPersister: File error accessing recents directory (directory doesn't exist?).
+11-26 20:19:05.343 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:19:05.343 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:19:05.343 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inEllipseOffset
+11-26 20:19:05.343 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 3 name inEllipseRadii
+11-26 20:19:05.413 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:19:05.413 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:19:05.413 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inEllipseOffset
+11-26 20:19:05.413 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 3 name inEllipseRadii
+11-26 20:19:05.475 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:05.475 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name color
+11-26 20:19:05.574 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:19:05.575 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:19:05.575 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+11-26 20:19:05.605 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:19:05.605 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:19:05.606 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+11-26 20:19:05.606 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 3 name inClipPlane
+11-26 20:19:05.606 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 4 name inUnionPlane
+11-26 20:19:05.606 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 5 name inRoundCapCenters
+11-26 20:19:05.663 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:19:05.663 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:19:05.663 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+11-26 20:19:05.722 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:19:05.722 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:19:05.722 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+11-26 20:19:05.769 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:05.769 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name localCoord
+11-26 20:19:05.769 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name texSubset
+11-26 20:19:05.816 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name radii_selector
+11-26 20:19:05.816 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name corner_and_radius_outsets
+11-26 20:19:05.816 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name aa_bloat_and_coverage
+11-26 20:19:05.816 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 3 name radii_x
+11-26 20:19:05.816 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 4 name radii_y
+11-26 20:19:05.816 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 5 name skew
+11-26 20:19:05.816 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 6 name translate_and_localrotate
+11-26 20:19:05.816 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 7 name localrect
+11-26 20:19:05.816 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 8 name color
+11-26 20:19:05.927 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:19:05.927 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:19:05.927 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inEllipseOffset
+11-26 20:19:05.927 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 3 name inEllipseRadii
+11-26 20:19:06.015 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:06.015 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name color
+11-26 20:19:06.015 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name localCoord
+11-26 20:19:06.104 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:06.104 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name color
+11-26 20:19:06.104 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name localCoord
+11-26 20:19:06.163 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:19:06.163 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inTextureCoords
+11-26 20:19:06.210 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name position
+11-26 20:19:06.210 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name localCoord
+11-26 20:19:06.210 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name texSubset
+11-26 20:19:06.264 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:19:06.264 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:19:06.264 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+11-26 20:19:06.322 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:19:06.322 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:19:06.322 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+11-26 20:19:06.437 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 0 name inPosition
+11-26 20:19:06.437 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 1 name inColor
+11-26 20:19:06.437 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 2 name inCircleEdge
+11-26 20:19:06.438 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 3 name inClipPlane
+11-26 20:19:06.438 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 4 name inIsectPlane
+11-26 20:19:06.438 12030 12049 E GoLog   : s_glBindAttribLocation: bind attrib 5 name inRoundCapCenters
+--------- beginning of kernel
+11-26 20:19:08.570     0     0 W healthd : battery l=100 v=5000 t=25.0 h=2 st=2 c=900000 fc=3000000 cc=10 chg=a
+11-26 20:19:13.509 12072 12072 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+11-26 20:19:13.510 12072 12072 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.

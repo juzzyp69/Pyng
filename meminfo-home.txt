@@ -1,0 +1,59 @@
+Applications Memory Usage (in Kilobytes):
+Uptime: 1330040 Realtime: 1330040
+
+** MEMINFO in pid 17447 [com.jpetrydesign.pyng] **
+                   Pss  Private  Private  SwapPss      Rss     Heap     Heap     Heap
+                 Total    Dirty    Clean    Dirty    Total     Size    Alloc     Free
+                ------   ------   ------   ------   ------   ------   ------   ------
+  Native Heap    22501    22464        0       54    23756    30148    24989     1334
+  Dalvik Heap     5294     5252        0      229     6512     8904     4452     4452
+ Dalvik Other     1904     1228        0       44     2712                           
+        Stack      760      760        0        0      768                           
+       Ashmem      522        0        0        0     1560                           
+    Other dev       20        4       16        0      260                           
+     .so mmap     2414      268       76       20    37308                           
+    .jar mmap     1240        0        0        0    27444                           
+    .apk mmap    11900     1068    10568        0    13640                           
+    .ttf mmap      129        0        0        0      736                           
+    .dex mmap      332        4      312        0     1084                           
+    .oat mmap      677        0        0        0    13780                           
+    .art mmap     2948     2336       40      198    21880                           
+   Other mmap      133       40       36        0     1576                           
+      Unknown     2041     2036        0        0     2392                           
+        TOTAL    53360    35460    11048      545   155408    39052    29441     5786
+ 
+ App Summary
+                       Pss(KB)                        Rss(KB)
+                        ------                         ------
+           Java Heap:     7628                          28392
+         Native Heap:    22464                          23756
+                Code:    12340                          95388
+               Stack:      760                            768
+            Graphics:        0                              0
+       Private Other:     3316
+              System:     6852
+             Unknown:                                    7104
+ 
+           TOTAL PSS:    53360            TOTAL RSS:   155408       TOTAL SWAP PSS:      545
+ 
+ Objects
+               Views:        6         ViewRootImpl:        1
+         AppContexts:        6           Activities:        1
+              Assets:       21        AssetManagers:        0
+       Local Binders:       18        Proxy Binders:       42
+       Parcel memory:        6         Parcel count:       27
+    Death Recipients:        0             WebViews:        0
+ 
+ SQL
+         MEMORY_USED:      305
+  PAGECACHE_OVERFLOW:       92          MALLOC_SIZE:       46
+ 
+ DATABASES
+      pgsz     dbsz   Lookaside(b) cache hits cache misses cache size  Dbname
+PER CONNECTION STATS
+         4      104            123    10    51    12  /data/user/0/com.jpetrydesign.pyng/no_backup/androidx.work.workdb
+         4        8                    0     0     0    (attached) temp
+         4      104             28     1    14     2  /data/user/0/com.jpetrydesign.pyng/no_backup/androidx.work.workdb (3)
+POOL STATS
+     cache hits  cache misses    cache size  Dbname
+             17           100           117  /data/user/0/com.jpetrydesign.pyng/no_backup/androidx.work.workdb
