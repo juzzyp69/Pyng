@@ -191,15 +191,17 @@ fun Modifier.frost(shape: Shape, tint: Color, blur: Dp = 26.dp): Modifier = comp
     val hz = LocalHaze.current
     val (gs, gb) = LocalGlassTune.current
     if (hz != null && !t.solid && LocalGlass.current && "haze" !in DebugFlags.off) {
-        // Liquid Glass: mostly blurred, with a light tint, a slight bend at the edge and a soft reflection. The frost underneath only shows on phones that can't bend light.
-        val light = tint.copy(alpha = (tint.alpha * 0.55f * gs).coerceAtMost(0.9f))
+        // Liquid Glass: the screen behind seen through a lens (bent at the edges, barely blurred), a light
+        // tint, and a lit rim. The frost underneath only shows on phones that can't bend light.
+        val light = tint.copy(alpha = (tint.alpha * 0.4f * gs).coerceAtMost(0.9f))
         this.clip(shape)
-            .hazeEffect(state = hz, style = HazeStyle(backgroundColor = t.bg, tint = HazeTint(light), blurRadius = blur * 0.9f * gb, noiseFactor = 0f))
-            .liquidLens(hz, shape, light.copy(alpha = light.alpha * 0.85f), blur * 0.75f * gb)
+            .hazeEffect(state = hz, style = HazeStyle(backgroundColor = t.bg, tint = HazeTint(light), blurRadius = blur * 0.5f * gb, noiseFactor = 0f))
+            .liquidLens(hz, shape, light.copy(alpha = light.alpha * 0.8f), blur * 0.22f * gb)
             .liquidShine(shape)
     } else if (hz != null && !t.solid) {
-        // Frost: a heavier, milkier blur, matte with no shine.
-        this.clip(shape).hazeEffect(state = hz, style = HazeStyle(backgroundColor = t.bg, tint = HazeTint(tint.copy(alpha = (tint.alpha * 1.25f * gs).coerceAtMost(0.95f))), blurRadius = blur * 1.3f * gb, noiseFactor = 0f))
+        // Frost: mostly blur with a lighter tint, so what's behind shows through softly, and a slight reflection.
+        this.clip(shape).hazeEffect(state = hz, style = HazeStyle(backgroundColor = t.bg, tint = HazeTint(tint.copy(alpha = (tint.alpha * 0.9f * gs).coerceAtMost(0.92f))), blurRadius = blur * 1.4f * gb, noiseFactor = 0f))
+            .frostShine(shape)
     } else if (!t.solid && LocalGlass.current) {
         this.clip(shape).background(tint.copy(alpha = tint.alpha * 0.7f)).liquidShine(shape)
     } else {
@@ -208,8 +210,8 @@ fun Modifier.frost(shape: Shape, tint: Color, blur: Dp = 26.dp): Modifier = comp
 }
 
 /**
- * A card, panel or tile, drawn in the glass look you picked: Liquid Glass is clear with a glossy rim,
- * a sheen and a glint that moves as you scroll; Frost is milky and matte; Solid is plain.
+ * A card, panel or tile, drawn in the glass look you picked: Liquid Glass is clear with a lit rim;
+ * Frost is soft and blurred with a slight reflection; Solid is plain.
  */
 fun Modifier.pane(shape: Shape): Modifier = composed {
     val t = LocalTok.current
@@ -217,9 +219,8 @@ fun Modifier.pane(shape: Shape): Modifier = composed {
     val gs = LocalGlassTune.current.first
     when {
         t.solid -> this.background(if (t.dark) t.card.compositeOver(t.bg) else Color.White)
-        liquid -> this.background(Color.White.copy(alpha = ((if (t.dark) 0.06f else 0.5f) * gs).coerceAtMost(0.95f))).liquidShine(shape)
-        else -> this.background(Color.White.copy(alpha = ((if (t.dark) 0.07f else 0.72f) * gs).coerceAtMost(0.95f)))
-            .border(1.dp, Color.White.copy(alpha = if (t.dark) 0.06f else 0.85f), shape)
+        liquid -> this.background(Color.White.copy(alpha = ((if (t.dark) 0.05f else 0.34f) * gs).coerceAtMost(0.95f))).liquidShine(shape)
+        else -> this.background(Color.White.copy(alpha = ((if (t.dark) 0.07f else 0.62f) * gs).coerceAtMost(0.95f))).frostShine(shape)
     }
 }
 
